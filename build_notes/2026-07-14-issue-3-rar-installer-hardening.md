@@ -41,16 +41,12 @@ Implementation details:
   installers.
 - Updated the Windows download URL from the stale 7.01 artifact to the current
   7.23 x64 artifact because the old 7.01 URL currently returns 404 on RARLab.
+- Follow-up cleanup narrowed this module back to Windows-only scope. Removed
+  non-Windows RARLab URLs, hashes, cfg branches, and Unix archive extraction.
 
 Pinned artifact hashes:
 - Windows x64 `winrar-x64-723.exe`:
   `8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b`
-- Linux x64 `rarlinux-x64-723.tar.gz`:
-  `759b4b6aa0d9f77131882162951193f3a0e54bf60e1d8dc4255aa308accab588`
-- macOS arm64 `rarmacos-arm-723.tar.gz`:
-  `68b393c000758d477fde43c955ff7542f12f76f3f5e87cdda923152fc791bd4d`
-- macOS x64 `rarmacos-x64-723.tar.gz`:
-  `da1fb3c3d7748136c9b369b683d574b372cb1ed049a634a81f85d93918346d8f`
 
 Hash source:
 - Hashes were computed locally on 2026-07-14 from artifacts downloaded from the
@@ -102,8 +98,6 @@ Passed:
 - `cargo fmt --all -- --check`
 - `cargo clippy --locked --all-targets --all-features -- -D warnings`
 - `npm run check:provider-surface`
-- `tar -tzf` layout checks confirming the Linux and macOS 7.23 archives still
-  contain `rar/rar`, which is the path used by the existing extraction code.
 
 Notes:
 - `npm run check` initially failed because `scripts/check-provider-surface.mjs`

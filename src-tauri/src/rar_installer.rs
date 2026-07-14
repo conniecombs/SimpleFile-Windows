@@ -9,48 +9,13 @@ use std::time::{Duration, SystemTime};
 use tauri::{AppHandle, Manager};
 
 // ── Versioned download URLs from rarlab.com ──────────────────────────────────
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const DOWNLOAD_URL: &str = "https://www.rarlab.com/rar/rarlinux-x64-723.tar.gz";
-
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const EXPECTED_DOWNLOAD_SHA256: &str =
-    "759b4b6aa0d9f77131882162951193f3a0e54bf60e1d8dc4255aa308accab588";
-
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const DOWNLOAD_URL: &str = "https://www.rarlab.com/rar/rarmacos-arm-723.tar.gz";
-
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const EXPECTED_DOWNLOAD_SHA256: &str =
-    "68b393c000758d477fde43c955ff7542f12f76f3f5e87cdda923152fc791bd4d";
-
-#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const DOWNLOAD_URL: &str = "https://www.rarlab.com/rar/rarmacos-x64-723.tar.gz";
-
-#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const EXPECTED_DOWNLOAD_SHA256: &str =
-    "da1fb3c3d7748136c9b369b683d574b372cb1ed049a634a81f85d93918346d8f";
-
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 const DOWNLOAD_URL: &str = "https://www.rarlab.com/rar/winrar-x64-723.exe";
 
-#[cfg(all(target_os = "windows", target_arch = "x86_64"))]
 const EXPECTED_DOWNLOAD_SHA256: &str =
     "8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b";
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 const PENDING_INSTALL_TTL: Duration = Duration::from_secs(30 * 60);
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 static PENDING_RAR_INSTALLS: Lazy<Mutex<HashMap<String, PendingRarInstall>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
@@ -90,15 +55,11 @@ fn rar_in_path() -> bool {
 /// Path to the rar binary stored inside the app data directory, if it exists.
 fn local_rar_binary(app: &AppHandle) -> Option<PathBuf> {
     let dir = rar_install_dir(app).ok()?;
-    #[cfg(target_os = "windows")]
     let bin = dir.join("rar.exe");
-    #[cfg(not(target_os = "windows"))]
-    let bin = dir.join("rar");
     bin.exists().then_some(bin)
 }
 
 /// On Windows, WinRAR's silent installer places rar.exe in a well-known location.
-#[cfg(target_os = "windows")]
 fn winrar_system_binary() -> Option<PathBuf> {
     // Check system-wide install locations (requires admin).
     let system_paths = [
@@ -138,7 +99,6 @@ pub fn resolve_rar_binary(app: &AppHandle) -> Option<String> {
     if let Some(p) = local_rar_binary(app) {
         return Some(p.to_string_lossy().to_string());
     }
-    #[cfg(target_os = "windows")]
     if let Some(p) = winrar_system_binary() {
         return Some(p.to_string_lossy().to_string());
     }
@@ -153,10 +113,8 @@ pub fn check_rar_installed(app: AppHandle) -> bool {
     resolve_rar_binary(&app).is_some()
 }
 
-/// Downloads and installs the RAR command-line tool silently.
-/// On Linux/macOS: extracts the `rar` binary to the app data directory.
-/// On Windows: runs the `WinRAR` installer with the /S (silent) flag.
-/// Returns the path to the installed binary on success.
+/// Downloads, verifies, confirms, and installs WinRAR silently.
+/// Returns the path to the installed RAR binary on success.
 #[tauri::command]
 pub async fn prepare_rar_install() -> Result<RarInstallPlan, String> {
     prepare_rar_install_inner().await
@@ -174,20 +132,9 @@ pub async fn install_rar(app: AppHandle, confirmation_token: String) -> Result<S
 
     let pending = take_pending_install(&confirmation_token)?;
 
-    #[cfg(target_os = "windows")]
-    {
-        let result = install_rar_windows(&pending.installer_path, &install_dir);
-        let _ = std::fs::remove_file(&pending.installer_path);
-        result
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let bytes = std::fs::read(&pending.installer_path)
-            .map_err(|e| format!("Failed to read verified RAR installer: {e}"))?;
-        let result = install_rar_unix(&bytes, &install_dir);
-        let _ = std::fs::remove_file(&pending.installer_path);
-        result
-    }
+    let result = install_rar_windows(&pending.installer_path, &install_dir);
+    let _ = std::fs::remove_file(&pending.installer_path);
+    result
 }
 
 #[tauri::command]
@@ -200,22 +147,6 @@ pub fn discard_rar_install(confirmation_token: String) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-)))]
-async fn prepare_rar_install_inner() -> Result<RarInstallPlan, String> {
-    Err("RAR installer download is not configured for this platform.".to_string())
-}
-
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 async fn prepare_rar_install_inner() -> Result<RarInstallPlan, String> {
     let bytes = download_bytes(DOWNLOAD_URL).await?;
     let sha256 = verify_sha256(&bytes)?;
@@ -225,7 +156,6 @@ async fn prepare_rar_install_inner() -> Result<RarInstallPlan, String> {
     std::fs::write(&installer_path, &bytes)
         .map_err(|e| format!("Failed to stage RAR installer: {e}"))?;
 
-    #[cfg(target_os = "windows")]
     let publisher = Some(match verify_windows_authenticode(&installer_path) {
         Ok(publisher) => publisher,
         Err(error) => {
@@ -233,9 +163,6 @@ async fn prepare_rar_install_inner() -> Result<RarInstallPlan, String> {
             return Err(error);
         }
     });
-
-    #[cfg(not(target_os = "windows"))]
-    let publisher = None;
 
     {
         let mut pending = PENDING_RAR_INSTALLS.lock();
@@ -262,22 +189,6 @@ async fn prepare_rar_install_inner() -> Result<RarInstallPlan, String> {
     })
 }
 
-#[cfg(not(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-)))]
-fn take_pending_install(_token: &str) -> Result<PendingRarInstall, String> {
-    Err("RAR installer download is not configured for this platform.".to_string())
-}
-
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn take_pending_install(token: &str) -> Result<PendingRarInstall, String> {
     let mut pending = PENDING_RAR_INSTALLS.lock();
     prune_pending_installs(&mut pending);
@@ -287,20 +198,6 @@ fn take_pending_install(token: &str) -> Result<PendingRarInstall, String> {
     })
 }
 
-#[cfg(not(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-)))]
-fn discard_pending_install(_token: &str) {}
-
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn discard_pending_install(token: &str) {
     let mut pending = PENDING_RAR_INSTALLS.lock();
     if let Some(install) = pending.remove(token) {
@@ -308,44 +205,10 @@ fn discard_pending_install(token: &str) {
     }
 }
 
-// ── Platform-specific install ─────────────────────────────────────────────────
-
-/// Linux / macOS: extract the `rar` binary from the downloaded tar.gz.
-#[cfg(not(target_os = "windows"))]
-fn install_rar_unix(bytes: &[u8], install_dir: &Path) -> Result<String, String> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let cursor = std::io::Cursor::new(bytes);
-    let decoder = flate2::read::GzDecoder::new(cursor);
-    let mut archive = tar::Archive::new(decoder);
-
-    let rar_dest = install_dir.join("rar");
-
-    for entry in archive.entries().map_err(|e| e.to_string())? {
-        let mut entry = entry.map_err(|e| e.to_string())?;
-        let path = entry.path().map_err(|e| e.to_string())?.into_owned();
-        // The tar.gz from rarlab.com contains "rar/rar" (the rar binary itself).
-        if path.to_string_lossy() == "rar/rar" {
-            entry
-                .unpack(&rar_dest)
-                .map_err(|e| format!("Failed to extract rar binary: {e}"))?;
-            break;
-        }
-    }
-
-    if !rar_dest.exists() {
-        return Err("Failed to locate the rar binary inside the downloaded archive".to_string());
-    }
-
-    std::fs::set_permissions(&rar_dest, std::fs::Permissions::from_mode(0o755))
-        .map_err(|e| format!("Failed to set execute permission: {e}"))?;
-
-    Ok(rar_dest.to_string_lossy().to_string())
-}
+// ── Windows install ──────────────────────────────────────────────────────────
 
 /// Windows: run the verified WinRAR installer with /S (silent), then verify
 /// rar.exe exists at the default WinRAR installation path.
-#[cfg(target_os = "windows")]
 fn install_rar_windows(installer_path: &Path, _install_dir: &Path) -> Result<String, String> {
     let status = std::process::Command::new(installer_path)
         .arg("/S")
@@ -369,24 +232,12 @@ fn install_rar_windows(installer_path: &Path, _install_dir: &Path) -> Result<Str
 
 // ── HTTP download ─────────────────────────────────────────────────────────────
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn generate_confirmation_token() -> Result<String, String> {
     let mut bytes = [0u8; 16];
     getrandom::fill(&mut bytes).map_err(|e| format!("Failed to create confirmation token: {e}"))?;
     Ok(hex_encode(&bytes))
 }
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn pending_installer_path(token: &str) -> Result<PathBuf, String> {
     let source_name = DOWNLOAD_URL
         .rsplit('/')
@@ -397,12 +248,6 @@ fn pending_installer_path(token: &str) -> Result<PathBuf, String> {
     Ok(std::env::temp_dir().join(filename))
 }
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn prune_pending_installs(pending: &mut HashMap<String, PendingRarInstall>) {
     let now = SystemTime::now();
     let expired: Vec<String> = pending
@@ -422,12 +267,6 @@ fn prune_pending_installs(pending: &mut HashMap<String, PendingRarInstall>) {
     }
 }
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn verify_sha256(bytes: &[u8]) -> Result<String, String> {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -440,12 +279,6 @@ fn verify_sha256(bytes: &[u8]) -> Result<String, String> {
     Ok(actual)
 }
 
-#[cfg(any(
-    all(target_os = "linux", target_arch = "x86_64"),
-    all(target_os = "macos", target_arch = "aarch64"),
-    all(target_os = "macos", target_arch = "x86_64"),
-    all(target_os = "windows", target_arch = "x86_64")
-))]
 fn hex_encode(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -456,7 +289,6 @@ fn hex_encode(bytes: &[u8]) -> String {
     output
 }
 
-#[cfg(target_os = "windows")]
 fn verify_windows_authenticode(path: &Path) -> Result<String, String> {
     let script = r#"
 $ErrorActionPreference = 'Stop'
