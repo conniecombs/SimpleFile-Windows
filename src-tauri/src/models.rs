@@ -1,0 +1,236 @@
+use serde::{Deserialize, Serialize};
+
+// ============================================================================
+// File System Types
+// ============================================================================
+
+/// Represents a file or directory entry
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub is_symlink: bool,
+    pub size: u64,
+    pub modified: String,
+    pub extension: String,
+    /// Unix permission string like "rwxr-xr-x" (None on Windows or if unavailable)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<String>,
+    /// Symlink target path (None if not a symlink)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub symlink_target: Option<String>,
+    /// Git status (e.g. "modified", "untracked", "added", "deleted")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_status: Option<String>,
+}
+
+/// Represents the result of a directory listing
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DirectoryListing {
+    pub path: String,
+    pub parent: Option<String>,
+    pub entries: Vec<FileEntry>,
+}
+
+/// Progress update for long-running operations
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ProgressUpdate {
+    pub operation_id: String,
+    pub operation_type: String,
+    pub current: u64,
+    pub total: u64,
+    pub current_item: String,
+    pub status: String, // "running", "completed", "error", "cancelled"
+    pub error: Option<String>,
+}
+
+/// File system change event
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileChangeEvent {
+    pub path: String,
+    pub kind: String, // "create", "modify", "remove", "rename"
+}
+
+// ============================================================================
+// Drive Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DriveInfo {
+    pub name: String,
+    pub path: String,
+    pub drive_type: String,
+    pub total_space: u64,
+    pub free_space: u64,
+}
+
+// ============================================================================
+// Tree / Directory Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TreeNode {
+    pub name: String,
+    pub path: String,
+    pub has_children: bool,
+    pub children: Vec<TreeNode>,
+}
+
+// ============================================================================
+// Search Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SearchResult {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub modified: String,
+    pub extension: String,
+    pub match_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SearchOptions {
+    pub query: String,
+    pub search_path: String,
+    pub case_sensitive: bool,
+    pub include_hidden: bool,
+    pub file_types: Option<Vec<String>>,
+    pub max_results: Option<usize>,
+    pub max_depth: Option<usize>,
+    /// Optional unique identifier for this search. When set, the
+    /// backend will track cancellation using this ID and allow
+    /// multiple searches to run concurrently. If None, a random ID
+    /// may be assigned on the frontend.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub search_id: Option<String>,
+    /// Enable full-text search of text file contents in addition to
+    /// filename matching. Note: content search may be slow on large
+    /// trees and should be used sparingly.
+    #[serde(default)]
+    pub content_search: bool,
+    /// Minimum file size (in bytes) to include in results. When set,
+    /// files smaller than this will be skipped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_size: Option<u64>,
+    /// Maximum file size (in bytes) to include in results. When set,
+    /// files larger than this will be skipped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_size: Option<u64>,
+    /// Only include files modified on or after this date (ISO 8601
+    /// format, e.g. "2024-01-01T00:00:00"). When None, no lower
+    /// bound is applied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_after: Option<String>,
+    /// Only include files modified on or before this date (ISO 8601
+    /// format). When None, no upper bound is applied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_before: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SmartFolder {
+    pub id: String,
+    pub name: String,
+    pub icon: Option<String>,
+    pub search_options: SearchOptions,
+}
+
+// ============================================================================
+// Disk Cleanup Types
+// ============================================================================
+
+/// Represents a group of duplicate files. All files in this group share
+/// the same content hash. The `hash` field contains the computed checksum
+/// (e.g. SHA-256) used to detect duplicates.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DuplicateGroup {
+    pub hash: String,
+    pub files: Vec<String>,
+}
+
+/// Result of a disk cleanup scan. The `large_files` vector lists files
+/// exceeding the requested size threshold along with their sizes. The
+/// `duplicates` vector contains groups of duplicate files (excluding the
+/// first occurrence in each group).
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CleanupResult {
+    pub large_files: Vec<(String, u64)>,
+    pub duplicates: Vec<DuplicateGroup>,
+}
+
+// ============================================================================
+// Git Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GitStatus {
+    pub is_repo: bool,
+    pub branch: Option<String>,
+    pub modified: u32,
+    pub staged: u32,
+    pub untracked: u32,
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+// ============================================================================
+// Preview / Thumbnail Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FilePreview {
+    pub file_type: String,
+    pub content: Option<String>,
+    pub mime_type: String,
+    pub size: u64,
+    pub encoding: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ThumbnailResult {
+    pub path: String,
+    pub data: Option<String>,
+    pub error: Option<String>,
+}
+
+// ============================================================================
+// Metadata Types
+// ============================================================================
+
+/// Detailed metadata for an image file. In addition to the pixel
+/// dimensions (`width` and `height`), this struct exposes a list of
+/// EXIF fields found in the file. Each entry in the `exif` vector is a
+/// `(tag, value)` tuple where `tag` is the human‑readable field name
+/// (e.g. "ISO Speed Ratings") and `value` is its value. If no EXIF
+/// metadata is present or the file could not be parsed, the `exif`
+/// vector will be empty.
+#[derive(Debug, Serialize)]
+pub struct ImageMetadata {
+    pub width: u32,
+    pub height: u32,
+    pub exif: Vec<(String, String)>,
+}
+
+// ============================================================================
+
+#[derive(Debug, Serialize)]
+pub struct ArchiveEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub compressed_size: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArchiveInfo {
+    pub path: String,
+    pub format: String,
+    pub entries: Vec<ArchiveEntry>,
+    pub total_size: u64,
+    pub compressed_size: u64,
+}

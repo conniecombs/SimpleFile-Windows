@@ -1,0 +1,620 @@
+/* ============================================================================
+   Modal
+   Generic modal overlay and modal shell, shared button variants,
+   form elements, properties table, and progress dialog.
+   ============================================================================ */
+
+/* ── Modal Overlay ────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    /* Must exceed .quicklook-overlay (3000) so a confirmation/error modal
+       triggered while Quick Look is open is never hidden behind it, which
+       would freeze the UI (user can't click Cancel/OK). */
+    z-index: 4000;
+}
+
+.modal-overlay.visible {
+    display: flex;
+}
+
+.modal-overlay.settings-opening {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* Generic prompts (new folder, rename, confirmation, progress) can be opened
+   from inside larger overlays. Keep them on top. */
+#modal-overlay,
+#progress-overlay {
+    z-index: 12000;
+}
+
+/* ── Modal Shell ──────────────────────────────────────────────────────────── */
+
+.modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    min-width: 400px;
+    max-width: 500px;
+    box-shadow: 0 16px 48px var(--shadow-color);
+}
+
+.modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.modal-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* ── Shared Buttons ───────────────────────────────────────────────────────── */
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-sm {
+    padding: 4px 10px;
+    font-size: 13px;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    background: var(--accent-secondary);
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    background: var(--bg-selected);
+}
+
+.btn-danger {
+    background: var(--accent-danger);
+    color: var(--bg-primary);
+}
+
+/* ── Form Elements ────────────────────────────────────────────────────────── */
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.form-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 14px;
+    border-radius: var(--radius-sm);
+    outline: none;
+}
+
+.form-input:focus {
+    border-color: var(--accent-primary);
+}
+
+/* ── Properties Table ─────────────────────────────────────────────────────── */
+
+.properties-table {
+    width: 100%;
+}
+
+.properties-table tr {
+    display: flex;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.properties-table tr:last-child {
+    border-bottom: none;
+}
+
+.properties-table td:first-child {
+    width: 100px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.properties-table td:last-child {
+    flex: 1;
+    word-break: break-all;
+}
+
+.exif-grid {
+    display: grid;
+    grid-template-columns: minmax(90px, auto) minmax(0, 1fr);
+    gap: 4px 10px;
+}
+
+.exif-tag {
+    color: var(--text-secondary);
+}
+
+.exif-value {
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+}
+
+.comparison-summary {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 12px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.comparison-summary strong {
+    color: var(--text-primary);
+}
+
+.comparison-table-wrap {
+    max-height: min(56vh, 520px);
+    overflow: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono, 'Consolas', 'Courier New', monospace);
+    font-size: 12px;
+}
+
+.comparison-table th,
+.comparison-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    vertical-align: top;
+}
+
+.comparison-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.comparison-table td:first-child,
+.comparison-table td:nth-child(3) {
+    width: 64px;
+    color: var(--text-muted);
+    text-align: right;
+    user-select: none;
+}
+
+.diff-added {
+    background: color-mix(in srgb, var(--accent-success) 14%, transparent);
+}
+
+.diff-removed {
+    background: color-mix(in srgb, var(--accent-danger) 12%, transparent);
+}
+
+.diff-modified,
+.diff-changed {
+    background: color-mix(in srgb, var(--accent-warning) 14%, transparent);
+}
+
+.diff-equal {
+    color: var(--text-secondary);
+}
+
+/* ── Progress Dialog ──────────────────────────────────────────────────────── */
+
+.progress-modal {
+    min-width: 450px;
+}
+
+.progress-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    border-radius: 4px;
+    transition: width 0.2s ease;
+    width: 0%;
+}
+
+.progress-info {
+    display: flex;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.progress-item {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-height: 18px;
+}
+
+.modal.comparison-modal {
+    width: min(1100px, calc(100vw - 48px));
+    max-width: min(1100px, calc(100vw - 48px));
+}
+
+.comparison-modal .modal-body {
+    padding: 0;
+    max-height: calc(100vh - 180px);
+    overflow: auto;
+}
+
+.compare-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 16px;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.compare-file {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.compare-file-right {
+    text-align: right;
+}
+
+.compare-file-name {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.compare-file-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.compare-status {
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    padding: 4px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.compare-status-clean {
+    color: var(--accent-success);
+}
+
+.compare-table {
+    min-width: 720px;
+    font-family: var(--font-mono, Consolas, monospace);
+    font-size: 12px;
+}
+
+.compare-row {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr) 56px minmax(0, 1fr);
+    min-height: 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.compare-header {
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-weight: 600;
+}
+
+.compare-line-no,
+.compare-line {
+    padding: 4px 8px;
+    min-width: 0;
+}
+
+.compare-line-no {
+    color: var(--text-muted);
+    text-align: right;
+    user-select: none;
+    border-right: 1px solid var(--border-color);
+}
+
+.compare-line {
+    margin: 0;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.compare-line-left {
+    border-right: 1px solid var(--border-color);
+}
+
+.compare-marker {
+    display: inline-block;
+    width: 1.5ch;
+    color: var(--text-muted);
+}
+
+.compare-row-added .compare-line-right,
+.compare-row-added .compare-line-no:nth-child(3) {
+    background: rgba(65, 180, 110, 0.16);
+}
+
+.compare-row-removed .compare-line-left,
+.compare-row-removed .compare-line-no:first-child {
+    background: rgba(220, 75, 75, 0.16);
+}
+
+.compare-row-modified .compare-line,
+.compare-row-modified .compare-line-no {
+    background: rgba(235, 185, 80, 0.16);
+}
+
+.compare-empty {
+    padding: 24px;
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+@media (max-width: 760px) {
+    .compare-summary {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .compare-file-right {
+        text-align: left;
+    }
+
+    .compare-status {
+        justify-self: start;
+    }
+}
+
+.cleanup-results {
+    display: grid;
+    gap: 12px;
+}
+
+.cleanup-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.cleanup-results h4 {
+    margin: 4px 0 0;
+}
+
+.cleanup-result-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.cleanup-result-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: baseline;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-secondary);
+}
+
+.cleanup-result-row span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.cleanup-result-row--stacked {
+    grid-template-columns: 1fr;
+}
+
+.cleanup-hash {
+    color: var(--text-secondary);
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.cleanup-path-list {
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.tags-selector {
+    display: grid;
+    gap: 8px;
+}
+
+.tag-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    cursor: pointer;
+}
+
+.tag-swatch {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+}
+
+.tag-swatch--empty {
+    background: transparent;
+}
+
+/* ── Properties layout helper ─────────────────────────────────────────────── */
+
+.properties-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 16px;
+}
+
+.prop-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.prop-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+/* ── Permissions value monospace ──────────────────────────────────────────── */
+
+.prop-permissions {
+    font-family: var(--font-mono, monospace);
+    letter-spacing: 0.05em;
+}
+
+/* ── Clipboard History list ───────────────────────────────────────────────── */
+
+.clipboard-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 340px;
+}
+
+.clipboard-history-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    cursor: default;
+}
+
+.clipboard-history-item:hover {
+    background: var(--bg-hover);
+}
+
+.clipboard-history-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.clipboard-history-label {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.clipboard-history-action {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}

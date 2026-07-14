@@ -1,0 +1,728 @@
+/* ============================================================================
+   Toolbar
+   Navigation toolbar, path bar, breadcrumb, search bar, toolbar buttons,
+   and the file-list column headers.
+   ============================================================================ */
+
+/* ── Toolbar Shell ────────────────────────────────────────────────────────── */
+
+.toolbar {
+    height: var(--toolbar-height);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+}
+
+.toolbar-nav {
+    display: flex;
+    gap: 4px;
+}
+
+/* ── Toolbar Buttons ──────────────────────────────────────────────────────── */
+
+.toolbar-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.toolbar-btn:hover:not(:disabled) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    /* FIX: Ensure we can still see them */
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 4px;
+}
+
+/* ── Theme Toggle ─────────────────────────────────────────────────────────── */
+
+.toolbar-btn.theme-active {
+    color: var(--accent-warning);
+}
+
+/* ── Terminal Button ──────────────────────────────────────────────────────── */
+
+.toolbar-btn.terminal-btn {
+    font-size: 16px;
+}
+
+/* ── Dual Pane Toggle ─────────────────────────────────────────────────────── */
+
+.toolbar-btn.dual-pane-active {
+    color: var(--accent-primary);
+    background: var(--bg-selected);
+}
+
+/* ── Path Bar ─────────────────────────────────────────────────────────────── */
+
+.path-bar {
+    flex: 1;
+    position: relative;
+    height: 36px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.path-bar:focus-within {
+    border-color: var(--accent-primary);
+}
+
+.path-bar.editing .breadcrumb {
+    display: none;
+}
+
+.path-bar:not(.editing) .path-input {
+    display: none;
+}
+
+/* ── Breadcrumb ───────────────────────────────────────────────────────────── */
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1;
+    scrollbar-width: none;
+}
+
+.breadcrumb::-webkit-scrollbar {
+    display: none;
+}
+
+.breadcrumb-segment {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+}
+
+.breadcrumb-segment:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.breadcrumb-segment:focus-visible {
+    outline: 1px solid var(--accent-primary);
+    outline-offset: -2px;
+}
+
+.breadcrumb-segment.current {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.breadcrumb-separator {
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 0 2px;
+    user-select: none;
+}
+
+/* ── Path Input (edit mode) ───────────────────────────────────────────────── */
+
+.path-input {
+    width: 100%;
+    height: 100%;
+    padding: 0 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+}
+
+/* ── Search Bar ───────────────────────────────────────────────────────────── */
+
+.search-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    margin-left: 8px;
+}
+
+.search-input {
+    width: 200px;
+    height: 28px;
+    padding: 0 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    /* Explicitly transition width so the 200→280 px expansion on focus is
+       smooth rather than an instant layout jump that shifts toolbar elements. */
+    transition: width var(--transition-fast), border-color var(--transition-fast);
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    width: 280px;
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-btn, .search-clear-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all var(--transition-fast);
+}
+
+.search-btn:hover, .search-clear-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--accent-primary);
+}
+
+.search-advanced-icon {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    pointer-events: none;
+}
+
+/* ── Search Results Header ────────────────────────────────────────────────── */
+
+.search-results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.search-results-count {
+    font-weight: 500;
+}
+
+/* ── Quick Filter Bar ─────────────────────────────────────────────────────── */
+
+.quick-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--accent-primary);
+}
+
+.quick-filter-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.quick-filter-input {
+    flex: 1;
+    height: 24px;
+    padding: 0 6px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+}
+
+.quick-filter-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.quick-filter-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.quick-filter-clear {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.quick-filter-clear:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+/* ── File List Column Headers ─────────────────────────────────────────────── */
+
+.file-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.file-list-header {
+    height: var(--header-height);
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    display: grid;
+    grid-template-columns: var(
+        --file-list-columns,
+        var(--col-name-width, 240px) var(--col-size-width, 100px) var(--col-date-width, 140px) var(--col-type-width, 100px)
+    );
+    align-items: center;
+    padding: 0 16px;
+    user-select: none;
+}
+
+.header-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    min-width: 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.header-cell.sortable {
+    cursor: pointer;
+}
+
+.header-cell.sortable:hover {
+    color: var(--text-primary);
+}
+
+.sort-indicator {
+    font-size: 10px;
+    opacity: 0;
+}
+
+.header-cell.active .sort-indicator {
+    opacity: 1;
+}
+
+.header-cell > span:first-of-type {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.name-col,
+.size-col,
+.items-col,
+.date-col,
+.type-col {
+    min-width: 0;
+}
+
+.column-resize-handle {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    position: absolute;
+    top: 0;
+    right: -5px;
+    padding: 0;
+    width: 10px;
+    height: var(--header-height);
+    cursor: col-resize;
+    z-index: 2;
+}
+
+.column-resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 4px;
+    width: 1px;
+    background: transparent;
+}
+
+.column-resize-handle:hover::after,
+.column-resize-handle:focus-visible::after,
+.column-resizing .column-resize-handle::after {
+    background: var(--accent-primary);
+}
+
+.column-resizing {
+    cursor: col-resize;
+}
+
+.column-header-menu {
+    display: none;
+    position: fixed;
+    z-index: 900;
+    min-width: 220px;
+    padding: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 6px);
+    background: var(--bg-secondary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.column-header-menu.open {
+    display: block;
+}
+
+.column-header-menu-title {
+    padding: 6px 8px 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.column-menu-item,
+.column-menu-button {
+    width: 100%;
+    min-height: 30px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: left;
+}
+
+.column-menu-item {
+    cursor: pointer;
+}
+
+.column-menu-item input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-primary);
+}
+
+.column-menu-item--disabled {
+    cursor: default;
+    color: var(--text-muted);
+}
+
+.column-menu-button {
+    cursor: pointer;
+    margin-top: 4px;
+    border-top: 1px solid var(--border-color);
+    border-radius: 0;
+    color: var(--text-secondary);
+}
+
+.column-menu-item:hover,
+.column-menu-button:hover {
+    background: var(--bg-hover);
+}
+
+/* ── More Actions Dropdown ────────────────────────────────────────────────── */
+
+.more-actions-wrapper {
+    position: relative;
+}
+
+.more-actions-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 500;
+    width: min(340px, calc(100vw - 24px));
+    max-height: min(72vh, 640px);
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md, 6px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    padding: 6px 0;
+    animation: dropdown-in 120ms ease;
+}
+
+.more-actions-dropdown.open {
+    display: block;
+}
+
+.more-actions-dropdown [hidden] {
+    display: none !important;
+}
+
+@media (max-width: 640px) {
+    .more-actions-dropdown {
+        position: fixed;
+        top: calc(var(--tab-height) + var(--toolbar-height) + 6px);
+        right: 8px;
+        width: min(340px, calc(100vw - 16px));
+    }
+}
+
+@keyframes dropdown-in {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.more-actions-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.more-actions-places {
+    gap: 8px;
+    padding: 4px 10px 8px;
+}
+
+.more-actions-section {
+    min-width: 0;
+}
+
+.more-actions-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 2px 6px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.45px;
+    text-transform: uppercase;
+}
+
+.menu-inline-btn {
+    width: 22px;
+    height: 22px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+}
+
+.menu-inline-btn:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.top-menu-list {
+    max-height: 118px;
+    overflow-y: auto;
+    padding: 0 2px;
+}
+
+.top-menu-empty {
+    padding: 7px 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.more-actions-item {
+    width: 100%;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-radius: 0;
+    justify-content: flex-start;
+    font-size: 13px;
+}
+
+.more-actions-item:hover:not(:disabled) {
+    background: var(--bg-hover);
+}
+
+.more-actions-label {
+    flex: 1;
+    text-align: left;
+    color: var(--text-secondary);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.more-actions-item:hover:not(:disabled) .more-actions-label {
+    color: var(--text-primary);
+}
+
+.more-actions-item:disabled .more-actions-label {
+    opacity: 0.4;
+}
+
+.more-actions-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: 4px 0;
+}
+
+.more-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.more-actions-row .icon {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* ── Icon Size Slider (toolbar) ───────────────────────────────────────────── */
+
+.icon-size-control {
+    display: flex;
+    align-items: center;
+    padding: 0 8px;
+}
+
+.icon-size-control input[type="range"] {
+    flex: 1;
+    min-width: 60px;
+    max-width: 100px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--bg-tertiary);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.icon-size-control input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform var(--transition-fast);
+}
+
+.icon-size-control input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.icon-size-control input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* ── Path Autocomplete Dropdown ──────────────────────────────────────────── */
+
+.path-autocomplete {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    max-height: 240px;
+    overflow-y: auto;
+    margin-top: 2px;
+}
+
+.autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: background var(--transition-fast);
+    outline: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item:focus {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.autocomplete-icon {
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.autocomplete-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

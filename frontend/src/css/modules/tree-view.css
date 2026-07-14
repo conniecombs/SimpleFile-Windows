@@ -1,0 +1,98 @@
+/* ============================================================================
+   Tree View
+   Directory tree nodes, expand arrows, icons, names, and the animated
+   collapse/expand container.
+   ============================================================================ */
+
+.tree-node {
+    user-select: none;
+}
+
+.tree-item {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.tree-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.tree-item.active {
+    background: var(--bg-selected);
+    color: var(--accent-primary);
+}
+
+.tree-item.loading {
+    opacity: 0.6;
+}
+
+.tree-expand {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: var(--text-muted);
+    flex-shrink: 0;
+    transition: transform var(--transition-fast);
+    will-change: transform;
+}
+
+.tree-expand:focus-visible {
+    outline: 1px solid var(--accent-primary);
+    outline-offset: 1px;
+}
+
+.tree-expand.expanded {
+    transform: rotate(90deg);
+}
+
+.tree-expand.empty {
+    visibility: hidden;
+}
+
+.tree-icon {
+    margin-right: 6px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.tree-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tree-children {
+    overflow: hidden;
+    max-height: 2000px; /* Large enough for expanded content */
+    opacity: 1;
+    /* Use matching durations so opacity and max-height finish together,
+       preventing the stutter where content fades out while the container
+       is still collapsing (or fades in before the container opens). */
+    transition: max-height 0.25s ease, opacity 0.25s ease;
+    /* No padding-left here: indentation is applied via element.style.paddingLeft
+       in renderTreeViewImmediate() using a data-depth attribute, which avoids
+       inline style= attributes (blocked by strict CSP). Adding padding on the
+       container would double-count the offset at every nesting level. */
+}
+
+.tree-children.collapsed {
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.2s ease, opacity 0.2s ease;
+}

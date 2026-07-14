@@ -1,0 +1,196 @@
+/* ============================================================================
+   Layout
+   Top-level structural shells: app container, sidebar, resize handles,
+   main content column, content area, and status bar.
+   ============================================================================ */
+
+/* App root */
+.app-container {
+    display: flex;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+
+.sidebar {
+    width: var(--sidebar-width);
+    background: var(--bg-secondary);
+    /* border-right removed for resizer */
+    display: flex;
+    flex-direction: column;
+    min-width: 150px; /* Prevent total collapse */
+}
+
+.sidebar-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0; /* Header should not shrink */
+}
+
+.app-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sidebar-header .toolbar-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+}
+
+/* ── Resize Handles ───────────────────────────────────────────────────────── */
+
+.resize-handle {
+    width: 4px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 100;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+    background: var(--accent-primary);
+}
+
+#sidebar-resizer {
+    border-right: 1px solid var(--border-color);
+}
+
+#preview-resizer {
+    border-left: 1px solid var(--border-color);
+}
+
+/* ── Main Content Column ──────────────────────────────────────────────────── */
+
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ── Content Area (houses panes + preview) ────────────────────────────────── */
+
+.content-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* ── Status Bar ───────────────────────────────────────────────────────────── */
+
+.status-bar {
+    height: var(--statusbar-height);
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.status-bar-section {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.status-path {
+    flex: 1 1 auto;
+    min-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-git {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 260px;
+    min-width: 0;
+    color: var(--text-secondary);
+}
+
+.status-git-label {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.status-git-branch {
+    min-width: 0;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--accent-primary);
+    font-family: monospace;
+}
+
+.status-git-state {
+    font-weight: 600;
+}
+
+.status-git-state--clean {
+    color: var(--accent-success);
+}
+
+.status-git-state--dirty {
+    color: var(--accent-warning);
+}
+
+.status-disk {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.status-disk-text {
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-disk-meter {
+    flex: 0 0 96px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.status-disk-fill {
+    display: block;
+    height: 100%;
+    width: 0;
+    border-radius: inherit;
+    background: var(--accent-primary);
+    transition: width 0.2s ease;
+}
+
+.status-disk-fill--warning {
+    background: var(--accent-warning);
+}
+
+@media (max-width: 720px) {
+    .status-disk {
+        display: none;
+    }
+}

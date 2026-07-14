@@ -1,0 +1,110 @@
+/* ============================================================================
+   Archive
+   Archive viewer modal (list of entries) and create-archive dialog.
+   ============================================================================ */
+
+.archive-modal {
+    width: 700px;
+    max-width: 90vw;
+    max-height: 80vh;
+}
+
+.archive-body {
+    display: flex;
+    flex-direction: column;
+    max-height: 50vh;
+    /* overflow-y: auto so the inner .archive-list (which handles its own
+       scroll) is not clipped when the body grows to max-height. */
+    overflow-y: auto;
+}
+
+.archive-info {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+
+.archive-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.archive-info-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.archive-info-value {
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.archive-list {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+}
+
+.archive-entry {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 13px;
+}
+
+.archive-entry:last-child {
+    border-bottom: none;
+}
+
+.archive-entry:hover {
+    background: var(--bg-hover);
+}
+
+.archive-entry .icon {
+    margin-right: 8px;
+    font-size: 16px;
+}
+
+.archive-entry .name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.archive-entry .size {
+    color: var(--text-muted);
+    font-size: 12px;
+    margin-left: 12px;
+}
+
+/* ── Create Archive Dialog ────────────────────────────────────────────────── */
+
+.archive-files-preview {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+    font-size: 12px;
+}
+
+.archive-file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    color: var(--text-secondary);
+}
+
+.archive-file-item .icon {
+    font-size: 14px;
+}

@@ -1,0 +1,110 @@
+/* ============================================================================
+   Skeleton Loaders
+   Shimmer animation and skeleton placeholder shapes used while file lists,
+   tree nodes, and sidebar items are loading.
+   ============================================================================ */
+
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-tertiary) 25%,
+        var(--bg-hover) 50%,
+        var(--bg-tertiary) 75%
+    );
+    background-size: 200% 100%;
+    /* linear is required: the default ease timing makes the sweep
+       accelerate/decelerate, producing a choppy rather than smooth shimmer. */
+    animation: skeleton-shimmer 1.5s linear infinite;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── File List Skeleton Items ─────────────────────────────────────────────── */
+
+.skeleton-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.skeleton-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+    height: 14px;
+    border-radius: 2px;
+}
+
+.skeleton-text.name {
+    width: 150px;
+}
+
+.skeleton-text.size {
+    width: 60px;
+    margin-left: auto;
+}
+
+.skeleton-text.date {
+    width: 100px;
+}
+
+.skeleton-text.type {
+    width: 50px;
+}
+
+/* ── Tree Skeleton Items ──────────────────────────────────────────────────── */
+
+.skeleton-tree-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+}
+
+.skeleton-expand {
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+}
+
+.skeleton-folder {
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-tree-name {
+    height: 12px;
+    width: 80px;
+    border-radius: 2px;
+}
+
+/* ── Sidebar Skeleton Items ───────────────────────────────────────────────── */
+
+.skeleton-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+}
+
+.skeleton-sidebar-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-sidebar-text {
+    height: 12px;
+    width: 100px;
+    border-radius: 2px;
+}

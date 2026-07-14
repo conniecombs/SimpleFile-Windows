@@ -1,0 +1,148 @@
+/* ============================================================================
+   Quick Look
+   Full-screen overlay for previewing a single file (image, text, video, etc.).
+   Sits at z-index 3000; modal-overlay is at 4000 to always appear above it.
+   ============================================================================ */
+
+.quicklook-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+}
+
+.quicklook-overlay.visible {
+    display: flex;
+}
+
+.quicklook-modal {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    width: 80vw;
+    max-width: 900px;
+    height: 80vh;
+    max-height: 700px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.quicklook-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.quicklook-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.quicklook-close {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 20px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quicklook-close:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.quicklook-content {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    min-height: 0;
+}
+
+.quicklook-content img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.quicklook-content pre {
+    width: 100%;
+    height: 100%;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 16px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 0;
+}
+
+.quicklook-content video,
+.quicklook-content audio {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.quicklook-content .no-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    color: var(--text-muted);
+}
+
+.quicklook-content .no-preview .icon {
+    font-size: 80px;
+    opacity: 0.5;
+}
+
+.quicklook-content .no-preview p {
+    font-size: 14px;
+}
+
+.quicklook-pdf {
+    width: 100%;
+    height: 100%;
+    border: none;
+    display: block;
+}
+
+.quicklook-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.quicklook-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+}

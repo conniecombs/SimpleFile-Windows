@@ -1,0 +1,335 @@
+/* ============================================================================
+   Advanced Rename
+   Multi-file batch rename dialog with remove, replace, add, and capitalize
+   operations plus a live preview panel.
+   ============================================================================ */
+
+.advanced-rename-modal {
+    width: 1000px; /* Widened for split layout */
+    max-width: 95vw;
+    height: 600px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    resize: both;
+    overflow: hidden;
+}
+
+.adv-rename-body {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    padding: 20px; /* If needed, or depend on existing modal body padding */
+}
+
+.adv-rename-preview-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Important for flex children to not overflow */
+}
+
+.adv-rename-options-column {
+    flex: 0 0 450px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding-right: 10px; /* Make space for scrollbar */
+}
+
+.adv-rename-summary {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+}
+
+.adv-rename-scope {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+}
+
+.adv-rename-scope label {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.adv-rename-scope select.form-input {
+    width: auto;
+    min-width: 170px;
+}
+
+/* ── Operation Cards ──────────────────────────────────────────────────────── */
+
+.adv-rename-ops {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.adv-rename-op {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+
+.adv-rename-op.op-enabled {
+    border-color: var(--accent-color, #4a9eff);
+}
+
+.adv-op-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.adv-op-toggle:hover {
+    background: var(--bg-hover);
+}
+
+.adv-op-toggle input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    accent-color: var(--accent-color, #4a9eff);
+    flex-shrink: 0;
+}
+
+.adv-op-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Body is hidden unless .op-enabled is set on the parent */
+.adv-op-body {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 14px 14px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.adv-rename-op.op-enabled .adv-op-body {
+    display: flex;
+}
+
+/* ── Field Row ────────────────────────────────────────────────────────────── */
+
+.adv-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.adv-field-row label {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.adv-field-row .form-input {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    padding: 5px 8px;
+}
+
+.adv-field-row select.form-input {
+    flex: 0 0 auto;
+    min-width: 150px;
+}
+
+.adv-inline-check {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.adv-inline-check input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    accent-color: var(--accent-color, #4a9eff);
+    cursor: pointer;
+}
+
+/* ── Preview Panel ────────────────────────────────────────────────────────── */
+
+.adv-rename-preview-section {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.adv-rename-preview-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    margin: 0;
+    background: var(--bg-primary);
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+}
+
+.adv-rename-preview {
+    flex: 1;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+}
+
+.adv-template-help {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border-color);
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.adv-template-help p {
+    margin: 0 0 6px 0;
+}
+
+.adv-template-vars {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+}
+
+.adv-template-vars li {
+    font-family: inherit;
+}
+
+.adv-template-vars code {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-family: monospace;
+    color: var(--accent-color, #4a9eff);
+}
+
+.adv-preview-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 14px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.adv-preview-row:last-child {
+    border-bottom: none;
+}
+
+.adv-preview-row.adv-preview-changed {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.adv-preview-row.adv-preview-invalid {
+    background: rgba(220, 53, 69, 0.12);
+}
+
+.adv-preview-names {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.adv-preview-old {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.adv-preview-arrow {
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.adv-preview-new {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+    font-weight: 500;
+}
+
+.adv-preview-row.adv-preview-changed .adv-preview-new {
+    color: var(--accent-color, #4a9eff);
+}
+
+.adv-preview-row.adv-preview-invalid .adv-preview-new,
+.adv-preview-row.adv-preview-invalid .adv-preview-path {
+    color: #ff6b6b;
+}
+
+.adv-preview-path,
+.adv-preview-state {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
+}
+
+.adv-preview-state {
+    padding: 10px 14px;
+    font-size: 12px;
+}
+
+.adv-preview-error {
+    color: #ff6b6b;
+}
+
+/* Compact number inputs in the numbering op card */
+.adv-number-input {
+    flex: 0 0 auto;
+    width: 60px;
+    min-width: 0;
+    text-align: center;
+}
+
+#adv-number-separator {
+    width: 48px;
+}
+
+.adv-extension-input {
+    flex: 0 0 90px;
+    max-width: 110px;
+}

@@ -1,0 +1,199 @@
+<script lang="ts">
+  export type FileListTag = {
+    color: string;
+    emoji: string;
+    label: string;
+  };
+
+  export type FileListViewItem = {
+    fixedHeight?: number | null;
+    icon: string;
+    index: number;
+    isCut: boolean;
+    isDir: boolean;
+    isFocused: boolean;
+    isImage: boolean;
+    isPdf: boolean;
+    isSelected: boolean;
+    isSymlink: boolean;
+    itemCount: string;
+    modified: string;
+    name: string;
+    path: string;
+    size: string;
+    git_status?: string | null;
+    tag?: FileListTag | null;
+    thumbnail?: string | null;
+    type: string;
+  };
+
+  let {
+    isGrid = false,
+    items = [],
+    mode = 'simple',
+    pane = 'primary',
+    visibleColumns = ['size', 'date', 'type'],
+  }: {
+    isGrid?: boolean;
+    items?: FileListViewItem[];
+    mode?: 'simple' | 'virtual';
+    pane?: 'primary' | 'secondary';
+    visibleColumns?: string[];
+  } = $props();
+
+  function itemClass(item: FileListViewItem) {
+    return [
+      'file-item',
+      isGrid ? 'grid-item' : 'list-item',
+      item.isSelected ? 'selected' : '',
+      item.isCut ? 'cut' : '',
+      item.isFocused ? 'focused' : '',
+      item.git_status ? `git-${item.git_status}` : '',
+    ].filter(Boolean).join(' ');
+  }
+
+  function hasColumn(column: string) {
+    return visibleColumns.includes(column);
+  }
+
+  function emitItemInteraction(type: string, event: MouseEvent | KeyboardEvent, item: FileListViewItem) {
+    event.currentTarget?.dispatchEvent(new CustomEvent(type, {
+      bubbles: true,
+      detail: {
+        ctrlKey: event.ctrlKey,
+        index: item.index,
+        isDir: item.isDir,
+        metaKey: event.metaKey,
+        pane,
+        path: item.path,
+        shiftKey: event.shiftKey,
+      },
+    }));
+  }
+
+  function handleItemKeydown(event: KeyboardEvent, item: FileListViewItem) {
+    if (event.key !== 'Enter') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    emitItemInteraction('simplefile:file-list-item-open', event, item);
+  }
+</script>
+
+{#snippet pdfIcon()}
+  <svg class="file-pdf-icon" viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M6 0 L34 0 L42 8 L42 56 L6 56 Z" fill="#e53935" rx="2" />
+    <path d="M34 0 L42 8 L34 8 Z" fill="#ffcdd2" />
+    <rect x="34" y="0" width="8" height="8" fill="#ef9a9a" />
+    <rect x="6" y="28" width="36" height="18" rx="2" fill="rgba(0,0,0,0.18)" />
+    <text
+      x="24"
+      y="42"
+      font-size="13"
+      font-weight="700"
+      fill="#ffffff"
+      text-anchor="middle"
+      font-family="Arial,Helvetica,sans-serif"
+      letter-spacing="1"
+    >
+      PDF
+    </text>
+  </svg>
+{/snippet}
+
+{#snippet tagBadge(tag: FileListTag)}
+  <span
+    class="file-tag-badge"
+    style="color: {tag.color};"
+    title={`${tag.label} label`}
+    aria-label={`${tag.label} label`}
+  >
+    {tag.emoji}
+  </span>
+{/snippet}
+
+{#snippet symlinkBadge()}
+  <span class="symlink-badge" title="Symbolic link" aria-label="symlink">&#128279;</span>
+{/snippet}
+
+{#snippet fileItem(item: FileListViewItem)}
+  <div
+    class={itemClass(item)}
+    data-path={item.path}
+    data-index={item.index}
+    data-is-dir={item.isDir}
+    data-is-image={isGrid ? item.isImage : undefined}
+    data-fixed-height={item.fixedHeight || undefined}
+    role="option"
+    aria-selected={item.isSelected}
+    tabindex={item.isFocused ? 0 : -1}
+    draggable="true"
+    onclick={(event) => emitItemInteraction('simplefile:file-list-item-click', event, item)}
+    ondblclick={(event) => emitItemInteraction('simplefile:file-list-item-open', event, item)}
+    onkeydown={(event) => handleItemKeydown(event, item)}
+  >
+    {#if isGrid}
+      <div class="file-icon" aria-hidden="true">
+        {#if item.thumbnail}
+          <img class="file-thumbnail" src={`data:image/jpeg;base64,${item.thumbnail}`} alt="" />
+        {:else if item.isPdf}
+          {@render pdfIcon()}
+        {:else}
+          {item.icon}
+        {/if}
+        {#if item.isSymlink}
+          {@render symlinkBadge()}
+        {/if}
+        {#if item.tag}
+          {@render tagBadge(item.tag)}
+        {/if}
+      </div>
+      <div class="file-name" title={item.name}>{item.name}</div>
+    {:else}
+      <div class="file-cell name-col">
+        <span class="file-icon" aria-hidden="true">{item.icon}</span>
+        <span class="file-name" title={item.name}>{item.name}</span>
+        {#if item.isSymlink}
+          {@render symlinkBadge()}
+        {/if}
+        {#if item.tag}
+          {@render tagBadge(item.tag)}
+        {/if}
+      </div>
+      {#if hasColumn('size')}
+        <div class="file-cell size-col" data-path={item.isDir ? item.path : ''}>{item.size}</div>
+      {/if}
+      {#if hasColumn('items')}
+        <div class="file-cell items-col" data-path={item.isDir ? item.path : ''}>{item.itemCount}</div>
+      {/if}
+      {#if hasColumn('date')}
+        <div class="file-cell date-col">{item.modified}</div>
+      {/if}
+      {#if hasColumn('type')}
+        <div class="file-cell type-col">{item.type}</div>
+      {/if}
+    {/if}
+  </div>
+{/snippet}
+
+{#if mode === 'virtual'}
+  <div class="virtual-spacer">
+    <div class={`virtual-content${isGrid ? ' virtual-content--grid' : ''}`}>
+      {#each items as item (item.path)}
+        {@render fileItem(item)}
+      {/each}
+    </div>
+  </div>
+{:else if isGrid}
+  <div class="grid-items-container">
+    {#each items as item (item.path)}
+      {@render fileItem(item)}
+    {/each}
+  </div>
+{:else}
+  {#each items as item (item.path)}
+    {@render fileItem(item)}
+  {/each}
+{/if}

@@ -1,0 +1,148 @@
+/* ============================================================================
+   SimpleFile – Main Stylesheet
+   This file is the single entry-point loaded by index.html.
+   All styles live in the modules/ subdirectory; import order matters
+   because later modules can build on variables and base rules defined earlier.
+   ============================================================================ */
+
+/* 1. Design tokens, CSS variables, global reset */
+@import url("modules/variables.css");
+
+/* 2. Top-level structural layout shells */
+@import url("modules/layout.css");
+
+/* 3. Navigation toolbar, path bar, breadcrumb, search, column headers */
+@import url("modules/toolbar.css");
+
+/* 4. File list scroll container, list items, grid view, icon-size overrides */
+@import url("modules/file-list.css");
+
+/* 5. Sidebar sections: bookmarks, recent locations, tree-view container */
+@import url("modules/sidebar-nav.css");
+
+/* 6. Directory tree nodes, expand arrows, animated collapse container */
+@import url("modules/tree-view.css");
+
+/* 7. Right-click context menu */
+@import url("modules/context-menu.css");
+
+/* 8. Generic modal overlay, shared buttons, form controls, progress dialog */
+@import url("modules/modal.css");
+
+/* 9. Tab bar */
+@import url("modules/tabs.css");
+
+/* 10. Collapsible side preview pane */
+@import url("modules/preview.css");
+
+/* 11. Quick Look full-screen overlay */
+@import url("modules/quick-look.css");
+
+/* 12. Settings modal layout and controls */
+@import url("modules/settings.css");
+
+/* 13. Archive viewer and create-archive dialog */
+@import url("modules/archive.css");
+
+/* 13a. Advanced multi-file rename dialog */
+@import url("modules/advanced-rename.css");
+
+/* 14. Two-pane split layout */
+@import url("modules/dual-pane.css");
+
+/* 15. Keyboard shortcuts and About dialogs */
+@import url("modules/overlays.css");
+
+/* 16. File-item state modifiers, drag-and-drop ghost, selection rect */
+@import url("modules/interactions.css");
+
+/* 17. Shimmer animation and skeleton placeholder shapes */
+@import url("modules/skeleton.css");
+
+/* 18. Scrollbar, loading spinner, empty state, toast notifications */
+@import url("modules/utilities.css");
+
+/* 19. Command Palette */
+@import url("modules/command-palette.css");
+
+
+/* File color labels */
+.file-tag-badge {
+    margin-left: 0.35rem;
+    font-size: 0.85em;
+    vertical-align: middle;
+}
+.grid-item .file-tag-badge {
+    position: absolute;
+    right: 0.4rem;
+    bottom: 0.4rem;
+}
+.toast .toast-undo {
+    margin-left: 0.75rem;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font-weight: 700;
+    cursor: pointer;
+    pointer-events: auto;
+    text-decoration: underline;
+}
+
+/* Transfer Manager */
+.transfer-manager-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(420px, 92vw);
+    height: 100vh;
+    background: var(--color-surface, #1f2937);
+    color: var(--color-text, #f9fafb);
+    box-shadow: -8px 0 24px rgba(0,0,0,0.35);
+    transform: translateX(110%);
+    transition: transform 180ms ease;
+    z-index: 2500;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid var(--color-border, rgba(255,255,255,0.12));
+}
+.transfer-manager-panel.open { transform: translateX(0); }
+.transfer-manager-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--color-border, rgba(255,255,255,0.12));
+}
+.transfer-manager-header h3 { margin: 0; font-size: 1rem; }
+.transfer-manager-subtitle { margin: .25rem 0 0; opacity: .7; font-size: .85rem; }
+.transfer-manager-close {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+.transfer-manager-toolbar { padding: .75rem 1rem; border-bottom: 1px solid var(--color-border, rgba(255,255,255,0.12)); }
+.transfer-manager-list { padding: .75rem; overflow: auto; flex: 1; }
+.transfer-empty { opacity: .7; padding: 1rem; text-align: center; }
+.transfer-item {
+    border: 1px solid var(--color-border, rgba(255,255,255,0.12));
+    border-radius: .55rem;
+    padding: .75rem;
+    margin-bottom: .75rem;
+    background: rgba(255,255,255,0.04);
+}
+.transfer-row-main { display: flex; align-items: center; gap: .65rem; }
+.transfer-direction { font-size: 1.15rem; }
+.transfer-meta { min-width: 0; flex: 1; }
+.transfer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.transfer-provider { opacity: .75; font-size: .82rem; margin-top: .15rem; }
+.transfer-percent { font-variant-numeric: tabular-nums; font-size: .85rem; opacity: .85; }
+.transfer-progress { height: .45rem; background: rgba(255,255,255,0.12); border-radius: 999px; overflow: hidden; margin-top: .6rem; }
+.transfer-progress-fill { height: 100%; background: currentColor; opacity: .8; transition: width 160ms ease; }
+.transfer-actions { display: flex; gap: .4rem; margin-top: .65rem; flex-wrap: wrap; }
+.transfer-error { margin-top: .5rem; color: #ffb4b4; font-size: .85rem; word-break: break-word; }
+.transfer-completed .transfer-provider { color: #8ee59a; }
+.transfer-failed .transfer-provider { color: #ffb4b4; }
+.transfer-cancelled .transfer-provider { color: #f6d365; }
+

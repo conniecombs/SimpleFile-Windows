@@ -1,0 +1,41 @@
+# Rust
+/target/
+/src-tauri/target/
+/src-tauri/google-oauth-client-id.txt
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build artifacts
+dist/
+build/
+/frontend/dist/
+.svelte-kit/
+.eslintcache
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri
+/src-tauri/WixTools/
+/src-tauri/target/
+
+# Local release/update signing secrets. Never commit updater private keys.
+/.secrets/
+/src-tauri/.secrets/
+*.key
+.env
+.env.*
+*-v1.backup

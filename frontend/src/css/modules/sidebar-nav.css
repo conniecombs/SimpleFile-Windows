@@ -1,0 +1,290 @@
+/* ============================================================================
+   Sidebar Navigation
+   Sidebar sections (bookmarks, recent locations), sidebar action buttons,
+   and the tree-view scroll container.
+   ============================================================================ */
+
+/* ── Sidebar Sections ─────────────────────────────────────────────────────── */
+
+.sidebar-section {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    flex-shrink: 0; /* Prevent collapsing */
+}
+
+.quick-access-section {
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+}
+
+.sidebar-section-header--collapsible,
+.quick-access-group-header--collapsible {
+    gap: 8px;
+}
+
+.sidebar-btn {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all var(--transition-fast);
+}
+
+.sidebar-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sidebar-collapse-btn {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 22px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-collapse-btn:hover,
+.sidebar-collapse-btn:focus-visible {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.sidebar-collapse-icon {
+    display: inline-block;
+    line-height: 1;
+    transform: rotate(0deg);
+    transition: transform var(--transition-fast);
+}
+
+.sidebar-collapse-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+.quick-access-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 4px 6px 12px;
+}
+
+/* ── Bookmarks & Recent Lists ─────────────────────────────────────────────── */
+
+.bookmarks-list, .recent-list {
+    max-height: 150px;
+    overflow-y: auto;
+    padding: 0 4px;
+}
+
+.bookmark-item, .recent-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.bookmark-item:hover, .recent-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.bookmark-item .bookmark-icon, .recent-item .recent-icon {
+    font-size: 14px;
+}
+
+.bookmark-item .bookmark-name, .recent-item .recent-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bookmark-item .bookmark-remove {
+    opacity: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.bookmark-item:hover .bookmark-remove {
+    opacity: 1;
+}
+
+.bookmark-item .bookmark-remove:hover {
+    color: var(--accent-danger);
+    background: var(--bg-hover);
+}
+
+.top-menu-list .bookmark-remove {
+    opacity: 1;
+}
+
+.sidebar-empty {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* ── Quick Access List ────────────────────────────────────────────────────── */
+
+.quick-access-list {
+    padding: 0 0 4px;
+}
+
+.quick-access-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary);
+    transition: all var(--transition-fast);
+}
+
+.quick-access-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.quick-access-icon {
+    font-size: 14px;
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.quick-access-text,
+.quick-access-name {
+    flex: 1;
+    min-width: 0;
+}
+
+.quick-access-name,
+.quick-access-meta {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.quick-access-meta {
+    margin-top: 1px;
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.quick-access-group {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.quick-access-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px 6px;
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.55px;
+    text-transform: uppercase;
+}
+
+.network-drives-list {
+    padding: 0;
+}
+
+/* ── Tree View Container ──────────────────────────────────────────────────── */
+
+.tree-view-container {
+    flex: 1; /* FIX: Ensure this fills space */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Allow shrinking properly */
+}
+
+.quick-access-list[hidden],
+.tree-view-container[hidden] {
+    display: none !important;
+}
+
+.tree-view {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px;
+    display: block !important; /* FIX: Force visibility */
+}
+
+.tree-view .empty-state {
+    color: var(--text-muted);
+    text-align: center;
+    padding-top: 20px;
+}
+
+.quick-access-section .tree-view-container {
+    flex: initial;
+    min-height: auto;
+    overflow: visible;
+}
+
+.quick-access-section .tree-view {
+    padding: 0;
+    overflow: visible;
+}
+
+.quick-access-section .tree-view .empty-state {
+    padding: 8px 6px;
+    text-align: left;
+    font-size: 12px;
+}

@@ -1,0 +1,281 @@
+/* ============================================================================
+   File List
+   File list scroll container, list-view items, grid-view items, and the
+   dynamic icon-size overrides applied by the icon-size slider.
+   ============================================================================ */
+
+/* ── Scroll Container ─────────────────────────────────────────────────────── */
+
+.file-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px;
+    opacity: 1;
+    transition: opacity 0.12s ease;
+}
+
+.file-list.navigating {
+    opacity: 0;
+    transition: none; /* Instant hide, then fade in */
+}
+
+/* ── Base File Item ───────────────────────────────────────────────────────── */
+
+.file-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.file-list.list-view .file-item {
+    display: grid;
+    grid-template-columns: var(
+        --file-list-columns,
+        var(--col-name-width, 240px) var(--col-size-width, 100px) var(--col-date-width, 140px) var(--col-type-width, 100px)
+    );
+    width: 100%;
+}
+
+.file-item:hover {
+    background: var(--bg-hover);
+}
+
+.file-item.selected {
+    background: var(--bg-selected);
+}
+
+.file-item .file-icon {
+    font-size: 20px;
+    width: 32px;
+    margin-right: 12px;
+    text-align: center;
+}
+
+.file-cell {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.folder-size-loading {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.file-item .file-name {
+    flex: 1;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.file-item .file-size {
+    width: 100px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.file-item .file-date {
+    width: 140px;
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+.file-item .file-type {
+    width: 100px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+/* ── Grid View ────────────────────────────────────────────────────────────── */
+
+/* Hide the Name/Size/Date/Type column header row in grid view — it has no
+   matching columns in the grid layout and causes visual confusion. */
+.file-container:has(.file-list.grid-view) .file-list-header {
+    display: none;
+}
+
+.file-list.grid-view {
+    padding: 16px;
+}
+
+.file-list.grid-view .file-item {
+    flex-direction: column;
+    padding: 12px;
+    text-align: center;
+    height: auto; /* Let content determine height */
+    align-self: start; /* Don't stretch to fill grid cell */
+}
+
+.file-list.grid-view .file-icon {
+    font-size: 48px;
+    margin: 0 0 8px 0;
+    width: auto;
+}
+
+.file-list.grid-view .file-name {
+    width: 100%;
+    text-align: center;
+}
+
+.file-list.grid-view .file-size,
+.file-list.grid-view .file-date,
+.file-list.grid-view .file-type {
+    display: none;
+}
+
+/* ── Dynamic Icon Sizing for Grid View ───────────────────────────────────── */
+/* Applied when the user moves the icon-size slider.                          */
+
+.file-list.grid-view .file-item {
+    /* Must match the minmax() min in the grid-template-columns rule above
+       (var(--icon-size) + 48px) so items fill their cell symmetrically and
+       don't shift off-centre due to the 8 px discrepancy that existed before. */
+    width: calc(var(--icon-size, 64px) + 48px);
+}
+
+.file-list.grid-view .file-icon {
+    font-size: var(--icon-size);
+    height: var(--icon-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-list.grid-view .file-icon img {
+    max-width: var(--icon-size);
+    max-height: var(--icon-size);
+    object-fit: contain;
+}
+
+/* ── Grid Item Icon Container ─────────────────────────────────────────────── */
+
+.grid-item .file-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--icon-size, 64px);
+    height: var(--icon-size, 64px);
+    font-size: calc(var(--icon-size, 64px) * 0.6);
+}
+
+.grid-item[data-is-image="true"] .file-icon {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+}
+
+/* ── Thumbnail Preview in Grid ────────────────────────────────────────────── */
+
+.file-thumbnail {
+    width: var(--icon-size, 64px);
+    height: var(--icon-size, 64px);
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    transition: opacity 0.2s ease;
+}
+
+.file-thumbnail:not([src]) {
+    opacity: 0;
+}
+
+/* ── PDF Icon in Grid ──────────────────────────────────────────────────────── */
+
+.file-pdf-icon {
+    width: var(--icon-size, 64px);
+    height: var(--icon-size, 64px);
+}
+
+/* ── Symlink Badge ─────────────────────────────────────────────────────────── */
+
+.symlink-badge {
+    font-size: 10px;
+    margin-left: 2px;
+    opacity: 0.75;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.file-tag-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin-left: 6px;
+    font-size: 14px;
+    line-height: 1;
+}
+
+.grid-item .file-tag-badge {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    margin-left: 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.grid-item .file-icon {
+    position: relative;
+}
+
+/* ── Virtual Scroll Layout ────────────────────────────────────────────────── */
+
+/* Height is set dynamically via element.style.height in renderVisibleItems(). */
+.virtual-spacer {
+    position: relative;
+    width: 100%;
+    pointer-events: none;
+}
+
+/* top is set dynamically via element.style.top in renderVisibleItems(). */
+.virtual-content {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: auto;
+}
+
+.grid-items-container,
+.virtual-content--grid {
+    display: flex;
+    flex-wrap: wrap;
+    /* Match the gap used in getColumnsPerRow()'s column-count math so items
+       wrap into the same number of columns for both rendering paths. */
+    gap: 12px;
+}
+
+/* ── Properties Modal – hash values ──────────────────────────────────────── */
+
+.prop-hash {
+    font-family: monospace;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+/* ── Git Integration ─────────────────────────────────────────────────────── */
+
+.file-item.git-modified .file-name {
+    color: var(--accent-color, #ffc107);
+}
+.file-item.git-untracked .file-name {
+    color: #4caf50;
+}
+.file-item.git-added .file-name {
+    color: #4caf50;
+}
+.file-item.git-deleted .file-name {
+    color: #f44336;
+    text-decoration: line-through;
+}
+.file-item.git-renamed .file-name {
+    color: var(--accent-color, #03a9f4);
+}

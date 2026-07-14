@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "dev": "npm --prefix frontend exec tauri dev",
+    "build": "npm --prefix frontend run build",
+    "check:migration": "npm --prefix frontend run check:migration",
+    "check:js": "node scripts/check-js-syntax.mjs",
+    "check:invokes": "node scripts/check-tauri-invokes.mjs",
+    "check:updater": "node scripts/check-updater-config.mjs",
+    "check:workflows": "node scripts/check-github-workflows.mjs",
+    "check:provider-surface": "node scripts/check-provider-surface.mjs",
+    "check:frontend": "npm --prefix frontend run check",
+    "check": "npm run check:frontend && npm run check:js && npm run check:invokes && npm run check:updater && npm run check:workflows && npm run check:provider-surface",
+    "check:rust": "cd src-tauri && cargo fmt --all -- --check && cargo test --locked --all-features && cargo clippy --locked --all-targets --all-features -- -D warnings",
+    "check:security": "node scripts/cargo-audit-release.mjs",
+    "check:release": "npm run check && npm run check:rust && npm run check:security",
+    "build:tauri:local": "cd src-tauri && cargo tauri build --ci --config tauri.local.conf.json",
+    "smoke:settings": "node scripts/smoke-settings-startup.mjs",
+    "smoke:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-release-startup.ps1",
+    "smoke:msi": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-msi-artifact.ps1",
+    "smoke:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-nsis-install.ps1",
+    "release:local": "npm run check:release && npm run build:tauri:local"
+  }
+}
