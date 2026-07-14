@@ -9,6 +9,7 @@ const ignoredDirectories = new Set([
   'target',
   'dist',
   'build',
+  'build_notes',
   '.svelte-kit',
 ]);
 

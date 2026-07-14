@@ -21,6 +21,7 @@ import type {
   OperationId,
   PathString,
   ProgressUpdate,
+  RarInstallPlan,
   RenameRequest,
   SearchOptions,
   SearchResult,
@@ -236,8 +237,16 @@ export function checkRarInstalled(): Promise<boolean> {
   return invokeCommand('check_rar_installed');
 }
 
-export function installRar(): Promise<string> {
-  return invokeCommand('install_rar');
+export function prepareRarInstall(): Promise<RarInstallPlan> {
+  return invokeCommand('prepare_rar_install');
+}
+
+export function discardRarInstall(confirmationToken: string): Promise<void> {
+  return invokeCommand('discard_rar_install', { confirmationToken });
+}
+
+export function installRar(confirmationToken: string): Promise<string> {
+  return invokeCommand('install_rar', { confirmationToken });
 }
 
 

@@ -20,6 +20,7 @@ import {
     createTag,
     deleteEntry,
     deleteSmartFolder,
+    discardRarInstall,
     diskCleanup,
     extractArchive,
     getAllFileTags,
@@ -55,6 +56,7 @@ import {
     getAppVersion,
     installRar,
     installUpdate,
+    prepareRarInstall,
     saveSmartFolder,
     setTagsForPath,
     watchDirectory,
@@ -96,6 +98,7 @@ import {
     OperationId,
     PathString,
     ProgressUpdate,
+    RarInstallPlan,
     RenameRequest,
     SearchOptions,
     SmartFolder,
@@ -2173,6 +2176,70 @@ const defaultColorLabels = [
       await updateToolStatus();
     } catch (error) {
       if (message) message.textContent = error instanceof Error ? error.message : String(error);
+      showError(error);
+    }
+  }
+
+  function setInstallMessage(messageId: string, text: string) {
+    const message = document.getElementById(messageId) as HTMLElement | null;
+    if (message) {
+      message.style.display = 'inline';
+      message.textContent = text;
+    }
+    return message;
+  }
+
+  function rarInstallConfirmationBody(plan: RarInstallPlan) {
+    const publisher = plan.publisher || 'Not applicable on this platform';
+    return `
+      <div class="rar-install-confirmation">
+        <p>SimpleFile downloaded and verified the RAR installer before running it.</p>
+        <dl class="metadata-list">
+          <dt>Source</dt>
+          <dd>${escapeHtml(plan.download_url)}</dd>
+          <dt>File</dt>
+          <dd>${escapeHtml(plan.file_name)}</dd>
+          <dt>SHA-256</dt>
+          <dd><code>${escapeHtml(plan.sha256)}</code></dd>
+          <dt>Publisher</dt>
+          <dd>${escapeHtml(publisher)}</dd>
+          <dt>Staged installer</dt>
+          <dd>${escapeHtml(plan.installer_path)}</dd>
+        </dl>
+      </div>
+    `;
+  }
+
+  export async function installRarFlow(messageId: string) {
+    setInstallMessage(messageId, 'Preparing verified RAR installer...');
+
+    let plan: RarInstallPlan | null = null;
+    try {
+      plan = await prepareRarInstall();
+      setInstallMessage(messageId, 'RAR installer verified. Waiting for confirmation...');
+
+      const confirmed = await showHtmlDialog({
+        bodyHtml: rarInstallConfirmationBody(plan),
+        confirmText: 'Run Installer',
+        title: 'Confirm RAR Installer',
+      });
+
+      if (!confirmed) {
+        await discardRarInstall(plan.confirmation_token).catch(() => undefined);
+        setInstallMessage(messageId, 'RAR installation cancelled.');
+        return;
+      }
+
+      setInstallMessage(messageId, 'Installing RAR...');
+      const result = await installRar(plan.confirmation_token);
+      setInstallMessage(messageId, result || 'RAR installed.');
+      showSuccess('RAR installed');
+      await updateToolStatus();
+    } catch (error) {
+      if (plan) {
+        await discardRarInstall(plan.confirmation_token).catch(() => undefined);
+      }
+      setInstallMessage(messageId, error instanceof Error ? error.message : String(error));
       showError(error);
     }
   }

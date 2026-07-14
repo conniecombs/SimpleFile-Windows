@@ -425,6 +425,28 @@
     font-style: italic;
 }
 
+.rar-install-confirmation .metadata-list {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 8px 12px;
+    margin: 12px 0 0;
+}
+
+.rar-install-confirmation .metadata-list dt {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.rar-install-confirmation .metadata-list dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.rar-install-confirmation code {
+    font-family: var(--font-mono, Consolas, monospace);
+    font-size: 12px;
+}
+
 /* ── Git Status (in Settings) ─────────────────────────────────────────────── */
 
 .git-branch-name {

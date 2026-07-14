@@ -47,7 +47,7 @@ assertContains('frontend/src/lib/app/core.ts', [
 assertContains('frontend/src/lib/app/setup.ts', [
   'selectDirectory,',
   'checkRarInstalled,',
-  'installRar,',
+  'installRarFlow,',
   "case 'settings-custom-path-browse':",
   "case 'rar-install-btn':",
   "case 'update-check-btn':",
@@ -81,6 +81,8 @@ assertNotContains('frontend/src/lib/components/settings-body/SettingsBody.svelte
 assertContains('frontend/src/lib/tauri.ts', [
   "case 'select_directory':",
   "case 'check_rar_installed':",
+  "case 'prepare_rar_install':",
+  "case 'discard_rar_install':",
   "case 'install_rar':",
   "case 'get_app_about_info':",
   "case 'check_for_update':",

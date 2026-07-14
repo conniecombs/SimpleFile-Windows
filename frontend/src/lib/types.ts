@@ -167,6 +167,15 @@ export interface Checksums {
   sha256: string;
 }
 
+export interface RarInstallPlan {
+  confirmation_token: string;
+  download_url: string;
+  file_name: string;
+  installer_path: string;
+  publisher: Nullable<string>;
+  sha256: string;
+}
+
 export interface DiffRow {
   kind: string;
   left_line: Nullable<number>;
@@ -277,7 +286,9 @@ export interface TauriCommandMap {
   extract_archive: CommandContract<{ archivePath: PathString; destination: PathString }, void>;
   create_archive: CommandContract<{ paths: PathString[]; archivePath: PathString; format: ArchiveFormat }, void>;
   check_rar_installed: CommandContract<NoArgs, boolean>;
-  install_rar: CommandContract<NoArgs, string>;
+  prepare_rar_install: CommandContract<NoArgs, RarInstallPlan>;
+  discard_rar_install: CommandContract<{ confirmationToken: string }, void>;
+  install_rar: CommandContract<{ confirmationToken: string }, string>;
   get_db_setting: CommandContract<{ key: string }, string | null>;
   set_db_setting: CommandContract<{ key: string; value: string }, void>;
   git_pull: CommandContract<{ path?: string }, string | void>;

@@ -997,6 +997,17 @@ async function invokeDevCommand<Name extends TauriCommandName>(
 
     case 'check_rar_installed':
       return false as CommandResult<Name>;
+    case 'prepare_rar_install':
+      return {
+        confirmation_token: 'dev-rar-confirmation-token',
+        download_url: 'https://www.rarlab.com/rar/winrar-x64-723.exe',
+        file_name: 'winrar-x64-723.exe',
+        installer_path: 'browser-dev-mode',
+        publisher: 'CN=win.rar GmbH, O=win.rar GmbH',
+        sha256: '8ff0daf3ed564cc743c0e23ff2e253997ffc74460f9673f0b6dd037b2db4ce7b',
+      } as CommandResult<Name>;
+    case 'discard_rar_install':
+      return undefined as CommandResult<Name>;
     case 'install_rar':
       return 'RAR installer is unavailable in browser dev mode.' as CommandResult<Name>;
     case 'get_app_version':

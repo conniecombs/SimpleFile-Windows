@@ -101,6 +101,8 @@ pub fn run() {
             terminal::open_powershell_admin,
             checksum::compute_checksum,
             rar_installer::check_rar_installed,
+            rar_installer::prepare_rar_install,
+            rar_installer::discard_rar_install,
             rar_installer::install_rar,
             updater::get_app_version,
             updater::get_app_about_info,
