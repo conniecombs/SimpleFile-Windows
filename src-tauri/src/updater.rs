@@ -45,7 +45,7 @@ pub fn get_app_about_info(app: AppHandle) -> AppAboutInfo {
         description: env!("CARGO_PKG_DESCRIPTION").to_string(),
         authors: env!("CARGO_PKG_AUTHORS").to_string(),
         repository: option_env!("CARGO_PKG_REPOSITORY")
-            .unwrap_or("https://github.com/conniecombs/SimpleFile-Svelte")
+            .unwrap_or("https://github.com/conniecombs/SimpleFile-Windows")
             .to_string(),
         framework: "Tauri 2".to_string(),
         runtime: "Rust backend + WebView frontend".to_string(),

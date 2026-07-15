@@ -85,7 +85,7 @@ Each release may include the following artifacts, depending on Tauri bundler out
 ## Auto-Update
 
 SimpleFile uses Tauri's updater plugin with GitHub Releases as the static update server.
-The app checks `https://github.com/conniecombs/SimpleFile-Svelte/releases/latest/download/latest.json`.
+The app checks `https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json`.
 
 ### Setup Requirements
 

@@ -215,7 +215,7 @@ jobs:
             ## SimpleFile ${{ needs.validate.outputs.version }}
 
             Windows NSIS and MSI installers are attached below.
-            See [docs/CHANGELOG.md](https://github.com/conniecombs/SimpleFile-Svelte/blob/main/docs/CHANGELOG.md) for release notes and upgrade details.
+            See [docs/CHANGELOG.md](https://github.com/conniecombs/SimpleFile-Windows/blob/main/docs/CHANGELOG.md) for release notes and upgrade details.
           releaseDraft: true
           prerelease: ${{ needs.validate.outputs.prerelease }}
           uploadUpdaterJson: true

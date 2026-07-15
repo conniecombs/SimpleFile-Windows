@@ -23,7 +23,7 @@ const releaseWorkflow = readText(releaseWorkflowPath);
 
 const updater = tauriConfig.plugins?.updater ?? {};
 const endpoints = updater.endpoints ?? [];
-const expectedEndpoint = 'https://github.com/conniecombs/SimpleFile-Svelte/releases/latest/download/latest.json';
+const expectedEndpoint = 'https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json';
 
 if (tauriConfig.bundle?.createUpdaterArtifacts !== true) {
     fail('src-tauri/tauri.conf.json must set bundle.createUpdaterArtifacts to true.');

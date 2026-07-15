@@ -4,7 +4,7 @@ version = "1.1.0"
 description = "A simple file explorer built with Tauri"
 authors = ["SimpleFile Team"]
 license-file = "../LICENSE"
-repository = "https://github.com/conniecombs/SimpleFile-Svelte"
+repository = "https://github.com/conniecombs/SimpleFile-Windows"
 edition = "2021"
 
 [build-dependencies]

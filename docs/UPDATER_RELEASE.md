@@ -5,7 +5,7 @@ update server. Release builds publish `latest.json`, signed update artifacts,
 and `.sig` files to the latest GitHub release. Installed apps check:
 
 ```text
-https://github.com/conniecombs/SimpleFile-Svelte/releases/latest/download/latest.json
+https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json
 ```
 
 ## One-time signing setup

@@ -4,7 +4,7 @@ Release date: 2026-05-29
 
 ## Summary
 
-SimpleFile 1.1.0 is the first public release from the `SimpleFile-Svelte`
+SimpleFile 1.1.0 is the first public release from the `SimpleFile-Windows`
 repository and supersedes the unreleased local `v1.0.4` tag. It combines the
 Svelte/Vite shell migration, release-readiness hardening, Windows installer
 smoke coverage, startup-location fixes, safer file-operation conflict behavior,
@@ -48,7 +48,7 @@ future published releases can be installed through Settings -> App Updates.
 - Release build tooling now includes local unsigned bundle support plus release
   executable, MSI, NSIS installer, and settings startup smoke tests.
 - Project metadata, README, updater configuration, support links, release docs,
-  and contribution terms now point at `conniecombs/SimpleFile-Svelte`.
+  and contribution terms now point at `conniecombs/SimpleFile-Windows`.
 
 ## Validation
 
