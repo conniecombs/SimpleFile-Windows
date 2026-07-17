@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
-  import { marked } from 'marked';
   import hljs from 'highlight.js/lib/core';
   import bash from 'highlight.js/lib/languages/bash';
   import css from 'highlight.js/lib/languages/css';
@@ -16,6 +15,7 @@
   import 'highlight.js/styles/github-dark.css';
 
   import type { FileEntry, FilePreview } from '../../types';
+  import { renderSafeMarkdown } from '../../markdownPreviewSecurity.mjs';
 
   export type PreviewPaneMode = 'empty' | 'loading' | 'folder' | 'preview' | 'error';
 
@@ -105,7 +105,7 @@
       } else if (preview?.file_type === 'text' && preview.content) {
         const ext = entry?.name.split('.').pop()?.toLowerCase();
         if (ext === 'md' || ext === 'markdown') {
-          renderedMarkdown = marked.parse(preview.content) as string;
+          renderedMarkdown = renderSafeMarkdown(preview.content);
         } else {
           try {
             const language = extensionLanguages[ext || ''];

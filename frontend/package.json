@@ -15,6 +15,7 @@
     "check:stage5-menu-overlays": "node scripts/check-stage5-menu-overlays.mjs",
     "check:stage7-search-smart-folders": "node scripts/check-stage7-search-smart-folders.mjs",
     "check:stage8-file-inspection": "node scripts/check-stage8-file-inspection.mjs",
+    "check:markdown-preview-safety": "node scripts/check-markdown-preview-safety.mjs",
     "check:stage9-organization-cleanup": "node scripts/check-stage9-organization-cleanup.mjs",
     "check:stage10-transfer-safety": "node scripts/check-stage10-transfer-safety.mjs",
     "check:stage11-navigation-dual-pane": "node scripts/check-stage11-navigation-dual-pane.mjs",
@@ -23,11 +24,12 @@
     "build": "npm run build:app",
     "dev": "vite",
     "preview": "vite preview",
-    "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run build"
+    "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:markdown-preview-safety && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run build"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tsconfig/svelte": "^5.0.8",
+    "@types/sanitize-html": "^2.16.1",
     "svelte": "^5.56.3",
     "svelte-check": "^4.6.0",
     "ts-morph": "^28.0.0",
@@ -37,6 +39,7 @@
   "dependencies": {
     "@tauri-apps/api": "^2.11.0",
     "highlight.js": "^11.11.1",
-    "marked": "^18.0.5"
+    "marked": "^18.0.5",
+    "sanitize-html": "^2.17.6"
   }
 }
