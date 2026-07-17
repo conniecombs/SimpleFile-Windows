@@ -65,50 +65,22 @@ fn contains_path_separator(value: &str) -> bool {
 }
 
 fn is_trusted_application_root(path: &Path) -> bool {
-    #[cfg(target_os = "windows")]
-    {
-        let mut roots = Vec::new();
-        if let Ok(value) = std::env::var("ProgramFiles") {
-            roots.push(PathBuf::from(value));
-        }
-        if let Ok(value) = std::env::var("ProgramFiles(x86)") {
-            roots.push(PathBuf::from(value));
-        }
-        if let Ok(value) = std::env::var("LOCALAPPDATA") {
-            roots.push(PathBuf::from(value).join("Programs"));
-        }
-        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-        roots.iter().any(|root| {
-            root.canonicalize()
-                .map(|trusted| canonical.starts_with(trusted))
-                .unwrap_or(false)
-        })
+    let mut roots = Vec::new();
+    if let Ok(value) = std::env::var("ProgramFiles") {
+        roots.push(PathBuf::from(value));
     }
-
-    #[cfg(target_os = "macos")]
-    {
-        let trusted_roots = [
-            Path::new("/Applications"),
-            Path::new("/System/Applications"),
-            Path::new("/usr/bin"),
-            Path::new("/usr/local/bin"),
-            Path::new("/opt/homebrew/bin"),
-        ];
-        trusted_roots.iter().any(|root| path.starts_with(root))
+    if let Ok(value) = std::env::var("ProgramFiles(x86)") {
+        roots.push(PathBuf::from(value));
     }
-
-    #[cfg(target_os = "linux")]
-    {
-        let trusted_roots = [
-            Path::new("/usr/bin"),
-            Path::new("/usr/local/bin"),
-            Path::new("/bin"),
-            Path::new("/opt"),
-            Path::new("/snap/bin"),
-            Path::new("/var/lib/flatpak/exports/bin"),
-        ];
-        trusted_roots.iter().any(|root| path.starts_with(root))
+    if let Ok(value) = std::env::var("LOCALAPPDATA") {
+        roots.push(PathBuf::from(value).join("Programs"));
     }
+    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    roots.iter().any(|root| {
+        root.canonicalize()
+            .map(|trusted| canonical.starts_with(trusted))
+            .unwrap_or(false)
+    })
 }
 
 fn is_executable_file(path: &Path) -> bool {
@@ -116,36 +88,18 @@ fn is_executable_file(path: &Path) -> bool {
         return false;
     }
 
-    #[cfg(windows)]
-    {
-        matches!(
-            path.extension()
-                .map(|ext| ext.to_string_lossy().to_ascii_lowercase()),
-            Some(ext) if ext == "exe" || ext == "com"
-        )
-    }
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
-    }
+    matches!(
+        path.extension()
+            .map(|ext| ext.to_string_lossy().to_ascii_lowercase()),
+        Some(ext) if ext == "exe" || ext == "com"
+    )
 }
 
 fn candidate_with_platform_extensions(path: PathBuf) -> Vec<PathBuf> {
-    #[cfg(windows)]
-    {
-        if path.extension().is_some() {
-            vec![path]
-        } else {
-            vec![path.with_extension("exe"), path.with_extension("com")]
-        }
-    }
-
-    #[cfg(not(windows))]
-    {
+    if path.extension().is_some() {
         vec![path]
+    } else {
+        vec![path.with_extension("exe"), path.with_extension("com")]
     }
 }
 

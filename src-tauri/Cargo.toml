@@ -49,10 +49,6 @@ exif = { package = "kamadak-exif", version = "0.6" }
 tauri-plugin-dialog = "2"
 rusqlite = { version = "0.31.0", features = ["bundled"] }
 
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-xattr = "1.6"
-
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["accctrl", "aclapi", "fileapi", "minwindef", "winbase", "winerror", "winnetwk", "winnt"] }
 

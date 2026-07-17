@@ -9,16 +9,13 @@
   };
 
   let {
-    legacyContent = null,
     preview = null,
     title = 'Preview',
   }: {
-    legacyContent?: Node | string | null;
     preview?: QuickLookPreview | null;
     title?: string;
   } = $props();
 
-  let contentElement: HTMLDivElement | undefined = $state();
   let pdfUrl: string | null = $state(null);
   let activePdfUrl: string | null = null;
 
@@ -69,19 +66,6 @@
     return revokePdfUrl;
   });
 
-  $effect(() => {
-    if (!contentElement || legacyContent === null || legacyContent === undefined) {
-      return;
-    }
-
-    contentElement.replaceChildren();
-    if (legacyContent instanceof Node) {
-      contentElement.replaceChildren(legacyContent);
-    } else {
-      contentElement.innerHTML = legacyContent;
-    }
-  });
-
   onDestroy(revokePdfUrl);
 </script>
 
@@ -92,32 +76,30 @@
       &times;
     </button>
   </div>
-  <div class="quicklook-content" id="quicklook-content" bind:this={contentElement}>
-    {#if legacyContent === null || legacyContent === undefined}
-      {#if !preview}
-        <div class="no-preview">
-          <span class="icon" aria-hidden="true">&#128065;</span>
-          <p>No preview available</p>
-        </div>
-      {:else if preview.file_type === 'image' && preview.content}
-        <img src={`data:${preview.mime_type};base64,${preview.content}`} alt={title} />
-      {:else if preview.file_type === 'text'}
-        <pre>{preview.content || ''}</pre>
-      {:else if preview.file_type === 'pdf'}
-        {#if pdfUrl}
-          <embed class="quicklook-pdf" type="application/pdf" src={pdfUrl} />
-        {:else}
-          <div class="no-preview">
-            <span class="icon" aria-hidden="true">&#128213;</span>
-            <p>PDF too large to preview</p>
-          </div>
-        {/if}
+  <div class="quicklook-content" id="quicklook-content">
+    {#if !preview}
+      <div class="no-preview">
+        <span class="icon" aria-hidden="true">&#128065;</span>
+        <p>No preview available</p>
+      </div>
+    {:else if preview.file_type === 'image' && preview.content}
+      <img src={`data:${preview.mime_type};base64,${preview.content}`} alt={title} />
+    {:else if preview.file_type === 'text'}
+      <pre>{preview.content || ''}</pre>
+    {:else if preview.file_type === 'pdf'}
+      {#if pdfUrl}
+        <embed class="quicklook-pdf" type="application/pdf" src={pdfUrl} />
       {:else}
-        <div class="preview-info">
-          <p>Type: {preview.mime_type}</p>
-          <p>Size: {formatSize(preview.size)}</p>
+        <div class="no-preview">
+          <span class="icon" aria-hidden="true">&#128213;</span>
+          <p>PDF too large to preview</p>
         </div>
       {/if}
+    {:else}
+      <div class="preview-info">
+        <p>Type: {preview.mime_type}</p>
+        <p>Size: {formatSize(preview.size)}</p>
+      </div>
     {/if}
   </div>
   <div class="quicklook-footer">

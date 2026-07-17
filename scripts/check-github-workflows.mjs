@@ -27,6 +27,13 @@ function requireRegex(source, file, pattern, label) {
     }
 }
 
+function requireOccurrenceCount(source, file, snippet, expectedCount) {
+    const actualCount = source.split(snippet).length - 1;
+    if (actualCount !== expectedCount) {
+        fail(`${file} must include ${snippet} exactly ${expectedCount} time(s), found ${actualCount}.`);
+    }
+}
+
 const ciPath = '.github/workflows/ci.yml';
 const releasePath = '.github/workflows/release.yml';
 const dependabotPath = '.github/dependabot.yml';
@@ -51,7 +58,7 @@ const ciSnippets = [
     'cargo fmt --all -- --check',
     'cargo clippy --locked --all-targets --all-features -- -D warnings',
     'cargo test --locked --all-features',
-    'cargo audit --deny warnings',
+    'node scripts/cargo-audit-release.mjs',
     'x86_64-pc-windows-msvc',
     'cargo build --locked --release --all-features --target ${{ matrix.target }}',
 ];
@@ -77,7 +84,7 @@ const releaseSnippets = [
     'cargo fmt --all -- --check',
     'cargo clippy --locked --all-targets --all-features -- -D warnings',
     'cargo test --locked --all-features',
-    'cargo audit --deny warnings',
+    'node scripts/cargo-audit-release.mjs',
     'TAURI_SIGNING_PRIVATE_KEY',
     'tauri-apps/tauri-action@action-v0.6.2',
     'uploadUpdaterJson: true',
@@ -98,6 +105,35 @@ requireRegex(
     /if:\s*needs\.validate\.outputs\.draft\s*==\s*'false'/,
     'a publish gate that respects manual draft=false releases',
 );
+
+requireRegex(
+    ciWorkflow,
+    ciPath,
+    /quality:[\s\S]*?name:\s*Rust quality gate[\s\S]*?runs-on:\s*windows-latest/,
+    'a Windows runner for Rust quality gates',
+);
+
+requireRegex(
+    releaseWorkflow,
+    releasePath,
+    /checks:[\s\S]*?name:\s*Release quality gates[\s\S]*?runs-on:\s*windows-latest/,
+    'a Windows runner for release quality gates',
+);
+
+const retiredWorkflowSnippets = [
+    'Install Linux/Tauri dependencies',
+    'libwebkit2gtk',
+    '--ignore RUSTSEC-',
+];
+
+for (const snippet of retiredWorkflowSnippets) {
+    if (ciWorkflow.includes(snippet)) {
+        fail(`${ciPath} should not include retired workflow snippet: ${snippet}.`);
+    }
+    if (releaseWorkflow.includes(snippet)) {
+        fail(`${releasePath} should not include retired workflow snippet: ${snippet}.`);
+    }
+}
 
 const retiredArtifactTargets = [
     'x86_64-apple-darwin',
@@ -125,6 +161,8 @@ const dependabotSnippets = [
 for (const snippet of dependabotSnippets) {
     requireSnippet(dependabot, dependabotPath, snippet);
 }
+
+requireOccurrenceCount(dependabot, dependabotPath, 'directory: "/frontend"', 1);
 
 if (!process.exitCode) {
     console.log('GitHub workflow configuration is wired.');

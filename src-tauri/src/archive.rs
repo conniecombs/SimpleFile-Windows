@@ -1150,16 +1150,11 @@ fn copy_dir_for_archive(src: &Path, dst: &Path) -> Result<(), String> {
 fn remove_local_path(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path).map_err(|e| format!("Failed to stat path: {e}"))?;
     if meta.file_type().is_symlink() {
-        #[cfg(windows)]
-        {
-            if meta.is_dir() {
-                fs::remove_dir(path).map_err(|e| format!("Failed to delete symlink: {}", e))?;
-            } else {
-                fs::remove_file(path).map_err(|e| format!("Failed to delete symlink: {}", e))?;
-            }
+        if meta.is_dir() {
+            fs::remove_dir(path).map_err(|e| format!("Failed to delete symlink: {}", e))?;
+        } else {
+            fs::remove_file(path).map_err(|e| format!("Failed to delete symlink: {}", e))?;
         }
-        #[cfg(not(windows))]
-        fs::remove_file(path).map_err(|e| format!("Failed to delete symlink: {e}"))?;
     } else if meta.is_dir() {
         fs::remove_dir_all(path).map_err(|e| format!("Failed to delete directory: {e}"))?;
     } else {
@@ -1304,10 +1299,7 @@ fn unique_nonce() -> u128 {
 fn same_archive_path(left: &Path, right: &Path) -> bool {
     match (left.canonicalize(), right.canonicalize()) {
         (Ok(left), Ok(right)) => left == right,
-        _ if cfg!(windows) || cfg!(target_os = "macos") => {
-            left.to_string_lossy().to_lowercase() == right.to_string_lossy().to_lowercase()
-        }
-        _ => left == right,
+        _ => left.to_string_lossy().to_lowercase() == right.to_string_lossy().to_lowercase(),
     }
 }
 

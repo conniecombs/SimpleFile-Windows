@@ -148,18 +148,12 @@ pub fn delete_entry(path: String, app: tauri::AppHandle) -> Result<(), String> {
         // Junction or Directory Symlink) carries FILE_ATTRIBUTE_DIRECTORY,
         // so remove_file fails with "Access denied".  remove_dir must be
         // used in that case.
-        #[cfg(windows)]
-        {
-            if lstat.is_dir() {
-                fs::remove_dir(&path_buf)
-                    .map_err(|e| format!("Failed to delete directory symlink: {}", e))?;
-            } else {
-                fs::remove_file(&path_buf)
-                    .map_err(|e| format!("Failed to delete symlink: {}", e))?;
-            }
+        if lstat.is_dir() {
+            fs::remove_dir(&path_buf)
+                .map_err(|e| format!("Failed to delete directory symlink: {}", e))?;
+        } else {
+            fs::remove_file(&path_buf).map_err(|e| format!("Failed to delete symlink: {}", e))?;
         }
-        #[cfg(not(windows))]
-        fs::remove_file(&path_buf).map_err(|e| format!("Failed to delete symlink: {e}"))?;
     } else if lstat.is_dir() {
         fs::remove_dir_all(&path_buf).map_err(|e| format!("Failed to delete directory: {e}"))?;
     } else {
@@ -236,12 +230,7 @@ struct RenamePlan {
 }
 
 fn path_collision_key(path: &Path) -> String {
-    let s = path.to_string_lossy().to_string();
-    if cfg!(target_os = "windows") || cfg!(target_os = "macos") {
-        s.to_lowercase()
-    } else {
-        s
-    }
+    path.to_string_lossy().to_lowercase()
 }
 
 fn unique_rename_temp_path(parent: &std::path::Path, idx: usize) -> Result<PathBuf, String> {
@@ -255,68 +244,6 @@ fn unique_rename_temp_path(parent: &std::path::Path, idx: usize) -> Result<PathB
     Ok(parent.join(format!(".simplefile-rename-tmp-{idx}-{token}")))
 }
 
-#[cfg(target_os = "linux")]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let source = CString::new(source.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let destination = CString::new(destination.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            destination.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        let error = std::io::Error::last_os_error();
-        if matches!(
-            error.raw_os_error(),
-            Some(code) if code == libc::ENOSYS || code == libc::EINVAL
-        ) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Unsupported,
-                "atomic no-replace rename is not supported on this filesystem",
-            ));
-        }
-        Err(error)
-    }
-}
-
-#[cfg(target_os = "macos")]
-fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let source = CString::new(source.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let destination = CString::new(destination.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let result = unsafe {
-        libc::renameatx_np(
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            destination.as_ptr(),
-            libc::RENAME_EXCL,
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 fn rename_no_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
     if destination.exists() {
         return Err(std::io::Error::new(
@@ -606,19 +533,13 @@ pub(crate) fn copy_dir_iterative(src: &Path, dst: &Path) -> Result<(), String> {
             }
             let link_target = fs::read_link(&src_path)
                 .map_err(|e| format!("Failed to read symlink target: {e}"))?;
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(&link_target, &dst_path)
-                .map_err(|e| format!("Failed to create symlink: {e}"))?;
-            #[cfg(windows)]
-            {
-                // Windows requires separate calls for file vs directory targets.
-                if link_target.is_dir() {
-                    std::os::windows::fs::symlink_dir(&link_target, &dst_path)
-                        .map_err(|e| format!("Failed to create directory symlink: {}", e))?;
-                } else {
-                    std::os::windows::fs::symlink_file(&link_target, &dst_path)
-                        .map_err(|e| format!("Failed to create file symlink: {}", e))?;
-                }
+            // Windows requires separate calls for file vs directory targets.
+            if link_target.is_dir() {
+                std::os::windows::fs::symlink_dir(&link_target, &dst_path)
+                    .map_err(|e| format!("Failed to create directory symlink: {}", e))?;
+            } else {
+                std::os::windows::fs::symlink_file(&link_target, &dst_path)
+                    .map_err(|e| format!("Failed to create file symlink: {}", e))?;
             }
         } else {
             if let Some(parent) = dst_path.parent() {
@@ -709,65 +630,10 @@ fn preserve_creation_time(metadata: &fs::Metadata, dst: &Path) -> Result<(), Str
     }
 }
 
-#[cfg(not(windows))]
-fn preserve_creation_time(_metadata: &fs::Metadata, _dst: &Path) -> Result<(), String> {
-    Ok(())
-}
-
-#[cfg(unix)]
-fn preserve_platform_metadata(src: &Path, dst: &Path) -> Result<(), String> {
-    let attrs = match xattr::list(src) {
-        Ok(attrs) => attrs,
-        Err(e) if optional_metadata_error(&e) => return Ok(()),
-        Err(e) => return Err(format!("Failed to list extended attributes: {e}")),
-    };
-
-    for name in attrs {
-        let Some(value) = (match xattr::get(src, &name) {
-            Ok(value) => value,
-            Err(e) if optional_metadata_error(&e) => continue,
-            Err(e) => {
-                return Err(format!(
-                    "Failed to read extended attribute {}: {}",
-                    name.to_string_lossy(),
-                    e
-                ));
-            }
-        }) else {
-            continue;
-        };
-
-        if let Err(e) = xattr::set(dst, &name, &value) {
-            if optional_metadata_error(&e) {
-                continue;
-            }
-            return Err(format!(
-                "Failed to preserve extended attribute {}: {}",
-                name.to_string_lossy(),
-                e
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-#[cfg(unix)]
-fn optional_metadata_error(error: &std::io::Error) -> bool {
-    matches!(
-        error.kind(),
-        std::io::ErrorKind::Unsupported
-            | std::io::ErrorKind::PermissionDenied
-            | std::io::ErrorKind::NotFound
-    )
-}
-
-#[cfg(windows)]
 fn preserve_platform_metadata(src: &Path, dst: &Path) -> Result<(), String> {
     preserve_windows_dacl(src, dst)
 }
 
-#[cfg(windows)]
 fn preserve_windows_dacl(src: &Path, dst: &Path) -> Result<(), String> {
     use std::os::windows::ffi::OsStrExt;
     use winapi::um::accctrl::SE_FILE_OBJECT;
@@ -1090,18 +956,13 @@ fn remove_existing_path(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path)
         .map_err(|e| format!("Failed to stat existing destination: {e}"))?;
     if meta.file_type().is_symlink() {
-        #[cfg(windows)]
-        {
-            if meta.is_dir() {
-                fs::remove_dir(path)
-                    .map_err(|e| format!("Failed to remove destination symlink: {}", e))?;
-            } else {
-                fs::remove_file(path)
-                    .map_err(|e| format!("Failed to remove destination symlink: {}", e))?;
-            }
+        if meta.is_dir() {
+            fs::remove_dir(path)
+                .map_err(|e| format!("Failed to remove destination symlink: {}", e))?;
+        } else {
+            fs::remove_file(path)
+                .map_err(|e| format!("Failed to remove destination symlink: {}", e))?;
         }
-        #[cfg(not(windows))]
-        fs::remove_file(path).map_err(|e| format!("Failed to remove destination symlink: {e}"))?;
     } else if meta.is_dir() {
         fs::remove_dir_all(path)
             .map_err(|e| format!("Failed to remove destination directory: {e}"))?;
@@ -1188,18 +1049,12 @@ fn copy_path_to_destination(source_path: &Path, final_dest: &Path) -> Result<(),
         }
         let link_target = fs::read_link(source_path)
             .map_err(|e| format!("Failed to read symlink target: {e}"))?;
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(&link_target, final_dest)
-            .map_err(|e| format!("Failed to create symlink: {e}"))?;
-        #[cfg(windows)]
-        {
-            if link_target.is_dir() {
-                std::os::windows::fs::symlink_dir(&link_target, final_dest)
-                    .map_err(|e| format!("Failed to create directory symlink: {}", e))?;
-            } else {
-                std::os::windows::fs::symlink_file(&link_target, final_dest)
-                    .map_err(|e| format!("Failed to create file symlink: {}", e))?;
-            }
+        if link_target.is_dir() {
+            std::os::windows::fs::symlink_dir(&link_target, final_dest)
+                .map_err(|e| format!("Failed to create directory symlink: {}", e))?;
+        } else {
+            std::os::windows::fs::symlink_file(&link_target, final_dest)
+                .map_err(|e| format!("Failed to create file symlink: {}", e))?;
         }
         Ok(())
     } else {

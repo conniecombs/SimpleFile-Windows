@@ -47,13 +47,3 @@ updates:
     labels:
       - "dependencies"
       - "npm"
-
-  # NPM dependencies in frontend
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "npm"

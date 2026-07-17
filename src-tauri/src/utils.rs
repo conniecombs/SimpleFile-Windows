@@ -6,17 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 pub(crate) fn hidden_command<S: AsRef<OsStr>>(program: S) -> Command {
-    let command = Command::new(program);
-
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        let mut command = command;
-        command.creation_flags(0x08000000);
-        command
-    }
-
-    #[cfg(not(target_os = "windows"))]
+    use std::os::windows::process::CommandExt;
+    let mut command = Command::new(program);
+    command.creation_flags(0x08000000);
     command
 }
 
@@ -64,14 +56,6 @@ pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
         None
     };
 
-    // Read Unix permissions as an "rwxr-xr-x" string
-    #[cfg(unix)]
-    let permissions = {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = metadata.permissions().mode();
-        Some(mode_to_string(mode))
-    };
-    #[cfg(not(unix))]
     let permissions: Option<String> = None;
 
     Some(FileEntry {
@@ -86,25 +70,6 @@ pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
         symlink_target,
         git_status: None,
     })
-}
-
-/// Convert a Unix mode bitmask to a 9-character "rwxr-xr-x" string.
-#[cfg(unix)]
-fn mode_to_string(mode: u32) -> String {
-    let bits = [
-        (0o400, 'r'),
-        (0o200, 'w'),
-        (0o100, 'x'),
-        (0o040, 'r'),
-        (0o020, 'w'),
-        (0o010, 'x'),
-        (0o004, 'r'),
-        (0o002, 'w'),
-        (0o001, 'x'),
-    ];
-    bits.iter()
-        .map(|&(mask, ch)| if mode & mask != 0 { ch } else { '-' })
-        .collect()
 }
 
 pub(crate) fn generate_operation_id() -> String {

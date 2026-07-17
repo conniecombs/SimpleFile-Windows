@@ -244,7 +244,7 @@
           aria-label="Edit secondary path"
           onclick={beginSecondaryPathEdit}
         >
-          <span class="icon" aria-hidden="true">âœŽ</span>
+          <span class="icon" aria-hidden="true">&#9998;</span>
         </button>
         <input
           bind:this={secondaryPathInput}

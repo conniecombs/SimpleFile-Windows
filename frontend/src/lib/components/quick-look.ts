@@ -4,7 +4,6 @@ import QuickLookModal from './quick-look/QuickLookModal.svelte';
 import type { QuickLookPreview } from './quick-look/QuickLookModal.svelte';
 
 export type QuickLookProps = {
-  legacyContent?: Node | string | null;
   preview?: QuickLookPreview | null;
   title?: string;
 };

@@ -48,12 +48,7 @@ fn path_exists_no_follow(path: &Path) -> bool {
 }
 
 fn path_collision_key(path: &Path) -> String {
-    let value = path.to_string_lossy().to_string();
-    if cfg!(target_os = "windows") || cfg!(target_os = "macos") {
-        value.to_lowercase()
-    } else {
-        value
-    }
+    path.to_string_lossy().to_lowercase()
 }
 
 fn paths_refer_to_same_entry(a: &Path, b: &Path) -> bool {
@@ -222,19 +217,10 @@ fn prepare_transfer_inputs(
 fn remove_path(path: &Path, label: &str) -> Result<(), String> {
     let meta = fs::symlink_metadata(path).map_err(|e| format!("Failed to stat {label}: {e}"))?;
     if meta.file_type().is_symlink() {
-        #[cfg(windows)]
-        {
-            if meta.is_dir() {
-                fs::remove_dir(path)
-                    .map_err(|e| format!("Failed to delete {} symlink: {}", label, e))
-            } else {
-                fs::remove_file(path)
-                    .map_err(|e| format!("Failed to delete {} symlink: {}", label, e))
-            }
-        }
-        #[cfg(not(windows))]
-        {
-            fs::remove_file(path).map_err(|e| format!("Failed to delete {label} symlink: {e}"))
+        if meta.is_dir() {
+            fs::remove_dir(path).map_err(|e| format!("Failed to delete {} symlink: {}", label, e))
+        } else {
+            fs::remove_file(path).map_err(|e| format!("Failed to delete {} symlink: {}", label, e))
         }
     } else if meta.is_dir() {
         fs::remove_dir_all(path).map_err(|e| format!("Failed to delete {label} directory: {e}"))
@@ -345,29 +331,18 @@ fn copy_symlink(source_path: &Path, dst_path: &Path) -> Result<(), String> {
     }
     let link_target =
         fs::read_link(source_path).map_err(|e| format!("Failed to read symlink target: {e}"))?;
-    #[cfg(unix)]
-    std::os::unix::fs::symlink(&link_target, dst_path).map_err(|e| {
+    let result = if link_target.is_dir() {
+        std::os::windows::fs::symlink_dir(&link_target, dst_path)
+    } else {
+        std::os::windows::fs::symlink_file(&link_target, dst_path)
+    };
+    result.map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
             conflict_for_existing_destination(dst_path)
         } else {
-            format!("Failed to create symlink: {e}")
+            format!("Failed to create symlink: {}", e)
         }
     })?;
-    #[cfg(windows)]
-    {
-        let result = if link_target.is_dir() {
-            std::os::windows::fs::symlink_dir(&link_target, dst_path)
-        } else {
-            std::os::windows::fs::symlink_file(&link_target, dst_path)
-        };
-        result.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::AlreadyExists {
-                conflict_for_existing_destination(dst_path)
-            } else {
-                format!("Failed to create symlink: {}", e)
-            }
-        })?;
-    }
     Ok(())
 }
 

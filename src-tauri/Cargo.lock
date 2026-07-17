@@ -3898,7 +3898,6 @@ dependencies = [
  "glob",
  "image",
  "kamadak-exif",
- "libc",
  "log",
  "md-5",
  "notify",
@@ -3921,7 +3920,6 @@ dependencies = [
  "unrar",
  "walkdir",
  "winapi",
- "xattr",
  "zip 8.6.0",
 ]
 
