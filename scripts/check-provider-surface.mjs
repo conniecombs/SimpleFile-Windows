@@ -39,6 +39,8 @@ const bannedPatterns = [
   { label: 'Remote Drives', pattern: /\bRemote Drives\b/i },
   { label: 'remote-drives id/class', pattern: /\bremote-drives\b/i },
   { label: 'cloud command', pattern: /\bcloud_list_plugins\b/i },
+  { label: 'Google OAuth env hook', pattern: /\bSIMPLEFILE_GOOGLE_CLIENT_ID\b/i },
+  { label: 'Google OAuth credential file', pattern: /\bgoogle-oauth-client-id\.txt\b/i },
   { label: 'rclone command', pattern: /\brclone_[a-z0-9_]+\b/i },
   { label: 'rclone installer command', pattern: /\b(?:check|install)_rclone_installed\b|\binstall_rclone\b/i },
   { label: 'WinFsp installer command', pattern: /\b(?:check|install)_winfsp_installed\b|\binstall_winfsp\b/i },
@@ -72,6 +74,10 @@ const searchableExtensions = new Set([
   '.yaml',
 ]);
 
+const searchableFiles = new Set([
+  '.gitignore',
+]);
+
 function toPosix(path) {
   return path.replaceAll('\\', '/');
 }
@@ -94,7 +100,10 @@ function collectFiles(directory) {
 
     if (entry.isDirectory()) {
       files.push(...collectFiles(absolute));
-    } else if (entry.isFile() && searchableExtensions.has(extname(entry.name).toLowerCase())) {
+    } else if (
+      entry.isFile()
+      && (searchableExtensions.has(extname(entry.name).toLowerCase()) || searchableFiles.has(rel))
+    ) {
       files.push(absolute);
     }
   }

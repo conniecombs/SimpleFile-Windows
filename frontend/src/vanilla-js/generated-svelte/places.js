@@ -4182,46 +4182,6 @@ function BookmarkList($$anchor, $$props) {
 }
 delegate(["click"]);
 //#endregion
-//#region src/lib/components/places/NetworkDrivesList.svelte
-var root$3 = /* @__PURE__ */ from_html(`<div class="quick-access-item network-drive-item na-mount-row" role="listitem"><span class="quick-access-icon" aria-hidden="true"> </span> <span class="quick-access-text"><span class="quick-access-name text-truncate-flex"> </span> <span class="quick-access-meta"> </span></span> <button type="button" class="sidebar-btn unmount-btn na-unmount-btn" title="Unmount">&times;</button></div>`);
-function NetworkDrivesList($$anchor, $$props) {
-	push($$props, true);
-	let mounts = prop($$props, "mounts", 19, () => []);
-	var fragment = comment();
-	each(first_child(fragment), 17, mounts, (mount) => mount.mountPoint, ($$anchor, mount) => {
-		var div = root$3();
-		var span = child(div);
-		var text = child(span, true);
-		reset(span);
-		var span_1 = sibling(span, 2);
-		var span_2 = child(span_1);
-		var text_1 = child(span_2, true);
-		reset(span_2);
-		var span_3 = sibling(span_2, 2);
-		var text_2 = child(span_3, true);
-		reset(span_3);
-		reset(span_1);
-		var button = sibling(span_1, 2);
-		reset(div);
-		template_effect(() => {
-			set_attribute(div, "data-path", get(mount).mountPoint);
-			set_text(text, get(mount).icon);
-			set_text(text_1, get(mount).name);
-			set_text(text_2, get(mount).mountPoint);
-			set_attribute(button, "data-mount-point", get(mount).mountPoint);
-			set_attribute(button, "aria-label", `Unmount ${get(mount).name}`);
-		});
-		delegated("click", button, (e) => {
-			e.stopPropagation();
-			$$props.onUnmount?.(get(mount).mountPoint);
-		});
-		append($$anchor, div);
-	});
-	append($$anchor, fragment);
-	pop();
-}
-delegate(["click"]);
-//#endregion
 //#region src/lib/components/places/QuickAccessList.svelte
 var root$2 = /* @__PURE__ */ from_html(`<div class="quick-access-item" role="listitem"><span class="quick-access-icon" aria-hidden="true"> </span> <span class="quick-access-name"> </span></div>`);
 function QuickAccessList($$anchor, $$props) {
@@ -4341,10 +4301,6 @@ function clearMountedList(target) {
 	}
 	target.replaceChildren();
 }
-function closestElement(event, selector) {
-	const target = event.target;
-	return target instanceof Element ? target.closest(selector) : null;
-}
 function renderBookmarkList(target, props = {}) {
 	if (!target) return;
 	clearMountedList(target);
@@ -4390,29 +4346,6 @@ function renderQuickAccessList(target, props = {}) {
 		});
 	});
 }
-function renderNetworkDrivesList(target, props = {}) {
-	if (!target) return;
-	clearMountedList(target);
-	const component = mount(NetworkDrivesList, {
-		target,
-		props: { mounts: props.mounts ?? [] }
-	});
-	mountedLists.set(target, component);
-	target.querySelectorAll(".network-drive-item").forEach((item) => {
-		item.addEventListener("click", (event) => {
-			if (closestElement(event, ".unmount-btn")) return;
-			const path = item.dataset.path;
-			if (path) props.onNavigate?.(path);
-		});
-	});
-	target.querySelectorAll(".unmount-btn").forEach((button) => {
-		button.addEventListener("click", (event) => {
-			event.stopPropagation();
-			const mountPoint = button.dataset.mountPoint;
-			if (mountPoint) props.onUnmount?.(mountPoint);
-		});
-	});
-}
 function renderSmartFoldersList(target, props = {}) {
 	if (!target) return;
 	clearMountedList(target);
@@ -4427,4 +4360,4 @@ function renderSmartFoldersList(target, props = {}) {
 	mountedLists.set(target, component);
 }
 //#endregion
-export { renderBookmarkList, renderNetworkDrivesList, renderQuickAccessList, renderRecentLocationsList, renderSmartFoldersList };
+export { renderBookmarkList, renderQuickAccessList, renderRecentLocationsList, renderSmartFoldersList };

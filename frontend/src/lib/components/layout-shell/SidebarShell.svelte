@@ -179,14 +179,6 @@
         </div>
       </div>
 
-
-
-
-
-      <div class="quick-access-group" id="network-drives-section" style="display:none;">
-        <div class="quick-access-group-header">Network Drives</div>
-        <div class="network-drives-list" id="network-drives-list" role="list" aria-label="Mounted network drives"></div>
-      </div>
     </div>
   </div>
 </aside>

@@ -14,7 +14,6 @@ pub(crate) struct WatcherState {
 pub struct AppState {
     pub(crate) watcher_state: Mutex<WatcherState>,
     pub(crate) cancelled_operations: Mutex<HashMap<String, bool>>,
-    /// PIDs of background FUSE mount processes (curlftpfs, etc.)
     /// Cancellation flag for the in-progress folder size calculation.
     /// Set to `true` to abort; reset to `false` at the start of each new calculation.
     pub(crate) folder_size_cancel: Arc<AtomicBool>,

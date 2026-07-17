@@ -1,7 +1,6 @@
 # Rust
 /target/
 /src-tauri/target/
-/src-tauri/google-oauth-client-id.txt
 
 # Node
 node_modules/

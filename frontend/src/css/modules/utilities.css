@@ -26,26 +26,6 @@
     font-size: 0.85em;
 }
 
-/* Replaces: style="color: var(--text-muted); font-size: 0.82em; padding: 4px 6px;"
-   for "no active mounts" messages */
-.mounts-empty-msg {
-    color: var(--text-muted);
-    font-size: 0.82em;
-    padding: 4px 6px;
-}
-
-/* Replaces inline styles on .ftp-placeholder empty/error divs */
-.ftp-placeholder {
-    color: var(--text-muted);
-    text-align: center;
-    margin-top: 100px;
-}
-.ftp-placeholder--error {
-    color: var(--error-color, var(--accent-danger));
-    text-align: center;
-    margin-top: 100px;
-}
-
 /* Replaces: style="width: 100%;" on modal text inputs */
 .input-full { width: 100%; }
 
@@ -57,18 +37,6 @@
     color: var(--text-muted);
     text-align: center;
     padding: 16px;
-}
-
-/* Replaces mount-row items in sidebar quick-access */
-.na-mount-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.na-unmount-btn {
-    font-size: 10px;
-    padding: 1px 4px;
 }
 
 /* ── Custom Scrollbar ─────────────────────────────────────────────────────── */

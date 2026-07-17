@@ -4231,9 +4231,8 @@ var root_1 = /* @__PURE__ */ from_html(`<div class="skeleton-tree-item"><div cla
 var root_2 = /* @__PURE__ */ from_html(`<div class="tree-children" role="group"></div>`);
 var root_3 = /* @__PURE__ */ from_html(`<button type="button" tabindex="-1">&#9654;</button>`);
 var root_4 = /* @__PURE__ */ from_html(`<span class="tree-expand empty" aria-hidden="true">&#9654;</span>`);
-var root_5 = /* @__PURE__ */ from_html(`<button type="button" class="sidebar-btn unmount-btn na-unmount-btn" title="Disconnect Drive">&times;</button>`);
 var root_6 = /* @__PURE__ */ from_html(`<div role="group"></div>`);
-var root_7 = /* @__PURE__ */ from_html(`<div class="tree-node"><div role="treeitem"><!> <span class="tree-icon" aria-hidden="true"> </span> <span class="tree-name"> </span> <!></div> <!></div>`);
+var root_7 = /* @__PURE__ */ from_html(`<div class="tree-node"><div role="treeitem"><!> <span class="tree-icon" aria-hidden="true"> </span> <span class="tree-name"> </span></div> <!></div>`);
 function TreeView($$anchor, $$props) {
 	push($$props, true);
 	const treeNode = ($$anchor, node = noop, depth = noop) => {
@@ -4266,23 +4265,6 @@ function TreeView($$anchor, $$props) {
 		var span_2 = sibling(span_1, 2);
 		var text_1 = child(span_2, true);
 		reset(span_2);
-		var node_2 = sibling(span_2, 2);
-		var consequent_1 = ($$anchor) => {
-			var button_1 = root_5();
-			template_effect(() => set_attribute(button_1, "aria-label", `Disconnect ${node().name}`));
-			delegated("click", button_1, (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-				event.currentTarget?.dispatchEvent(new CustomEvent("simplefile:tree-node-unmount", {
-					bubbles: true,
-					detail: { path: node().path }
-				}));
-			});
-			append($$anchor, button_1);
-		};
-		if_block(node_2, ($$render) => {
-			if (node().isCloud) $$render(consequent_1);
-		});
 		reset(div_3);
 		var node_3 = sibling(div_3, 2);
 		var consequent_4 = ($$anchor) => {

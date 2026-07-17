@@ -3,26 +3,12 @@ use std::process::Command;
 use std::time::SystemTime;
 
 fn main() {
-    println!("cargo:rerun-if-env-changed=SIMPLEFILE_GOOGLE_CLIENT_ID");
-    println!("cargo:rerun-if-changed=google-oauth-client-id.txt");
     println!("cargo:rerun-if-changed=../frontend/package.json");
     println!("cargo:rerun-if-changed=../frontend/package-lock.json");
     println!("cargo:rerun-if-changed=../frontend/index.html");
     println!("cargo:rerun-if-changed=../frontend/src");
     println!("cargo:rerun-if-changed=../frontend/svelte.config.js");
     println!("cargo:rerun-if-changed=../frontend/vite.config.ts");
-
-    if std::env::var("SIMPLEFILE_GOOGLE_CLIENT_ID")
-        .ok()
-        .is_none_or(|value| value.trim().is_empty())
-    {
-        if let Ok(value) = std::fs::read_to_string("google-oauth-client-id.txt") {
-            let value = value.trim();
-            if !value.is_empty() {
-                println!("cargo:rustc-env=SIMPLEFILE_GOOGLE_CLIENT_ID={value}");
-            }
-        }
-    }
 
     ensure_frontend_dist();
     tauri_build::build();
