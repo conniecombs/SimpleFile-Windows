@@ -1,6 +1,7 @@
 # Release Process
 
-This document describes how to create a new SimpleFile release from the `main` branch.
+This document describes how to create a Windows-only SimpleFile release from the
+`main` branch.
 
 ## Automated Releases
 
@@ -17,10 +18,10 @@ Update the version in these files and keep them identical:
 
 Release workflow validation fails if the tag/manual version does not match both Rust/Tauri manifest versions.
 `src-tauri/Cargo.lock` must also be committed and current so release builds use the reviewed dependency graph.
-For releases that change drive enumeration, process launching, updater behavior, or installer behavior,
-update [`docs/CLOUD_DRIVES.md`](../docs/CLOUD_DRIVES.md),
-[`docs/SECURITY.md`](../docs/SECURITY.md), [`docs/SUPPORT.md`](../docs/SUPPORT.md),
-and the relevant README sections.
+For releases that change Windows drive enumeration, mapped network drive display,
+process launching, updater behavior, installer behavior, or release smoke tests,
+update [`docs/SECURITY.md`](../docs/SECURITY.md),
+[`docs/SUPPORT.md`](../docs/SUPPORT.md), and the relevant README sections.
 
 ### 2. Merge the Version Bump
 
@@ -47,17 +48,15 @@ The release workflow will:
 1. Validate the release version against `Cargo.toml` and `tauri.conf.json`.
 2. Run release quality gates: Rust formatting, Clippy, tests, Svelte build/type checks,
    frontend/backend invoke checks, updater configuration checks, and Rust dependency audit.
-3. Build for all configured platforms:
-   - Windows x64
-   - macOS x64 / Intel
-   - macOS ARM64 / Apple Silicon
-   - Linux x64
+3. Build the Windows release target:
+   - Windows x64 (`x86_64-pc-windows-msvc`)
 4. Verify the updater signing secret is available for release builds.
-5. Create or update a draft GitHub release and upload installer artifacts, signed updater
-   artifacts, signatures, and `latest.json` through
+5. Create or update a draft GitHub release and upload Windows installer artifacts,
+   signed updater artifacts, signatures, and `latest.json` through
    `tauri-apps/tauri-action@action-v0.6.2`.
 6. Keep tag-triggered releases as drafts by default so assets can be reviewed before publishing.
-7. Publish the release only after all platform builds succeed when manual `draft=false` is selected.
+7. Publish the release only after the Windows build succeeds when manual
+   `draft=false` is selected.
 
 ### 5. Manual Release
 
@@ -68,19 +67,19 @@ You can also trigger a release manually:
 3. Enter the version, for example `v1.0.0`.
 4. Choose whether to create a draft release.
 
-If `draft` is set to `false`, the workflow publishes the release after all platform builds succeed.
+If `draft` is set to `false`, the workflow publishes the release after the
+Windows build succeeds.
 
 ## Release Artifacts
 
-Each release may include the following artifacts, depending on Tauri bundler output for the platform:
+Each release may include the following Windows artifacts, depending on Tauri
+bundler output:
 
 | Platform | Installer Type | Example File |
 |----------|----------------|--------------|
-| Windows | MSI / NSIS | `SimpleFile_x.x.x_x64_en-US.msi`, `SimpleFile_x.x.x_x64-setup.exe` |
-| macOS Intel | DMG / app bundle | `SimpleFile_x.x.x_x64.dmg` |
-| macOS Apple Silicon | DMG / app bundle | `SimpleFile_x.x.x_aarch64.dmg` |
-| Linux | AppImage / Debian package | `simplefile_x.x.x_amd64.AppImage`, `simplefile_x.x.x_amd64.deb` |
-| Updater | Static JSON / signatures | `latest.json`, updater bundle signatures, and platform updater artifacts |
+| Windows x64 | NSIS setup executable | `SimpleFile_x.x.x_x64-setup.exe` |
+| Windows x64 | MSI installer | `SimpleFile_x.x.x_x64_en-US.msi` |
+| Windows updater | Static JSON / signatures | `latest.json`, updater bundle signatures, and Windows updater artifacts |
 
 ## Auto-Update
 
@@ -111,9 +110,9 @@ See [`docs/UPDATER_RELEASE.md`](../docs/UPDATER_RELEASE.md) for the operational 
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | Push/PR to `main`, manual dispatch | Rust format, Clippy, tests, Svelte and legacy frontend checks, frontend/backend invoke checks, dependency audit/review, and Linux/macOS/Windows backend builds with the committed lockfile |
-| `release.yml` | Tag push (`v*`), manual dispatch | Version validation, release quality gates, cross-platform Tauri release packaging, installer upload via Tauri Action, optional publishing |
-| `dependabot.yml` | Weekly schedule | Dependency update pull requests for Cargo and GitHub Actions |
+| `ci.yml` | Push/PR to `main`, manual dispatch | Rust format, Clippy, tests, Svelte/frontend checks, frontend/backend invoke checks, updater/workflow/provider-surface checks, Rust dependency audit, and Windows x64 backend build with the committed lockfile |
+| `release.yml` | Tag push (`v*`), manual dispatch | Version validation, release quality gates, Windows x64 Tauri release packaging, installer/updater upload via Tauri Action, optional publishing |
+| `dependabot.yml` | Weekly schedule | Dependency update pull requests for Cargo, npm, and GitHub Actions |
 
 ## Code Signing
 
@@ -123,17 +122,6 @@ Add these secrets for Windows code signing when ready:
 
 - `WINDOWS_CERTIFICATE` — base64-encoded `.pfx` file
 - `WINDOWS_CERTIFICATE_PASSWORD` — certificate password
-
-### macOS
-
-Add these secrets for macOS code signing and notarization when ready:
-
-- `APPLE_CERTIFICATE` — base64-encoded `.p12` file
-- `APPLE_CERTIFICATE_PASSWORD` — certificate password
-- `APPLE_SIGNING_IDENTITY` — for example, `Developer ID Application: Your Name`
-- `APPLE_ID` — Apple ID email
-- `APPLE_PASSWORD` — app-specific password
-- `APPLE_TEAM_ID` — Apple Team ID
 
 ## Versioning
 

@@ -70,11 +70,9 @@ tests, Clippy with warnings denied, and Rust dependency audit.
 
 The GitHub release workflow builds:
 
-- Windows x64 installer artifacts
-- macOS Intel artifacts
-- macOS Apple Silicon artifacts
-- Linux x64 artifacts
-- Signed updater artifacts and `latest.json`
+- Windows x64 NSIS setup executable
+- Windows x64 MSI installer
+- Signed Windows updater artifacts and `latest.json`
 
 The release workflow requires the GitHub secret `TAURI_SIGNING_PRIVATE_KEY`.
 If the signing key is password-protected, it also requires
