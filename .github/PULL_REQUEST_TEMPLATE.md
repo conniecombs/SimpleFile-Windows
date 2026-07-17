@@ -19,11 +19,25 @@ Closes #<!-- issue number -->
 
 ## How Has This Been Tested?
 
-<!-- Describe what you tested and on which platform(s). -->
+<!-- SimpleFile-Windows is Windows-only. Describe the Windows environment and exact test coverage. -->
 
-- [ ] Linux
-- [ ] macOS
-- [ ] Windows
+**Windows version:**
+- [ ] Windows 11
+- [ ] Windows 10
+- [ ] Other Windows version:
+
+**Run/install mode tested:**
+- [ ] Tauri dev
+- [ ] Local executable
+- [ ] NSIS installer
+- [ ] MSI installer
+- [ ] Not applicable for this change
+
+**Storage context tested:**
+- [ ] Local drive
+- [ ] Mapped network drive or UNC path
+- [ ] Removable drive
+- [ ] Not applicable for this change
 
 **Test steps:**
 1.
@@ -39,6 +53,7 @@ Closes #<!-- issue number -->
 - [ ] I have run `npm run check`
 - [ ] I have run `npm run check:release` for release-level or migration changes
 - [ ] I have run the documented `cargo audit --deny warnings` command and there are no new advisories
+- [ ] I have tested on Windows or explained why runtime testing is not applicable
 - [ ] New Tauri commands validate path inputs via `validate_existing_path()` or `validate_name()`
 - [ ] No user-controlled data is passed to `innerHTML` or shell commands without sanitization
 - [ ] Drive-listing changes preserve local and mapped network drive behavior

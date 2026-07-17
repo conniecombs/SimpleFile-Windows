@@ -8,12 +8,17 @@ assignees: ""
 
 ## Environment
 
+SimpleFile-Windows is currently supported on Windows only. Please include the
+Windows-specific details below so the issue can be reproduced against the
+supported release target.
+
 | Field | Value |
 |-------|-------|
-| **OS** | <!-- e.g. Ubuntu 24.04, Windows 11, macOS 14.4 --> |
-| **SimpleFile version** | <!-- e.g. v0.2.0 — check About dialog or release page --> |
-| **Rust version** | <!-- run: rustc --version --> |
-| **Tauri version** | <!-- check src-tauri/Cargo.toml --> |
+| **Windows version/build** | <!-- e.g. Windows 11 24H2 build 26100 --> |
+| **SimpleFile version** | <!-- e.g. v1.1.0 - check About dialog or release page --> |
+| **Install/source** | <!-- e.g. NSIS installer, MSI installer, local executable, Tauri dev --> |
+| **Affected storage** | <!-- e.g. local NTFS path, mapped network drive, UNC path, removable drive --> |
+| **Rust/Tauri version** | <!-- For local/dev builds only; otherwise write N/A --> |
 
 ---
 
