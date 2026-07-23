@@ -34,6 +34,13 @@ function assertCount(file, pattern, expected, label = 'value') {
   }
 }
 
+function assertFileMissing(path) {
+  const resolved = resolve(root, path);
+  if (existsSync(resolved)) {
+    fail(`${path} should not exist; frontend/src/css/styles.css is the canonical stylesheet entry.`);
+  }
+}
+
 assertContains('frontend/src/lib/app/core.ts', [
   'calculateFolderSize',
   'countFolderItems',
@@ -130,6 +137,14 @@ assertContains('frontend/src/css/modules/modal.css', [
 ], 'Stage 9 cleanup and tag modal styles');
 
 assertCount('frontend/src/vanilla-js/runtime/state.svelte.js', /fileTags:\s*\{\}/g, 1, 'fileTags declarations');
+
+assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
+  'id="btn-secondary-edit-path"',
+  'aria-label="Edit secondary path"',
+  '&#9998;',
+], 'secondary path edit button');
+
+assertFileMissing('frontend/src/app.css');
 
 if (process.exitCode) {
   process.exit();

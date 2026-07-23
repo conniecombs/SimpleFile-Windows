@@ -36,8 +36,9 @@ tracked.
 2. Commit the version bump and release notes.
 3. Create a tag such as `v1.1.0`, or run the `Release` GitHub Actions workflow
    manually with that version.
-4. The release workflow runs quality gates, builds each platform, signs updater
-   artifacts, uploads signatures, and uploads `latest.json`.
+4. The release workflow runs quality gates, builds the Windows x64 release
+   target, signs updater artifacts, uploads signatures, and uploads
+   `latest.json`.
 5. Publish the GitHub release when ready. Draft releases are not returned by the
    `releases/latest` endpoint, so installed apps only see published releases.
 
@@ -49,9 +50,12 @@ Run these before pushing a release branch:
 npm run check:release
 ```
 
-That command runs the Svelte production build and bridge builds, legacy
+That command runs the Svelte production build, frontend/backend bridge checks,
 frontend syntax/invoke/updater checks, Rust formatting, Rust tests, Clippy, and
 the Rust dependency audit using the same advisory ignore policy as CI.
+
+On local Windows machines, make sure the Windows SDK Resource Compiler
+(`rc.exe`) is available on `PATH` before running Rust tests or Tauri builds.
 
 To also prove that local Windows installer packaging works without requiring
 the updater private key, run:

@@ -10,7 +10,9 @@ npm run check
 npm run check:rust
 ```
 
-Use Node.js 24 or newer and stable Rust.
+Use Node.js 24 or newer, stable Rust, and the Windows SDK Resource Compiler
+(`rc.exe`) on `PATH`. Tauri resource builds and `cargo test --all-features`
+need `rc.exe` when compiling the Windows desktop target.
 
 ## Project Layout
 

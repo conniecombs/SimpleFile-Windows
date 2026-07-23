@@ -120,4 +120,5 @@ npm run check:release
 
 That expands to the frontend gates plus Rust formatting, tests, Clippy, and the
 security audit. On Windows, Rust tests and release builds require the MSVC
-linker (`link.exe`) to be available on `PATH`.
+linker (`link.exe`) and Windows SDK Resource Compiler (`rc.exe`) to be
+available on `PATH`.

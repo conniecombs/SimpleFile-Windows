@@ -32,6 +32,8 @@ This branch does not include app-managed provider integrations or provider-backe
 - Windows 10 or later for the supported desktop release target.
 - Node.js 24 or newer.
 - Rust stable and the Tauri prerequisites for Windows.
+- Windows SDK Resource Compiler (`rc.exe`) on `PATH` for Rust tests and Tauri
+  builds that stamp Windows resources.
 - Optional: RAR tooling can be installed from Settings when needed for RAR archive workflows.
 
 ## Development

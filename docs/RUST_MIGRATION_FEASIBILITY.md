@@ -1,5 +1,10 @@
 # Rust Migration Feasibility Analysis
 
+Historical note: this document evaluates a possible future replacement of the
+Tauri WebView frontend with a native Rust GUI. It is not part of the current
+Windows-only release process. Current release documentation lives in
+`README.md`, `.github/RELEASE.md`, and `docs/UPDATER_RELEASE.md`.
+
 ## Summary
 
 **Verdict: Feasible, but represents a substantial frontend rewrite.**

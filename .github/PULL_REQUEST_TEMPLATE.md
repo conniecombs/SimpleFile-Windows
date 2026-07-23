@@ -26,6 +26,10 @@ Closes #<!-- issue number -->
 - [ ] Windows 10
 - [ ] Other Windows version:
 
+**Windows build tools:**
+- [ ] Windows SDK `rc.exe` is on `PATH` for Rust/Tauri checks
+- [ ] Not applicable for this change
+
 **Run/install mode tested:**
 - [ ] Tauri dev
 - [ ] Local executable

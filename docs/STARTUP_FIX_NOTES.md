@@ -1,16 +1,25 @@
 # Startup fix notes
 
-This file records historical startup fixes and the current updater status.
+This file records historical startup fixes and the current Windows updater
+status.
 
 Startup changes made:
 
 1. `src-tauri/tauri.conf.json` now starts the main window with `visible: true`.
-2. `frontend/js/app.js` calls `show_main_window` early, before slower filesystem initialization.
-3. `frontend/js/startup-guard.js` catches frontend startup errors and renders them in the app window.
-4. The inline theme script was moved to `frontend/js/theme-preload.js` to better match the configured CSP.
-5. The updater plugin has an explicit placeholder config (`pubkey: ""`, `endpoints: []`) so the app can start before the production updater channel is configured.
-6. `src-tauri/src/main.rs` now writes Rust panics to `%LOCALAPPDATA%\SimpleFile\startup.log` on Windows (or the closest app-data/home path on other platforms).
+2. `frontend/src/main.ts` mounts the Svelte shell from `frontend/src/App.svelte`
+   as the shipping frontend entry point.
+3. Frontend startup and settings recovery live in `frontend/src/lib/app/setup.ts`
+   and `frontend/src/vanilla-js/runtime/startup-location.js`.
+4. The configured CSP allows the Svelte/Vite bundle while keeping object,
+   frame, form, worker, and remote script surfaces closed.
+5. The updater plugin now has production configuration in
+   `src-tauri/tauri.conf.json`: updater artifacts are enabled, a public key is
+   present, and the endpoint points at the Windows release channel on GitHub.
+6. `src-tauri/src/main.rs` writes Rust panics to
+   `%LOCALAPPDATA%\SimpleFile\startup.log` on Windows.
 
-Production updater rollout still requires a real updater public key, endpoint configuration, and
-the `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub secrets described in
-`.github/RELEASE.md`. `createUpdaterArtifacts` remains disabled until those settings are ready.
+Production updater releases still require the
+`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub
+secrets described in `.github/RELEASE.md`. Local `build:tauri:local` builds use
+`src-tauri/tauri.local.conf.json` to disable updater artifact generation without
+changing the production release configuration.

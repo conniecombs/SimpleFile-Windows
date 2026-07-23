@@ -7,6 +7,13 @@ This document describes how to create a Windows-only SimpleFile release from the
 
 Releases are automated with GitHub Actions through `.github/workflows/release.yml`.
 
+## Windows Build Prerequisites
+
+Local release validation requires Node.js 24 or newer, stable Rust, and the
+Windows SDK Resource Compiler (`rc.exe`) on `PATH`. GitHub-hosted
+`windows-latest` runners provide the Windows SDK; local shells should expose
+the x64 SDK bin directory before running Rust/Tauri release gates.
+
 ### 1. Update Version Numbers
 
 Update the version in these files and keep them identical:
