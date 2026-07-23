@@ -7,6 +7,10 @@ The Windows-focused branch has a local-file UI backed by typed Tauri commands. T
 ## Strengths
 
 - Tauri command registration and frontend command contracts are checked by `scripts/check-tauri-invokes.mjs`.
+- The renderer bridge keeps `withGlobalTauri` disabled and routes active
+  frontend Tauri access through the typed local wrapper.
+- Shared modal HTML is sanitized before insertion, and
+  `frontend/scripts/check-html-sink-safety.mjs` guards that boundary.
 - Windows drive display names use native volume and mapped-share lookups.
 - Directory opens from file list, tree, and breadcrumb events carry directory intent.
 - Archive paths are handled before normal filesystem commands.

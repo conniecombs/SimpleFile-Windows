@@ -1,5 +1,5 @@
 import { invokeCommand, listenToEvent } from './tauri';
-import type { EventCallback, UnlistenFn } from '@tauri-apps/api/event';
+import type { EventCallback, UnlistenFn } from './tauri';
 import type {
   AppAboutInfo,
   ArchiveFormat,

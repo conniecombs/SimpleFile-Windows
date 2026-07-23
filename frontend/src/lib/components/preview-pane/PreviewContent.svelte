@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { convertFileSrc } from '@tauri-apps/api/core';
   import hljs from 'highlight.js/lib/core';
   import bash from 'highlight.js/lib/languages/bash';
   import css from 'highlight.js/lib/languages/css';
@@ -16,6 +15,7 @@
 
   import type { FileEntry, FilePreview } from '../../types';
   import { renderSafeMarkdown } from '../../markdownPreviewSecurity.mjs';
+  import { convertFileSource } from '../../tauri';
 
   export type PreviewPaneMode = 'empty' | 'loading' | 'folder' | 'preview' | 'error';
 
@@ -148,9 +148,9 @@
   <img class="preview-image" src={`data:${preview.mime_type};base64,${preview.content}`} alt={entry?.name || 'Preview'} />
 {:else if preview?.file_type === 'video' && entry}
   <!-- svelte-ignore a11y_media_has_caption -->
-  <video class="preview-media" controls src={convertFileSrc(entry.path)}></video>
+  <video class="preview-media" controls src={convertFileSource(entry.path)}></video>
 {:else if preview?.file_type === 'audio' && entry}
-  <audio class="preview-media" controls src={convertFileSrc(entry.path)}></audio>
+  <audio class="preview-media" controls src={convertFileSource(entry.path)}></audio>
 {:else if preview?.file_type === 'text'}
   {#if renderedMarkdown}
     <div class="preview-markdown markdown-body">{@html renderedMarkdown}</div>

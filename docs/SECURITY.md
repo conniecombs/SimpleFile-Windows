@@ -29,6 +29,10 @@ When reporting a vulnerability, include:
 
 - Path validation and symlink handling before delete, rename, copy, move, folder size, and metadata operations.
 - Archive virtual paths and extraction destination validation.
+- Modal HTML rendering through `sanitizeModalHtml` before any shared dialog
+  body insertion.
+- Tauri renderer bridge scope: keep `__TAURI__` disabled and route active
+  frontend Tauri access through the local typed wrapper.
 - Updater signature configuration and release artifact handling.
 - Windows elevated PowerShell launch behavior.
 - Mapped network drive naming and filesystem probing.

@@ -84,14 +84,14 @@ npm run smoke:msi
 npm run smoke:installer
 ```
 
-`npm run check` includes a provider-surface guard that fails if retired provider UI, command contracts, docs, or setup text reappear outside historical changelog notes and generated syntax-highlighter data.
+`npm run check` includes provider-surface, Tauri renderer-surface, modal HTML safety, and Windows-asset guards. The provider guard fails if retired provider UI, command contracts, docs, or setup text reappear outside historical changelog notes and generated syntax-highlighter data. The Tauri renderer guard keeps the global `__TAURI__` API disabled and requires active frontend Tauri imports to stay behind `frontend/src/lib/tauri.ts`. The modal HTML guard requires shared modal renderers to sanitize HTML before insertion and blocks unreviewed raw HTML sinks. The Windows-asset guard fails if non-Windows packaging assets or bundle targets return.
 
 ## Project Layout
 
 - `frontend/src/main.ts` starts the Svelte app.
 - `frontend/src/lib/components/` contains Svelte components.
 - `frontend/src/lib/app/` contains workflow orchestration.
-- `frontend/src/lib/api.ts` and `frontend/src/lib/tauri.ts` define the typed Tauri command boundary and browser-dev fallback.
+- `frontend/src/lib/api.ts` and `frontend/src/lib/tauri.ts` define the typed Tauri command and media URL boundary plus browser-dev fallback.
 - `frontend/src/vanilla-js/runtime/` contains live plain JavaScript state helpers that are still shared by the Svelte app.
 - `frontend/src/vanilla-js/generated-svelte/` contains generated migration-audit artifacts.
 - `src-tauri/src/` contains Rust commands for filesystem, archive, preview, search, metadata, Git, cleanup, updater, and Windows drive behavior.

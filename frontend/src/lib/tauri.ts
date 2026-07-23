@@ -1,5 +1,6 @@
-import { invoke, type InvokeArgs } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke, type InvokeArgs } from '@tauri-apps/api/core';
 import { listen, type EventCallback, type EventName, type UnlistenFn } from '@tauri-apps/api/event';
+export type { EventCallback, UnlistenFn };
 import type {
   CommandArgs,
   CommandResult,
@@ -1056,4 +1057,12 @@ export function listenToEvent<Name extends keyof TauriEventMap>(
   }
 
   return listen<TauriEventMap[Name]>(eventName as EventName, callback);
+}
+
+export function convertFileSource(filePath: string, protocol?: string): string {
+  if (shouldUseDevFallback()) {
+    return filePath;
+  }
+
+  return convertFileSrc(filePath, protocol);
 }

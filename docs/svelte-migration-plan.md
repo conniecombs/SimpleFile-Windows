@@ -89,6 +89,11 @@ it; it must not move, delete, or rewrite source files.
 - Add or update typed Tauri wrappers in `frontend/src/lib/api.ts` and command
   contracts in `frontend/src/lib/types.ts`; Svelte components should not call
   raw `invoke()` directly.
+- Keep `app.withGlobalTauri` disabled in `src-tauri/tauri.conf.json`; active
+  frontend code should not use the global `__TAURI__` API or import Tauri APIs
+  outside `frontend/src/lib/tauri.ts`.
+- Route shared modal HTML through `frontend/src/lib/modalHtmlSecurity.mjs`
+  before DOM insertion or Svelte `{@html}` rendering.
 - Do not restore retired folders or script references.
 
 ## Checks

@@ -1,5 +1,6 @@
 import { mount, unmount } from 'svelte';
 
+import { sanitizeModalHtml } from '../modalHtmlSecurity.mjs';
 import ModalBody from './modal-body/ModalBody.svelte';
 
 export type RenderModalBodyProps = {
@@ -34,7 +35,7 @@ export function renderModalBody(
   const component = mount(ModalBody, {
     target,
     props: {
-      bodyHtml: props.bodyHtml ?? '',
+      bodyHtml: sanitizeModalHtml(props.bodyHtml ?? ''),
     },
   });
 

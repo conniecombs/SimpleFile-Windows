@@ -77,6 +77,7 @@ import {
   import { getRecentSearches, rememberRecentSearch } from '../searchStorage';
   import { getOpenWithSuggestions, rememberOpenWithApplication } from '../localCommandStorage';
   import { readAdvancedSearchOptions, searchResultToFileEntry, toSearchCommandOptions, type SearchWorkflowOptions } from '../searchOptions';
+  import { sanitizeModalHtml } from '../modalHtmlSecurity.mjs';
   import { renderAdvancedRenamePreview } from '../components/advanced-rename-preview';
   import { renderArchiveContents, renderArchiveInfo, renderCreateArchiveBody } from '../components/archive-surfaces';
   import { clearSearchResultsHeader, renderSearchResultsHeader } from '../components/search-chrome';
@@ -881,7 +882,7 @@ const defaultColorLabels = [
 
     resetGenericModal();
     if (titleElement) titleElement.textContent = title;
-    body.innerHTML = bodyHtml;
+    body.innerHTML = sanitizeModalHtml(bodyHtml);
     confirmBtn.textContent = confirmText;
     if (cancelBtn) cancelBtn.style.display = showCancel ? '' : 'none';
     overlay.classList.add('visible');

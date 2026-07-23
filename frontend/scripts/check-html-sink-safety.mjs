@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
+import { sanitizeModalHtml } from '../src/lib/modalHtmlSecurity.mjs';
 
 const root = resolve(import.meta.dirname, '..', '..');
 
@@ -64,7 +65,7 @@ const allowedHtmlSinks = new Map([
   [
     'frontend/src/lib/app/core.ts',
     new Set([
-      'body.innerHTML = bodyHtml;',
+      'body.innerHTML = sanitizeModalHtml(bodyHtml);',
     ]),
   ],
   [
@@ -77,7 +78,7 @@ const allowedHtmlSinks = new Map([
   [
     'frontend/src/lib/components/modal-body/ModalBody.svelte',
     new Set([
-      '{@html bodyHtml}',
+      '{@html sanitizedBodyHtml}',
     ]),
   ],
   [
@@ -116,6 +117,9 @@ for (const file of activeFiles) {
 
 const quickLookModal = read('frontend/src/lib/components/quick-look/QuickLookModal.svelte');
 const quickLookWrapper = read('frontend/src/lib/components/quick-look.ts');
+const modalCore = read('frontend/src/lib/app/core.ts');
+const modalBody = read('frontend/src/lib/components/modal-body/ModalBody.svelte');
+const modalBodyWrapper = read('frontend/src/lib/components/modal-body.ts');
 
 for (const [file, source] of [
   ['frontend/src/lib/components/quick-look/QuickLookModal.svelte', quickLookModal],
@@ -123,6 +127,62 @@ for (const [file, source] of [
 ]) {
   assertMissing(source, file, 'legacyContent', 'legacy QuickLook content API');
   assertMissing(source, file, 'innerHTML', 'raw HTML injection');
+}
+
+for (const [file, source] of [
+  ['frontend/src/lib/app/core.ts', modalCore],
+  ['frontend/src/lib/components/modal-body/ModalBody.svelte', modalBody],
+  ['frontend/src/lib/components/modal-body.ts', modalBodyWrapper],
+]) {
+  if (!source.includes('sanitizeModalHtml')) {
+    fail(`${file} must route modal HTML through sanitizeModalHtml.`);
+  }
+}
+
+const sanitized = sanitizeModalHtml(`
+  <script>alert(1)</script>
+  <img src=x onerror=alert(1)>
+  <a href="javascript:alert(1)">bad link</a>
+  <div id="safe-modal" class="modal-test" onclick="alert(1)" data-index="2">
+    <label style="display:flex;gap:8px;cursor:pointer;background-image:url(javascript:alert(1))">
+      <input id="safe-input" type="radio" name="choice" value="safe" checked onchange="alert(1)">
+      <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background-color:#22c55e"></span>
+      Safe option
+    </label>
+    <table><tbody><tr><td colspan="4">safe cell</td></tr></tbody></table>
+  </div>
+`);
+
+for (const forbidden of [
+  '<script',
+  '<img',
+  '<a',
+  'onerror',
+  'onclick',
+  'onchange',
+  'javascript:',
+  'background-image',
+  'url(',
+]) {
+  assertMissing(sanitized, 'sanitizeModalHtml(sample)', forbidden, 'unsafe modal HTML');
+}
+
+for (const required of [
+  'id="safe-modal"',
+  'class="modal-test"',
+  'data-index="2"',
+  'style="display:flex;gap:8px;cursor:pointer"',
+  'id="safe-input"',
+  'type="radio"',
+  'name="choice"',
+  'value="safe"',
+  'checked',
+  'background-color:#22c55e',
+  'colspan="4"',
+]) {
+  if (!sanitized.includes(required)) {
+    fail(`sanitizeModalHtml(sample) should preserve reviewed modal markup: ${required}`);
+  }
 }
 
 if (process.exitCode) {

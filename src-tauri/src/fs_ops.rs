@@ -698,11 +698,6 @@ fn preserve_windows_dacl(src: &Path, dst: &Path) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(not(any(unix, windows)))]
-fn preserve_platform_metadata(_src: &Path, _dst: &Path) -> Result<(), String> {
-    Ok(())
-}
-
 fn copy_file_exclusive_preserve_times(src: &Path, dst: &Path) -> Result<u64, String> {
     let mut created_destination = false;
     let result = (|| -> Result<u64, String> {
