@@ -1,5 +1,5 @@
 import type { SimpleFileAppState } from './appState';
-import { pushClipboardHistory } from './transferClipboard';
+import { setTransferClipboard } from './transferClipboard';
 import { getTransferVerb, toTransferAction, type TransferAction } from './transferPathUtils';
 import {
   queueFileTransfer,
@@ -125,9 +125,7 @@ export function createTransferWorkflowActions(host: TransferWorkflowHost): Trans
     copy() {
       if (state.selectedEntries.size > 0) {
         const paths = [...state.selectedEntries];
-        pushClipboardHistory(state, paths, 'copy');
-        state.clipboard = paths;
-        state.clipboardAction = 'copy';
+        setTransferClipboard(state, paths, 'copy');
         ui.updateCutItemsVisual();
       }
     },
@@ -135,9 +133,7 @@ export function createTransferWorkflowActions(host: TransferWorkflowHost): Trans
     cut() {
       if (state.selectedEntries.size > 0) {
         const paths = [...state.selectedEntries];
-        pushClipboardHistory(state, paths, 'cut');
-        state.clipboard = paths;
-        state.clipboardAction = 'cut';
+        setTransferClipboard(state, paths, 'cut');
         ui.updateCutItemsVisual();
       }
     },

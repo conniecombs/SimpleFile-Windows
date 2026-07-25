@@ -23,3 +23,14 @@ export function pushClipboardHistory(
     ...state.clipboardHistory,
   ].slice(0, MAX_CLIPBOARD_HISTORY);
 }
+
+export function setTransferClipboard(
+  state: SimpleFileAppState,
+  paths: PathString[],
+  action: ClipboardAction,
+) {
+  const clipboardPaths = [...paths];
+  pushClipboardHistory(state, clipboardPaths, action);
+  state.clipboard = clipboardPaths;
+  state.clipboardAction = action;
+}

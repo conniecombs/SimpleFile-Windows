@@ -102,9 +102,10 @@ import { onMount } from 'svelte';
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
 import type { TransferAction } from "../transferPathUtils.js";
+import { handleKeyDown, registerShortcut, unregisterShortcut, type ShortcutOptions } from "../keyboardShortcuts.js";
 import { showAdvancedRenameFlow, closeAdvancedRenameFlow, applyAdvancedRenameFlow, updateAdvancedRenameOperationClasses, refreshAdvancedRenamePreview } from "./advanced_rename.js";
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow } from "./archive.js";
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, refreshSecondaryPane, openSelected, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState } from "./core.js";
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
 
 
@@ -692,134 +693,191 @@ export function initApp() {
       }
     };
 
-    const handleKeydown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const isTextInput = target instanceof HTMLInputElement
-        || target instanceof HTMLTextAreaElement
-        || target instanceof HTMLSelectElement;
-      const key = event.key.toLowerCase();
-
-      if (target?.id === 'path-input' && event.key === 'Enter') {
-        event.preventDefault();
-        const value = (target as HTMLInputElement).value.trim();
-        if (value) void loadDirectory(value);
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        if (overlayById('quicklook-overlay')?.classList.contains('visible')) {
-          event.preventDefault();
-          closeQuickLookFlow();
-          return;
-        }
-        if (overlayById('archive-overlay')?.classList.contains('visible')) {
-          event.preventDefault();
-          closeArchiveFlow();
-          return;
-        }
-        if (overlayById('advanced-rename-overlay')?.classList.contains('visible')) {
-          event.preventDefault();
-          closeAdvancedRenameFlow();
-          return;
-        }
-        if (overlayById('keyboard-help-overlay')?.classList.contains('visible')) {
-          event.preventDefault();
-          closeKeyboardHelpFlow();
-          return;
-        }
-        if (overlayById('progress-overlay')?.classList.contains('visible')) {
-          event.preventDefault();
-          hideProgressFlow();
-          return;
-        }
-      }
-
-      if (
-        event.key === 'Escape'
-        && document.getElementById('modal-overlay')?.classList.contains('visible')
-        && document.getElementById('modal')?.classList.contains('settings-modal')
-      ) {
-        closeSettingsModal();
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        hideContextMenu();
-        appState.commandPaletteVisible = false;
-      }
-
-      if (event.ctrlKey && event.shiftKey && key === 'p') {
-        event.preventDefault();
-        appState.commandPaletteVisible = true;
-        return;
-      }
-
-      if (event.ctrlKey && key === 'f') {
-        event.preventDefault();
-        handleSearchFocus();
-        return;
-      }
-
-      if (isTextInput || document.getElementById('modal-overlay')?.classList.contains('visible')) {
-        return;
-      }
-
-      if (event.ctrlKey && event.shiftKey && key === 'n') {
-        event.preventDefault();
-        void createFileFlow();
-      } else if (event.ctrlKey && key === 'n') {
-        event.preventDefault();
-        void createFolderFlow();
-      } else if (event.ctrlKey && key === 'a') {
-        event.preventDefault();
-        selectAllEntries();
-      } else if (event.ctrlKey && key === 'c') {
-        event.preventDefault();
-        copySelection('copy');
-      } else if (event.ctrlKey && key === 'x') {
-        event.preventDefault();
-        copySelection('cut');
-      } else if (event.ctrlKey && (key === 'y' || (event.shiftKey && key === 'z'))) {
-        event.preventDefault();
-        void redoLastFlow();
-      } else if (event.ctrlKey && key === 'z') {
-        event.preventDefault();
-        void undoLastFlow();
-      } else if (event.ctrlKey && event.shiftKey && key === 'v') {
-        event.preventDefault();
-        void showClipboardHistoryFlow();
-      } else if (event.ctrlKey && key === 'v') {
-        event.preventDefault();
-        void pasteClipboard();
-      } else if (event.key === 'F2') {
-        event.preventDefault();
-        void renameSelectedFlow();
-      } else if (event.key === 'F4') {
-        event.preventDefault();
-        openTerminal(pathForPane()).catch(showError);
-      } else if (event.key === 'Delete') {
-        event.preventDefault();
-        void deleteSelectedFlow();
-      } else if (event.key === 'F5') {
-        event.preventDefault();
-        if (appState.activePane === 'secondary') void refreshSecondaryPane();
-        else void refreshCurrentDirectory();
-      } else if (event.key === 'Backspace') {
-        event.preventDefault();
-        const activePane = appState.activePane as PaneId;
-        const parent = getParentPath(pathForPane(activePane));
-        if (parent) {
-          if (activePane === 'secondary') void loadSecondaryDirectory(parent);
-          else void loadDirectory(parent);
-        }
-      } else if ((event.key === ' ' || event.code === 'Space') && !(target instanceof HTMLButtonElement) && !(target instanceof HTMLAnchorElement)) {
-        event.preventDefault();
-        void showQuickLookFlow();
-      } else if (event.key === 'Enter') {
-        event.preventDefault();
-        void openSelected();
-      }
+    const closePathBarEditor = () => {
+      const pathBar = document.getElementById('path-bar');
+      if (!pathBar?.classList.contains('editing')) return false;
+      pathBar.classList.remove('editing');
+      const autocomplete = document.getElementById('path-autocomplete') as HTMLElement | null;
+      if (autocomplete) autocomplete.style.display = 'none';
+      return true;
     };
+
+    const focusPathBar = () => {
+      const pathBar = document.getElementById('path-bar');
+      const input = document.getElementById('path-input') as HTMLInputElement | null;
+      if (!input) return;
+      pathBar?.classList.add('editing');
+      input.value = appState.currentPath || '';
+      window.setTimeout(() => {
+        input.focus();
+        input.select();
+      }, 0);
+    };
+
+    const refreshActivePane = () => {
+      if (appState.activePane === 'secondary') void refreshSecondaryPane();
+      else void refreshCurrentDirectory();
+    };
+
+    const navigateParentDirectory = () => {
+      const activePane = appState.activePane as PaneId;
+      const parent = getParentPath(pathForPane(activePane));
+      if (!parent) return;
+      if (activePane === 'secondary') void loadSecondaryDirectory(parent);
+      else void loadDirectory(parent);
+    };
+
+    const navigateActiveHistory = (delta: number) => {
+      if (appState.activePane === 'secondary') void navigateSecondaryHistory(delta);
+      else void navigateHistory(delta);
+    };
+
+    const closeActiveTab = () => {
+      if (appState.activeTabId) void closeTab(appState.activeTabId);
+    };
+
+    const switchActiveTabBy = (delta: number) => {
+      const tabs = appState.tabs || [];
+      if (tabs.length === 0) return;
+      const activeIndex = Math.max(0, tabs.findIndex((tab: { id: string }) => tab.id === appState.activeTabId));
+      const nextTab = tabs[(activeIndex + delta + tabs.length) % tabs.length];
+      if (nextTab?.id) void switchToTab(nextTab.id);
+    };
+
+    const clearQuickFilter = () => {
+      const filterBar = document.getElementById('quick-filter-bar') as HTMLElement | null;
+      const filterInput = document.getElementById('filter-input') as HTMLInputElement | null;
+      const hasVisibleFilter = Boolean(filterBar && filterBar.style.display !== 'none');
+      if (!appState.filterQuery && !hasVisibleFilter) return false;
+
+      appState.filterQuery = '';
+      if (filterInput) filterInput.value = '';
+      if (filterBar) filterBar.style.display = 'none';
+      applyEntryFilters();
+      return true;
+    };
+
+    const closeVisibleOverlay = () => {
+      if (overlayById('quicklook-overlay')?.classList.contains('visible')) {
+        closeQuickLookFlow();
+        return true;
+      }
+      if (overlayById('archive-overlay')?.classList.contains('visible')) {
+        closeArchiveFlow();
+        return true;
+      }
+      if (overlayById('advanced-rename-overlay')?.classList.contains('visible')) {
+        closeAdvancedRenameFlow();
+        return true;
+      }
+      if (overlayById('keyboard-help-overlay')?.classList.contains('visible')) {
+        closeKeyboardHelpFlow();
+        return true;
+      }
+      if (overlayById('progress-overlay')?.classList.contains('visible')) {
+        hideProgressFlow();
+        return true;
+      }
+
+      return false;
+    };
+
+    const handleEscapeShortcut = () => {
+      if (closeVisibleOverlay()) return;
+
+      const modalOverlay = document.getElementById('modal-overlay');
+      const modal = document.getElementById('modal');
+      if (modalOverlay?.classList.contains('visible')) {
+        if (modal?.classList.contains('settings-modal')) {
+          closeSettingsModal();
+        }
+        return;
+      }
+
+      hideContextMenu();
+      if (appState.commandPaletteVisible) {
+        appState.commandPaletteVisible = false;
+        return;
+      }
+      if (appState.searchMode) {
+        void clearSearch();
+        return;
+      }
+      if (closePathBarEditor()) return;
+      clearQuickFilter();
+    };
+
+    const registerAppShortcuts = () => {
+      const shortcutIds: string[] = [];
+      const addShortcut = (
+        id: string,
+        combo: string,
+        handler: (event: KeyboardEvent) => void | Promise<void>,
+        options: ShortcutOptions = {},
+      ) => {
+        registerShortcut(id, combo, handler, options);
+        shortcutIds.push(id);
+      };
+
+      addShortcut('path.submit', 'Enter', (event) => {
+        const target = event.target as HTMLInputElement | null;
+        const value = target?.value.trim();
+        closePathBarEditor();
+        if (value) void loadDirectory(value);
+      }, {
+        allowInEditable: true,
+        when: (event) => event.target instanceof HTMLInputElement && event.target.id === 'path-input',
+      });
+      addShortcut('path.focus', 'Ctrl+L', focusPathBar, { allowInControls: true, allowInEditable: true });
+      addShortcut('path.focus.alt', 'Alt+D', focusPathBar, { allowInControls: true, allowInEditable: true });
+      addShortcut('nav.parent', 'Alt+Up', navigateParentDirectory);
+      addShortcut('nav.parent.backspace', 'Backspace', navigateParentDirectory);
+      addShortcut('nav.back', 'Alt+Left', () => navigateActiveHistory(-1));
+      addShortcut('nav.forward', 'Alt+Right', () => navigateActiveHistory(1));
+      addShortcut('directory.refresh', 'F5', refreshActivePane);
+
+      addShortcut('file.open', 'Enter', () => void openSelected());
+      addShortcut('file.rename', 'F2', () => void renameSelectedFlow());
+      addShortcut('file.delete.trash', 'Delete', () => void deleteSelectedFlow({ mode: 'trash' }));
+      addShortcut('file.delete.permanent', 'Shift+Delete', () => void deleteSelectedFlow({ mode: 'permanent' }));
+      addShortcut('file.copy', 'Ctrl+C', () => copySelection('copy'));
+      addShortcut('file.cut', 'Ctrl+X', () => copySelection('cut'));
+      addShortcut('file.paste', 'Ctrl+V', () => void pasteClipboard());
+      addShortcut('file.copyPath', 'Ctrl+Shift+C', () => void copySelectedPathsToSystemClipboard());
+      addShortcut('selection.all', 'Ctrl+A', selectAllEntries);
+      addShortcut('file.newFile', 'Ctrl+N', () => void createFileFlow());
+      addShortcut('file.newFolder', 'Ctrl+Shift+N', () => void createFolderFlow());
+
+      addShortcut('tabs.new', 'Ctrl+T', () => void openNewTab());
+      addShortcut('tabs.close', 'Ctrl+W', closeActiveTab);
+      addShortcut('tabs.next', 'Ctrl+Tab', () => switchActiveTabBy(1));
+      addShortcut('tabs.previous', 'Ctrl+Shift+Tab', () => switchActiveTabBy(-1));
+
+      addShortcut('quickLook.toggle', 'Space', () => void showQuickLookFlow());
+      addShortcut('search.focus', 'Ctrl+F', handleSearchFocus, { allowInControls: true, allowInEditable: true });
+      addShortcut('help.keyboard', 'F1', showKeyboardHelpFlow, { allowInControls: true, allowInEditable: true });
+      addShortcut('help.keyboard.ctrl', 'Ctrl+?', showKeyboardHelpFlow, { allowInControls: true, allowInEditable: true });
+      addShortcut('escape', 'Escape', handleEscapeShortcut, { allowInControls: true, allowInEditable: true });
+
+      addShortcut('commandPalette.open', 'Ctrl+Shift+P', () => {
+        appState.commandPaletteVisible = true;
+      }, { allowInControls: true, allowInEditable: true });
+      addShortcut('history.undo', 'Ctrl+Z', () => void undoLastFlow());
+      addShortcut('history.redo', 'Ctrl+Y', () => void redoLastFlow());
+      addShortcut('history.redo.shift', 'Ctrl+Shift+Z', () => void redoLastFlow());
+      addShortcut('clipboard.history', 'Ctrl+Shift+V', () => void showClipboardHistoryFlow());
+      addShortcut('terminal.open', 'F4', () => {
+        openTerminal(pathForPane()).catch(showError);
+      });
+
+      return () => {
+        for (const id of shortcutIds) {
+          unregisterShortcut(id);
+        }
+      };
+    };
+
+    const cleanupShortcuts = registerAppShortcuts();
 
     const handleOperationProgress = (event: { payload: ProgressUpdate }) => {
       const update = event.payload;
@@ -948,7 +1006,7 @@ export function initApp() {
     document.addEventListener('input', handleAdvancedRenameControlInput);
     document.addEventListener('mousedown', handleDocumentPointerDown);
     document.addEventListener('mousedown', handleModalPointerDown);
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('dragstart', handleDragStart);
     document.addEventListener('dragover', handleDragOver);
     document.addEventListener('drop', handleDrop);
@@ -1009,7 +1067,8 @@ export function initApp() {
       document.removeEventListener('input', handleAdvancedRenameControlInput);
       document.removeEventListener('mousedown', handleDocumentPointerDown);
       document.removeEventListener('mousedown', handleModalPointerDown);
-      document.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener('keydown', handleKeyDown);
+      cleanupShortcuts();
       document.removeEventListener('dragstart', handleDragStart);
       document.removeEventListener('dragover', handleDragOver);
       document.removeEventListener('drop', handleDrop);

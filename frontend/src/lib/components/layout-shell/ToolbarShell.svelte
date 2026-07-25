@@ -192,7 +192,7 @@
   </div>
 
   <div class="toolbar-actions" role="group" aria-label="Actions">
-    <button class="toolbar-btn" id="btn-new-folder" title="New Folder (Ctrl+N)" aria-label="Create new folder" onclick={(event) => emitToolbarCommand(event, 'new-folder')}>
+    <button class="toolbar-btn" id="btn-new-folder" title="New Folder (Ctrl+Shift+N)" aria-label="Create new folder" onclick={(event) => emitToolbarCommand(event, 'new-folder')}>
       <span class="icon" aria-hidden="true">📁+</span>
     </button>
     <button class="toolbar-btn" id="btn-view-toggle" title="Toggle View (List/Grid)" aria-label="Toggle between list and grid view" aria-pressed={appState.isGridView} onclick={(event) => emitToolbarCommand(event, 'view-toggle')}>
@@ -234,7 +234,7 @@
         </div>
         <div class="more-actions-divider" role="separator"></div>
         <div class="more-actions-group">
-          <button class="more-actions-item toolbar-btn" id="btn-new-file" title="New File (Ctrl+Shift+N)" aria-label="Create new file" role="menuitem" onclick={(event) => emitMoreActionCommand(event, 'new-file')}>
+          <button class="more-actions-item toolbar-btn" id="btn-new-file" title="New File (Ctrl+N)" aria-label="Create new file" role="menuitem" onclick={(event) => emitMoreActionCommand(event, 'new-file')}>
             <span class="icon" aria-hidden="true">📄+</span>
             <span class="more-actions-label">New File</span>
           </button>

@@ -122,7 +122,9 @@ import {
 
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
+import { getShortcutMap } from "../keyboardShortcuts.js";
 import type { TransferAction } from "../transferPathUtils.js";
+import { setTransferClipboard } from "../transferClipboard.js";
 import { showAdvancedRenameFlow } from "./advanced_rename.js";
 import { isArchiveEntry, showArchiveContentsFlow, showCreateArchiveFlow, extractArchiveFlow, archiveExtractFolderNameForPath } from "./archive.js";
 import { resetSearchStateForNavigation, showPropertiesFlow } from "./search.js";
@@ -1424,12 +1426,15 @@ const defaultColorLabels = [
     }
   }
 
-  export async function deleteSelectedFlow() {
+  export type DeleteSelectedMode = 'settings' | 'trash' | 'permanent';
+
+  export async function deleteSelectedFlow({ mode = 'settings' }: { mode?: DeleteSelectedMode } = {}) {
     const activePane = appState.activePane as PaneId;
     const paths = currentSelectionPaths();
     if (paths.length === 0) return;
 
-    const useTrash = appState.settings?.useTrash !== false;
+    const useTrash = mode === 'trash'
+      || (mode === 'settings' && appState.settings?.useTrash !== false);
     const confirmed = await showDialog({
       confirmText: useTrash ? 'Move to Trash' : 'Delete',
       message: useTrash
@@ -1478,10 +1483,42 @@ const defaultColorLabels = [
   export function copySelection(action: 'copy' | 'cut') {
     const paths = currentSelectionPaths();
     if (paths.length === 0) return;
-    appState.clipboard = paths;
-    appState.clipboardAction = action;
-    appState.clipboardHistory = [{ paths, action }, ...(appState.clipboardHistory || [])].slice(0, 10);
+    setTransferClipboard(appState, paths, action);
     showSuccess(`${action === 'copy' ? 'Copied' : 'Cut'} ${paths.length} item${paths.length === 1 ? '' : 's'}`);
+  }
+
+  async function writeTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      if (!document.execCommand('copy')) {
+        throw new Error('System clipboard is unavailable.');
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  export async function copySelectedPathsToSystemClipboard() {
+    const paths = currentSelectionPaths();
+    if (paths.length === 0) return;
+
+    try {
+      await writeTextToClipboard(paths.join('\n'));
+      showSuccess(`Copied ${paths.length === 1 ? 'path' : `${paths.length} paths`}`);
+    } catch (error) {
+      showError(error);
+    }
   }
 
   export async function showClipboardHistoryFlow() {
@@ -1945,7 +1982,103 @@ const defaultColorLabels = [
     }
   }
 
+  const keyboardShortcutSections = [
+    {
+      rows: [
+        ['path.focus', 'Focus path bar'],
+        ['path.focus.alt', 'Focus path bar'],
+        ['path.submit', 'Go to entered path'],
+        ['nav.parent', 'Parent folder'],
+        ['nav.parent.backspace', 'Parent folder'],
+        ['nav.back', 'Back'],
+        ['nav.forward', 'Forward'],
+        ['directory.refresh', 'Refresh'],
+        ['file.open', 'Open selected item'],
+      ],
+      title: 'Navigation',
+    },
+    {
+      rows: [
+        ['selection.all', 'Select all'],
+        ['file.copy', 'Copy'],
+        ['file.cut', 'Cut'],
+        ['file.paste', 'Paste'],
+        ['file.copyPath', 'Copy full path'],
+        ['file.rename', 'Rename'],
+        ['file.delete.trash', 'Move to trash'],
+        ['file.delete.permanent', 'Permanently delete'],
+        ['file.newFile', 'New file'],
+        ['file.newFolder', 'New folder'],
+      ],
+      title: 'File Operations',
+    },
+    {
+      rows: [
+        ['tabs.new', 'New tab'],
+        ['tabs.close', 'Close tab'],
+        ['tabs.next', 'Next tab'],
+        ['tabs.previous', 'Previous tab'],
+      ],
+      title: 'Tabs',
+    },
+    {
+      rows: [
+        ['quickLook.toggle', 'Quick Look'],
+        ['search.focus', 'Focus search'],
+        ['commandPalette.open', 'Command palette'],
+        ['clipboard.history', 'Clipboard history'],
+        ['history.undo', 'Undo last file operation'],
+        ['history.redo', 'Redo last file operation'],
+        ['history.redo.shift', 'Redo last file operation'],
+        ['terminal.open', 'Open terminal here'],
+        ['help.keyboard', 'Keyboard shortcuts'],
+        ['help.keyboard.ctrl', 'Keyboard shortcuts'],
+        ['escape', 'Close or cancel current surface'],
+      ],
+      title: 'View & Tools',
+    },
+  ] as const;
+
+  function renderKeyboardHelpBody() {
+    const shortcutMap = getShortcutMap();
+    const sections: HTMLElement[] = [];
+
+    for (const sectionDefinition of keyboardShortcutSections) {
+      const groupedRows = new Map<string, string[]>();
+      for (const [shortcutId, label] of sectionDefinition.rows) {
+        const combo = shortcutMap[shortcutId];
+        if (!combo) continue;
+        groupedRows.set(label, [...(groupedRows.get(label) || []), combo]);
+      }
+
+      if (groupedRows.size === 0) continue;
+
+      const section = document.createElement('div');
+      section.className = 'shortcuts-section';
+      const heading = document.createElement('h4');
+      heading.textContent = sectionDefinition.title;
+      section.appendChild(heading);
+
+      for (const [label, combos] of groupedRows.entries()) {
+        const row = document.createElement('div');
+        row.className = 'shortcut-row';
+        const shortcut = document.createElement('kbd');
+        shortcut.textContent = combos.join(' / ');
+        const action = document.createElement('span');
+        action.textContent = label;
+        row.append(shortcut, action);
+        section.appendChild(row);
+      }
+
+      sections.push(section);
+    }
+
+    const body = document.querySelector<HTMLElement>('.keyboard-help-body');
+    body?.replaceChildren(...sections);
+  }
+
   export function showKeyboardHelpFlow() {
+    renderKeyboardHelpBody();
     setOverlayVisible('keyboard-help-overlay', true);
     document.getElementById('keyboard-help-close')?.focus();
   }

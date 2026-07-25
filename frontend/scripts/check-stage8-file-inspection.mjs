@@ -50,7 +50,7 @@ assertContains('frontend/src/lib/app/core.ts', [
 assertContains('frontend/src/lib/app/setup.ts', [
   "document.addEventListener('simplefile:quick-look', handleQuickLook);",
   "document.addEventListener('simplefile:preview-close', handlePreviewClose);",
-  "event.code === 'Space'",
+  "addShortcut('quickLook.toggle', 'Space'",
 ], 'Stage 8 setup inspection events');
 
 assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte', [
