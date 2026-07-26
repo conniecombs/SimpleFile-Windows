@@ -20,6 +20,7 @@
     "check:release": "npm run check && npm run check:rust && npm run check:security",
     "build:tauri:local": "cd src-tauri && cargo tauri build --ci --config tauri.local.conf.json",
     "smoke:settings": "node scripts/smoke-settings-startup.mjs",
+    "smoke:settings-ui": "npm --prefix frontend run smoke:settings-ui",
     "smoke:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-release-startup.ps1",
     "smoke:msi": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-msi-artifact.ps1",
     "smoke:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-nsis-install.ps1",

@@ -22,11 +22,12 @@
     "check:stage10-transfer-safety": "node scripts/check-stage10-transfer-safety.mjs",
     "check:stage11-navigation-dual-pane": "node scripts/check-stage11-navigation-dual-pane.mjs",
     "check:svelte": "svelte-check --tsconfig ./tsconfig.json",
+    "smoke:settings-ui": "node scripts/smoke-settings-ui.mjs",
     "build:app": "vite build",
     "build": "npm run build:app",
     "dev": "vite",
     "preview": "vite preview",
-    "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:markdown-preview-safety && npm run check:html-sink-safety && npm run check:huge-folder && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run build"
+    "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:markdown-preview-safety && npm run check:html-sink-safety && npm run check:huge-folder && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run smoke:settings-ui && npm run build"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

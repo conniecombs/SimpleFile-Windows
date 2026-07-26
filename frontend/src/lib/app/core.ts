@@ -2259,6 +2259,7 @@ const defaultColorLabels = [
     setElementText('settings-icon-size-value', `${settings.defaultIconSize || appState.iconSize || 64}px`);
     setCheckbox('settings-show-hidden', Boolean(settings.showHidden));
     setCheckbox('settings-confirm-delete', settings.confirmDelete !== false);
+    setCheckbox('settings-use-trash', settings.useTrash !== false);
     setCheckbox('settings-new-tab', Boolean(settings.openInNewTab));
     setCheckbox('settings-auto-collapse', Boolean(settings.autoCollapseTree));
     setCheckbox('settings-recent-locations', settings.showRecentLocations !== false);
@@ -2303,6 +2304,7 @@ const defaultColorLabels = [
       showRecentLocations: (document.getElementById('settings-recent-locations') as HTMLInputElement | null)?.checked !== false,
       startLocation: (document.getElementById('settings-start-location') as HTMLSelectElement | null)?.value || 'home',
       theme: (document.getElementById('settings-theme') as HTMLSelectElement | null)?.value || 'dark',
+      useTrash: (document.getElementById('settings-use-trash') as HTMLInputElement | null)?.checked !== false,
       visibleColumns: selectedVisibleColumns,
     };
     appState.theme = appState.settings.theme;

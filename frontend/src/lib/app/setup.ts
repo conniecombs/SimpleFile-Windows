@@ -513,6 +513,7 @@ export function initApp() {
       'settings-icon-size',
       'settings-show-hidden',
       'settings-confirm-delete',
+      'settings-use-trash',
       'settings-new-tab',
       'settings-auto-collapse',
       'settings-recent-locations',

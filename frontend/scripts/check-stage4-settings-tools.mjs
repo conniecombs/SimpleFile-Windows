@@ -61,10 +61,24 @@ assertContains('frontend/src/lib/app/setup.ts', [
 ], 'Stage 4 settings command');
 
 assertContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', [
+  'class="settings-layout"',
+  'class="settings-sidebar"',
+  'class="settings-search"',
+  'id="settings-search"',
+  'aria-orientation={tabsOrientation}',
+  'class="settings-tabs-shell"',
+  'class="settings-empty-state"',
+  "id: 'appearance'",
+  "id: 'file-list'",
+  "id: 'navigation'",
+  "id: 'behavior'",
+  "id: 'about'",
+  "searchText: 'appearance theme dark light default view list grid default icon size icons display'",
   'id="settings-theme"',
   'id="settings-default-view"',
   'id="settings-icon-size"',
   'id="settings-start-location"',
+  'id="settings-use-trash"',
   'id="settings-custom-path-browse"',
   'id="rar-install-btn"',
   'id="update-check-btn"',
@@ -88,6 +102,25 @@ assertContains('frontend/src/lib/tauri.ts', [
   "case 'check_for_update':",
   "case 'install_update':",
 ], 'Stage 4 browser dev fallback');
+
+assertContains('frontend/src/css/modules/settings.css', [
+  '.settings-search',
+  '.settings-layout',
+  '.settings-sidebar',
+  '.settings-tabs-shell::after',
+  '.settings-switch',
+  '.settings-section-grid',
+  'scroll-snap-type: x proximity;',
+], 'Stage 4 settings sidebar layout styles');
+
+assertContains('frontend/scripts/smoke-settings-ui.mjs', [
+  'createServer',
+  'remote-debugging-port',
+  'Settings UI smoke passed.',
+  '#settings-search',
+  'Move Deleted Items to Trash',
+  'scrollSnapType.includes',
+], 'Stage 4 settings UI smoke');
 
 if (process.exitCode) {
   process.exit();
