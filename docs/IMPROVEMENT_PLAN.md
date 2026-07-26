@@ -1,0 +1,466 @@
+# Improvement Plan
+
+This document expands the seven highest-value improvement areas for the
+Windows-focused SimpleFile branch. The intent is to keep the product direction
+tight: local files, Windows drives, mapped network drives, archives, search,
+previews, metadata, Git helpers, cleanup tools, and Windows installers.
+
+The current baseline is healthy. The standard repo checks passed during the
+review that produced this plan:
+
+```powershell
+npm run check
+npm run check:rust
+```
+
+## 1. Tighten Archive Extraction Safety For TAR And RAR
+
+### Why This Matters
+
+SimpleFile is a file manager, so archive extraction is one of the highest-risk
+surfaces. A crafted archive should never be able to write outside the selected
+destination, create Windows alternate data streams, or create ambiguous
+drive-relative paths.
+
+ZIP handling already has stronger Windows-specific validation. TAR and RAR
+entry handling should match it so every supported archive format follows the
+same safety contract.
+
+### Current Evidence
+
+- `src-tauri/src/archive.rs` has ZIP-specific validation in
+  `zip_entry_relative_path`.
+- ZIP entries reject Windows drive-relative names such as `C:evil.txt`.
+- TAR and RAR use `archive_entry_relative_path`, which rejects parent/root/prefix
+  components but does not apply the same colon and ADS-like component checks.
+- `is_windows_special_component` already exists and can be reused or generalized.
+
+### Recommended Change
+
+- Extract a shared archive component validator that rejects:
+  - Parent traversal such as `..`.
+  - Absolute/rooted entries.
+  - Windows drive-relative names such as `C:evil.txt`.
+  - Windows ADS-like names such as `file.txt:stream`.
+  - Empty final paths.
+  - NUL bytes where raw archive names are strings.
+- Route ZIP, TAR, and RAR entry normalization through the same validator.
+- Keep archive listing tolerant enough to report readable safe entries, but make
+  extraction fail loudly when an unsafe path is encountered.
+
+### Files To Inspect
+
+- `src-tauri/src/archive.rs`
+- `src-tauri/src/fs_ops.rs`
+- `src-tauri/src/progress.rs`
+
+### Verification
+
+Add Rust tests for:
+
+- ZIP rejects `C:evil.txt`.
+- TAR rejects `C:evil.txt`.
+- RAR path validation rejects `C:evil.txt` or equivalent validator input.
+- TAR rejects `foo:bar.txt` on Windows.
+- RAR path validation rejects `foo:bar.txt` on Windows.
+- Existing nested safe archive paths still extract correctly.
+
+Run:
+
+```powershell
+npm run check:rust
+npm run check
+```
+
+## 2. Make Backend Filename Validation Fully Windows-Aware
+
+### Why This Matters
+
+The frontend rejects Windows-invalid filename characters, but the backend is the
+real security and correctness boundary. If any future command path bypasses the
+frontend helper, the backend should still reject invalid names before calling
+filesystem operations.
+
+This also improves error consistency between dialogs, shortcuts, archive virtual
+paths, batch rename, and direct Tauri command calls.
+
+### Current Evidence
+
+- `frontend/src/lib/coreFileManager.ts` rejects Windows-invalid characters with
+  `isValidFileName`.
+- `src-tauri/src/utils.rs` currently rejects empty names, separators, `..`, and
+  `.`.
+- Backend validation does not currently mirror all Windows filename restrictions.
+
+### Recommended Change
+
+Update `validate_name` in `src-tauri/src/utils.rs` to reject:
+
+- Empty or whitespace-only names.
+- `.` and `..`.
+- Path separators.
+- Characters invalid on Windows: `< > : " / \ | ? *`.
+- ASCII control characters.
+- Reserved device names, with or without extension:
+  - `CON`
+  - `PRN`
+  - `AUX`
+  - `NUL`
+  - `COM1` through `COM9`
+  - `LPT1` through `LPT9`
+- Trailing spaces or trailing periods.
+- Names containing `..` only if that rule remains intentional. If kept, document
+  that this is stricter than Windows and is a SimpleFile policy choice.
+
+### Files To Inspect
+
+- `src-tauri/src/utils.rs`
+- `frontend/src/lib/coreFileManager.ts`
+- `src-tauri/src/fs_ops.rs`
+- `src-tauri/src/archive.rs`
+- `frontend/src/lib/app/advanced_rename.ts`
+
+### Verification
+
+Add Rust tests for backend validation:
+
+- Rejects `bad:name.txt`.
+- Rejects `CON`, `CON.txt`, `NUL`, `COM1`, and `LPT9.log`.
+- Rejects `trailing.` and `trailing `.
+- Rejects control characters.
+- Accepts normal names such as `Report 2026.txt`.
+
+Then run:
+
+```powershell
+npm run check:rust
+npm run check
+```
+
+## 3. Consolidate Symlink Copy Handling
+
+### Why This Matters
+
+Symlink handling is easy to get subtly wrong on Windows. The app has already
+been hardened to operate on symlinks themselves for delete, rename, and move
+paths. Copy behavior should be just as consistent.
+
+There are multiple implementations that read a symlink target and choose
+`symlink_dir` or `symlink_file` based on `link_target.is_dir()`. For relative
+symlink targets, that check can be evaluated relative to the process current
+directory instead of the symlink's parent directory.
+
+### Current Evidence
+
+Similar symlink recreation logic appears in:
+
+- `src-tauri/src/fs_ops.rs` inside recursive directory copy.
+- `src-tauri/src/fs_ops.rs` inside resolved copy behavior.
+- `src-tauri/src/progress.rs` inside progress-aware transfers.
+
+### Recommended Change
+
+- Create one shared helper for recreating a symlink at a destination.
+- Resolve relative link targets against the symlink source parent only for the
+  purpose of classifying file vs directory.
+- Preserve the original symlink target text when creating the new link, so a
+  relative link remains relative after copy if that is the intended behavior.
+- Return consistent conflict errors if the destination already exists.
+- Use the helper from both normal and progress-aware transfer paths.
+
+### Files To Inspect
+
+- `src-tauri/src/fs_ops.rs`
+- `src-tauri/src/progress.rs`
+- `src-tauri/src/utils.rs`
+
+### Verification
+
+Add Windows Rust tests for:
+
+- Copying a symlink to a file recreates a symlink, not target bytes.
+- Copying a symlink to a directory recreates a directory symlink.
+- Relative symlink targets are classified relative to the symlink parent.
+- Existing destination conflicts are preserved.
+- Progress and non-progress copy paths behave the same way.
+
+Run:
+
+```powershell
+npm run check:rust
+npm run check
+```
+
+## 4. Improve Huge-Folder Responsiveness
+
+### Why This Matters
+
+Large folders are a core file-manager stress case. The current UI already has
+good feature coverage, but rendering and metadata work can still become costly
+when a directory has thousands of entries.
+
+The goal is not to add more features first. The goal is to make existing
+navigation, filtering, selection, thumbnails, preview, and folder metrics stay
+responsive under heavy local folders and network drives.
+
+### Current Evidence
+
+- `frontend/src/lib/components/file-list/FileList.svelte` maps all filtered
+  entries into display items.
+- `frontend/src/lib/components/file-list/FileListItems.svelte` has a `virtual`
+  mode branch, but it still renders all `items`.
+- Roadmap and review docs already call out large-folder progress, cancellation,
+  and expensive metadata work as areas to improve.
+
+### Recommended Change
+
+- Implement true list virtualization:
+  - Calculate visible row range from scroll position.
+  - Render only visible rows plus overscan.
+  - Preserve stable selection indexes.
+  - Ensure keyboard navigation scrolls focused items into view.
+- Make expensive secondary data lazy:
+  - Folder item counts.
+  - Folder sizes.
+  - Image thumbnails.
+  - Git file statuses if a repo has many files.
+- Add cancellation and freshness tokens to expensive per-directory work so old
+  results do not update the UI after navigation.
+- Add clearer progress text for long operations.
+
+### Files To Inspect
+
+- `frontend/src/lib/components/file-list/FileList.svelte`
+- `frontend/src/lib/components/file-list/FileListItems.svelte`
+- `frontend/src/lib/app/core.ts`
+- `src-tauri/src/fs_ops.rs`
+- `src-tauri/src/progress.rs`
+- `src-tauri/src/preview.rs`
+- `src-tauri/src/metadata.rs`
+
+### Verification
+
+Add or run manual smoke tests with disposable folders containing:
+
+- 1,000 files.
+- 10,000 files.
+- Mixed image and non-image files.
+- Nested folders where folder size calculation can be cancelled.
+- A mapped network drive or network-like path if available.
+
+Run:
+
+```powershell
+npm run check
+npm run check:rust
+```
+
+Also verify that scrolling, selection, `Ctrl+A`, type-ahead, sorting, and dual
+pane navigation still behave correctly.
+
+## 5. Retire Remaining Migration Glue
+
+### Why This Matters
+
+The Svelte migration is documented as complete, but some compatibility pieces
+remain. They are useful as guard rails during migration, but over time they
+become maintenance cost: static HTML overlay injection, generated audit bundles,
+`@ts-ignore` imports, and broad `any` state make future refactors harder to
+review safely.
+
+This is a code-health improvement that should reduce drift and make later UI
+work easier.
+
+### Current Evidence
+
+- `frontend/src/App.svelte` injects `legacyOverlayMarkup`.
+- `frontend/src/lib/components/legacy-overlays.ts` parses
+  `legacy-shell-template.html`.
+- `frontend/src/lib/app/localState.svelte.ts` stores several values as `any`.
+- The app still tracks generated Svelte audit artifacts under
+  `frontend/src/vanilla-js/generated-svelte/`.
+- Check scripts still depend on some generated artifacts for behavior-contract
+  coverage.
+
+### Recommended Change
+
+Approach this in slices:
+
+1. Replace one legacy overlay at a time with native Svelte components.
+2. Remove DOM ID dependencies from workflows after each replacement.
+3. Replace `any` fields in `localState.svelte.ts` with typed state.
+4. Convert imported plain JavaScript runtime helpers to typed TypeScript where
+   practical.
+5. Replace generated-bundle behavior checks with source-level or component-level
+   tests.
+6. Remove generated audit artifacts only after the new checks prove the same
+   behavior contracts.
+
+### Files To Inspect
+
+- `frontend/src/App.svelte`
+- `frontend/src/lib/components/legacy-overlays.ts`
+- `frontend/src/lib/components/legacy-shell-template.html`
+- `frontend/src/lib/app/localState.svelte.ts`
+- `frontend/src/vanilla-js/runtime/state.svelte.js`
+- `frontend/src/vanilla-js/generated-svelte/`
+- `frontend/scripts/check-behavior-bridges.mjs`
+- `frontend/scripts/check-migration-complete.mjs`
+
+### Verification
+
+After each slice:
+
+```powershell
+npm run check
+```
+
+For overlay replacement, manually verify:
+
+- Context menu.
+- Generic modal.
+- Progress modal.
+- Quick Look.
+- Archive modal.
+- Advanced rename.
+- Keyboard shortcuts modal.
+- About modal.
+
+## 6. Add Installer Smoke Coverage To CI Or A Scheduled Workflow
+
+### Why This Matters
+
+The normal CI builds the Rust backend, but packaging failures can still appear
+only when Tauri creates NSIS/MSI installers. Since SimpleFile ships as a Windows
+desktop app, installer health is part of product health.
+
+The repo already has good smoke scripts. The improvement is to run them earlier
+and more consistently.
+
+### Current Evidence
+
+- `.github/workflows/ci.yml` runs frontend checks, Rust checks, security checks,
+  and a Windows backend release build.
+- `.github/workflows/release.yml` creates Windows x64 installer artifacts.
+- Local scripts already exist for:
+  - Release executable startup smoke.
+  - MSI artifact extraction and launch smoke.
+  - NSIS install, launch, and uninstall smoke.
+
+### Recommended Change
+
+Add one of these workflows:
+
+- A manual `workflow_dispatch` installer smoke workflow.
+- A scheduled nightly Windows installer smoke workflow.
+- A PR-gated packaging smoke for changes under `src-tauri/`, `.github/`,
+  `frontend/`, or installer scripts.
+
+Start with manual or nightly if runtime is too expensive for every PR.
+
+### Files To Inspect
+
+- `.github/workflows/ci.yml`
+- `.github/workflows/release.yml`
+- `scripts/smoke-release-startup.ps1`
+- `scripts/smoke-msi-artifact.ps1`
+- `scripts/smoke-nsis-install.ps1`
+- `src-tauri/tauri.local.conf.json`
+- `src-tauri/tauri.conf.json`
+
+### Verification
+
+The workflow should prove:
+
+- Tauri can build NSIS and MSI artifacts.
+- The unpacked release executable launches and exposes the expected window
+  title.
+- The MSI contains `simplefile.exe` and launches after administrative
+  extraction.
+- The NSIS installer installs silently, writes an uninstall entry, launches the
+  installed executable, and uninstalls cleanly.
+
+## 7. Add Persisted Layouts And Shortcut Customization
+
+### Why This Matters
+
+Once the core safety and responsiveness work is solid, the best user-facing
+quality-of-life improvement is remembering how people work. A file manager gets
+used repeatedly, so tabs, panes, columns, preview visibility, icon size, and
+keyboard shortcuts should feel personal and durable.
+
+The app already has a shortcut registry and settings persistence, so this can be
+added without changing the product scope.
+
+### Current Evidence
+
+- `frontend/src/lib/keyboardShortcuts.ts` exposes shortcut registration,
+  dispatching, cleanup, and `getShortcutMap`.
+- `frontend/src/lib/app/setup.ts` registers default shortcuts.
+- `src-tauri/src/db.rs` exposes `get_db_setting` and `set_db_setting`.
+- Settings already persist some view preferences.
+- `ToDo.txt` points to shortcut customization as a later step.
+
+### Recommended Change
+
+Add two related but separate features:
+
+1. Persisted layouts:
+   - Tabs.
+   - Active pane.
+   - Dual-pane enabled state.
+   - Pane paths.
+   - Column visibility.
+   - Column widths.
+   - Preview pane visibility.
+   - Icon size and view mode.
+
+2. Shortcut customization:
+   - Store overrides by shortcut ID.
+   - Keep default shortcuts as fallback.
+   - Detect duplicate key combinations before saving.
+   - Provide reset-to-default per shortcut and reset-all.
+   - Keep developer tools shortcuts available in dev mode.
+   - Continue ignoring file-operation shortcuts while typing in text fields.
+
+### Files To Inspect
+
+- `frontend/src/lib/keyboardShortcuts.ts`
+- `frontend/src/lib/app/setup.ts`
+- `frontend/src/lib/app/core.ts`
+- `frontend/src/lib/appState.ts`
+- `frontend/src/vanilla-js/runtime/state.svelte.js`
+- `frontend/src/lib/components/settings-body/SettingsBody.svelte`
+- `src-tauri/src/db.rs`
+
+### Verification
+
+Add tests or smoke checks for:
+
+- Default shortcuts still work with no saved settings.
+- Overrides load on startup.
+- Duplicate shortcuts are rejected.
+- Reset restores defaults.
+- File-operation shortcuts do not fire inside inputs/textareas.
+- `F12` and devtools shortcuts remain available during development.
+- Layout settings survive restart.
+
+Run:
+
+```powershell
+npm run check
+npm run check:rust
+```
+
+## Suggested Implementation Order
+
+1. Archive extraction safety.
+2. Backend Windows filename validation.
+3. Shared symlink-copy helper and tests.
+4. Huge-folder virtualization and lazy metadata.
+5. Migration-glue retirement.
+6. Installer smoke workflow.
+7. Persisted layouts and shortcut customization.
+
+The first two items are the best initial patch because they are narrow,
+security-adjacent, and easy to verify with focused Rust tests.
