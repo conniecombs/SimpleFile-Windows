@@ -87,10 +87,19 @@ export function createFallbackDriveForPath(path: PathString): DriveInfo | null {
 
 export function isValidFileName(name: string) {
   const trimmed = name.trim();
+  const baseName = name.split('.')[0]?.replace(/ +$/, '').toUpperCase() || '';
   return trimmed.length > 0
     && !/[<>:"/\\|?*\u0000-\u001F]/.test(trimmed)
     && trimmed !== '.'
-    && trimmed !== '..';
+    && trimmed !== '..'
+    && !/[ .]$/.test(name)
+    && !isReservedWindowsDeviceName(baseName);
+}
+
+function isReservedWindowsDeviceName(baseName: string) {
+  return ['CON', 'PRN', 'AUX', 'NUL'].includes(baseName)
+    || /^COM[1-9]$/.test(baseName)
+    || /^LPT[1-9]$/.test(baseName);
 }
 
 export function formatFileSize(bytes: number, isDirectory = false) {

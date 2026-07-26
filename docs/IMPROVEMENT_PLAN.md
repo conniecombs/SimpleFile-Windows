@@ -260,6 +260,8 @@ pane navigation still behave correctly.
 
 ## 5. Retire Remaining Migration Glue
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
 The Svelte migration is documented as complete, but some compatibility pieces
@@ -271,39 +273,36 @@ review safely.
 This is a code-health improvement that should reduce drift and make later UI
 work easier.
 
-### Current Evidence
+### Completed Change
 
-- `frontend/src/App.svelte` injects `legacyOverlayMarkup`.
-- `frontend/src/lib/components/legacy-overlays.ts` parses
-  `legacy-shell-template.html`.
-- `frontend/src/lib/app/localState.svelte.ts` stores several values as `any`.
-- The app still tracks generated Svelte audit artifacts under
-  `frontend/src/vanilla-js/generated-svelte/`.
-- Check scripts still depend on some generated artifacts for behavior-contract
-  coverage.
+- `frontend/src/App.svelte` now renders the native
+  `OverlayShell.svelte` component instead of injecting `legacyOverlayMarkup`.
+- `frontend/src/lib/components/legacy-overlays.ts` and
+  `legacy-shell-template.html` are retired.
+- `frontend/src/lib/app/localState.svelte.ts` uses explicit local state types
+  for overlay paths, operation IDs, timers, progress cancellation, and advanced
+  rename plans.
+- The runtime helpers were converted from imported plain JavaScript files to
+  typed TypeScript sources under `frontend/src/vanilla-js/runtime/`.
+- Generated Svelte audit artifacts under
+  `frontend/src/vanilla-js/generated-svelte/` are retired.
+- Migration and behavior-bridge checks now verify live Svelte source contracts
+  and fail if the retired artifacts or raw overlay HTML sink return.
 
-### Recommended Change
+### Remaining Follow-Up
 
-Approach this in slices:
-
-1. Replace one legacy overlay at a time with native Svelte components.
-2. Remove DOM ID dependencies from workflows after each replacement.
-3. Replace `any` fields in `localState.svelte.ts` with typed state.
-4. Convert imported plain JavaScript runtime helpers to typed TypeScript where
-   practical.
-5. Replace generated-bundle behavior checks with source-level or component-level
-   tests.
-6. Remove generated audit artifacts only after the new checks prove the same
-   behavior contracts.
+The overlay hosts still intentionally preserve DOM IDs because several
+workflow controllers address those elements directly. A later UI slice can move
+one workflow at a time to component-owned state and events, then delete the
+corresponding DOM ID dependency.
 
 ### Files To Inspect
 
 - `frontend/src/App.svelte`
-- `frontend/src/lib/components/legacy-overlays.ts`
-- `frontend/src/lib/components/legacy-shell-template.html`
+- `frontend/src/lib/components/OverlayShell.svelte`
 - `frontend/src/lib/app/localState.svelte.ts`
-- `frontend/src/vanilla-js/runtime/state.svelte.js`
-- `frontend/src/vanilla-js/generated-svelte/`
+- `frontend/src/vanilla-js/runtime/state.svelte.ts`
+- `frontend/src/vanilla-js/runtime/startup-location.ts`
 - `frontend/scripts/check-behavior-bridges.mjs`
 - `frontend/scripts/check-migration-complete.mjs`
 
@@ -429,7 +428,7 @@ Add two related but separate features:
 - `frontend/src/lib/app/setup.ts`
 - `frontend/src/lib/app/core.ts`
 - `frontend/src/lib/appState.ts`
-- `frontend/src/vanilla-js/runtime/state.svelte.js`
+- `frontend/src/vanilla-js/runtime/state.svelte.ts`
 - `frontend/src/lib/components/settings-body/SettingsBody.svelte`
 - `src-tauri/src/db.rs`
 

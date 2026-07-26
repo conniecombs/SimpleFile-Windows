@@ -1,13 +1,12 @@
 
-import { onMount } from 'svelte';
-  // @ts-ignore
-  import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, removeBookmark, saveSettings, saveTabs, state as appState } from '../../vanilla-js/runtime/state.svelte.js';
-  // @ts-ignore
-  import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location.js';
+import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, removeBookmark, saveSettings, saveTabs, state as appState } from '../../vanilla-js/runtime/state.svelte';
+import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location';
   import { getActiveFileSystem } from '../vfs';
 import {
     batchRename,
     calculateFolderSize,
+    cancelFolderItemCount,
+    cancelFolderSize,
     cancelOperation,
     compareFiles,
     computeChecksum,
@@ -86,11 +85,9 @@ import {
     import { renderStatusBar } from '../components/status-bar';
   import { clearSettingsBody, renderSettingsBody } from '../components/settings-body';
   import { showError, showSuccess } from '../components/toasts';
-            
-  import { legacyOverlayMarkup } from '../components/legacy-overlays';
-  import { renderLayoutShell } from '../components/layout-shell';
   import type {
     ArchiveFormat,
+    ColumnId,
     ClipboardAction,
     CleanupResult,
     ConflictAction,
@@ -104,7 +101,9 @@ import {
     SearchOptions,
     SmartFolder,
     TransferResult,
+    ViewMode,
   } from '../types';
+  import type { FileTab } from '../appState';
 
   export type ColorLabelTag = {
     color: string;
@@ -213,6 +212,19 @@ const defaultColorLabels = [
     return `${count} item${count === 1 ? '' : 's'}`;
   }
 
+  function cancelFolderMetricWork() {
+    localState.folderMetricsToken += 1;
+    cancelFolderSize().catch((error) => console.warn('Failed to cancel folder size work:', error));
+    cancelFolderItemCount().catch((error) => console.warn('Failed to cancel folder item count work:', error));
+  }
+
+  async function stopPreviousFolderMetricWork() {
+    await Promise.all([
+      cancelFolderSize().catch((error) => console.warn('Failed to cancel previous folder size work:', error)),
+      cancelFolderItemCount().catch((error) => console.warn('Failed to cancel previous folder item count work:', error)),
+    ]);
+  }
+
   export function applyFolderMetrics(metrics: Map<PathString, { count: number; size: number }>) {
     const withMetrics = (entries: FileEntry[]) => entries.map((entry: FileEntry) => {
       const metric = metrics.get(entry.path);
@@ -241,7 +253,12 @@ const defaultColorLabels = [
       return;
     }
 
+    const metricsToken = ++localState.folderMetricsToken;
+
     try {
+      await stopPreviousFolderMetricWork();
+      if (metricsToken !== localState.folderMetricsToken) return;
+
       const metrics = new Map<PathString, { count: number; size: number }>();
       const nextFolderSizes = new Map(appState.folderSizes || new Map());
 
@@ -251,23 +268,33 @@ const defaultColorLabels = [
         async () => {
           for (let index = 0; index < folders.length; index += 1) {
             const folder = folders[index];
-            updateProgressFlow((index / Math.max(1, folders.length)) * 90, folder.name);
+            if (metricsToken !== localState.folderMetricsToken) return;
+
+            const progressLabel = `Folder ${index + 1} of ${folders.length}: ${folder.name}`;
+            updateProgressFlow((index / Math.max(1, folders.length)) * 90, progressLabel);
             const [size, count] = await Promise.all([
               calculateFolderSize(folder.path),
               countFolderItems(folder.path),
             ]);
+            if (metricsToken !== localState.folderMetricsToken) return;
+
             const metric = { count: Number(count || 0), size: Number(size || 0) };
             metrics.set(folder.path, metric);
             nextFolderSizes.set(folder.path, metric.size);
           }
         },
+        { onCancel: cancelFolderMetricWork },
       );
+
+      if (metricsToken !== localState.folderMetricsToken) return;
 
       appState.folderSizes = nextFolderSizes;
       applyFolderMetrics(metrics);
       showSuccess(`Calculated ${folders.length} folder${folders.length === 1 ? '' : 's'}`);
     } catch (error) {
-      showError(error);
+      if (metricsToken === localState.folderMetricsToken) {
+        showError(error);
+      }
     }
   }
 
@@ -307,7 +334,7 @@ const defaultColorLabels = [
       }
 
       const currentTag = entries.length === 1 ? appState.fileTags?.[entries[0].path] : null;
-      const currentTagId = Number.isFinite(Number(currentTag?.id)) ? Number(currentTag.id) : null;
+      const currentTagId = Number.isFinite(Number(currentTag?.id)) ? Number(currentTag?.id) : null;
       const result = await showHtmlDialog({
         bodyHtml: renderTagOptions(tags, currentTagId),
         confirmText: 'Apply',
@@ -495,7 +522,7 @@ const defaultColorLabels = [
     if (!appState.currentPath) return;
 
     const activeTabId = appState.activeTabId || `tab-${Date.now()}`;
-    const tab = {
+    const tab: FileTab = {
       id: activeTabId,
       path: appState.currentPath,
       title: basename(appState.currentPath),
@@ -503,9 +530,9 @@ const defaultColorLabels = [
       historyIndex: appState.historyIndex,
     };
 
-    const existingIndex = appState.tabs.findIndex((candidate: { id: string }) => candidate.id === activeTabId);
+    const existingIndex = appState.tabs.findIndex((candidate: FileTab) => candidate.id === activeTabId);
     appState.tabs = existingIndex >= 0
-      ? appState.tabs.map((candidate: { id: string }) => candidate.id === activeTabId ? tab : candidate)
+      ? appState.tabs.map((candidate: FileTab) => candidate.id === activeTabId ? tab : candidate)
       : [...appState.tabs, tab];
     appState.activeTabId = activeTabId;
     saveTabs();
@@ -956,6 +983,7 @@ const defaultColorLabels = [
   export async function loadDirectory(path: string, historyMode: HistoryMode = 'push') {
     const token = ++localState.navigationToken;
     try {
+      cancelFolderMetricWork();
       resetSearchStateForNavigation();
       appState.isNavigating = true;
       appState.currentPath = path;
@@ -988,8 +1016,12 @@ const defaultColorLabels = [
 
   export async function loadSecondaryDirectory(path: PathString, historyMode: HistoryMode = 'push', activate = true) {
     if (!path) return;
+    const token = ++localState.secondaryNavigationToken;
     try {
+      cancelFolderMetricWork();
       const listing = await getActiveFileSystem().listDirectory(path);
+      if (token !== localState.secondaryNavigationToken) return;
+
       appState.secondaryPath = listing.path;
       appState.secondaryEntries = listing.entries;
       appState.secondarySelectedEntries = new Set();
@@ -1681,8 +1713,19 @@ const defaultColorLabels = [
     overlayById(id)?.classList.toggle('visible', visible);
   }
 
-  export function showProgressFlow(title: string, item = '', percent = 0, operationId: string | null = null) {
+  type ProgressFlowOptions = {
+    onCancel?: (() => unknown) | null;
+  };
+
+  export function showProgressFlow(
+    title: string,
+    item = '',
+    percent = 0,
+    operationId: string | null = null,
+    options: ProgressFlowOptions = {},
+  ) {
     localState.currentProgressOperationId = operationId;
+    localState.currentProgressCancel = options.onCancel ?? null;
     setElementText('progress-title', title);
     setElementText('progress-text', `${Math.max(0, Math.min(100, Math.round(percent)))}%`);
     setElementText('progress-item', item);
@@ -1700,11 +1743,17 @@ const defaultColorLabels = [
 
   export function hideProgressFlow() {
     localState.currentProgressOperationId = null;
+    localState.currentProgressCancel = null;
     setOverlayVisible('progress-overlay', false);
   }
 
-  export async function runWithProgress<T>(title: string, item: string, work: () => Promise<T>) {
-    showProgressFlow(title, item, 8);
+  export async function runWithProgress<T>(
+    title: string,
+    item: string,
+    work: () => Promise<T>,
+    options: ProgressFlowOptions = {},
+  ) {
+    showProgressFlow(title, item, 8, null, options);
     try {
       const result = await work();
       updateProgressFlow(100, item);
@@ -2232,18 +2281,21 @@ const defaultColorLabels = [
       ['settings-col-items', 'items'],
       ['settings-col-date', 'date'],
       ['settings-col-type', 'type'],
-    ]
+    ] satisfies Array<[string, ColumnId]>;
+    const selectedVisibleColumns = visibleColumns
       .filter(([id]) => (document.getElementById(id) as HTMLInputElement | null)?.checked)
       .map(([, value]) => value);
 
     const iconSize = Number((document.getElementById('settings-icon-size') as HTMLInputElement | null)?.value || appState.iconSize || 64);
+    const defaultViewValue = (document.getElementById('settings-default-view') as HTMLSelectElement | null)?.value;
+    const defaultView: ViewMode = defaultViewValue === 'grid' ? 'grid' : 'list';
     appState.settings = {
       ...appState.settings,
       autoCollapseTree: (document.getElementById('settings-auto-collapse') as HTMLInputElement | null)?.checked || false,
       confirmDelete: (document.getElementById('settings-confirm-delete') as HTMLInputElement | null)?.checked !== false,
       customPath: (document.getElementById('settings-custom-path') as HTMLInputElement | null)?.value?.trim() || '',
       defaultIconSize: iconSize,
-      defaultView: (document.getElementById('settings-default-view') as HTMLSelectElement | null)?.value || 'list',
+      defaultView,
       enableGitIntegration: (document.getElementById('settings-git-integration') as HTMLInputElement | null)?.checked !== false,
       openInNewTab: (document.getElementById('settings-new-tab') as HTMLInputElement | null)?.checked || false,
       showFolderSizes: (document.getElementById('settings-folder-sizes') as HTMLInputElement | null)?.checked !== false,
@@ -2251,7 +2303,7 @@ const defaultColorLabels = [
       showRecentLocations: (document.getElementById('settings-recent-locations') as HTMLInputElement | null)?.checked !== false,
       startLocation: (document.getElementById('settings-start-location') as HTMLSelectElement | null)?.value || 'home',
       theme: (document.getElementById('settings-theme') as HTMLSelectElement | null)?.value || 'dark',
-      visibleColumns,
+      visibleColumns: selectedVisibleColumns,
     };
     appState.theme = appState.settings.theme;
     appState.isGridView = appState.settings.defaultView === 'grid';
@@ -2453,5 +2505,3 @@ const defaultColorLabels = [
       showError(error);
     }
   }
-
-

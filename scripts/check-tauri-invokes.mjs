@@ -13,7 +13,7 @@ function collectSourceFiles(directory) {
     .flatMap((entry) => {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'generated-svelte') {
+        if (entry.name === 'node_modules' || entry.name === 'dist') {
           return [];
         }
         return collectSourceFiles(path);

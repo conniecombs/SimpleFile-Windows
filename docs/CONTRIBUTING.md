@@ -21,8 +21,7 @@ need `rc.exe` when compiling the Windows desktop target.
 - `frontend/src/lib/app/` contains workflow orchestration.
 - `frontend/src/lib/api.ts` defines typed frontend API wrappers.
 - `frontend/src/lib/tauri.ts` owns the typed Tauri invoke wrapper and browser-dev fallback.
-- `frontend/src/vanilla-js/runtime/` contains live plain JavaScript runtime helpers.
-- `frontend/src/vanilla-js/generated-svelte/` contains generated migration-audit artifacts.
+- `frontend/src/vanilla-js/runtime/` contains typed runtime helpers still shared by the Svelte app.
 - `src-tauri/src/` contains Rust command modules.
 - `scripts/` and `frontend/scripts/` contain release and migration checks.
 

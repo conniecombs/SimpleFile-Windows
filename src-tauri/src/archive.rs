@@ -271,7 +271,9 @@ pub(crate) fn list_archive_directory(path: &str) -> Result<Option<DirectoryListi
     let mut entries: BTreeMap<String, FileEntry> = BTreeMap::new();
 
     for entry in archive_info.entries {
-        let relative_path = listing_entry_relative_path(parsed.format, &entry.path)?;
+        let Ok(relative_path) = listing_entry_relative_path(parsed.format, &entry.path) else {
+            continue;
+        };
         let entry_parts = normal_components(&relative_path);
         if entry_parts.len() <= current_parts.len()
             || !entry_parts
@@ -512,13 +514,28 @@ fn extract_rar(path: &str, dest: &Path) -> Result<(), String> {
 }
 
 fn zip_entry_relative_path(entry_name: &str) -> Result<PathBuf, String> {
+    archive_entry_relative_path_from_name(entry_name, "Zip")
+}
+
+fn archive_entry_relative_path(entry_path: &Path, archive_type: &str) -> Result<PathBuf, String> {
+    archive_entry_relative_path_from_name(&entry_path.to_string_lossy(), archive_type)
+}
+
+fn archive_entry_relative_path_from_name(
+    entry_name: &str,
+    archive_type: &str,
+) -> Result<PathBuf, String> {
     if entry_name.contains('\0') {
-        return Err(format!("Zip entry has unsafe path: {entry_name}"));
+        return Err(format!(
+            "{archive_type} entry has unsafe path: {entry_name}"
+        ));
     }
 
     let normalized = entry_name.replace('\\', "/");
     if normalized.starts_with('/') {
-        return Err(format!("Zip entry has unsafe path: {entry_name}"));
+        return Err(format!(
+            "{archive_type} entry has unsafe path: {entry_name}"
+        ));
     }
 
     let mut relative_path = PathBuf::new();
@@ -526,40 +543,20 @@ fn zip_entry_relative_path(entry_name: &str) -> Result<PathBuf, String> {
         if part.is_empty() || part == "." {
             continue;
         }
-        if part == ".." || is_windows_special_component(part) {
-            return Err(format!("Zip entry has unsafe path: {entry_name}"));
+        if part == ".."
+            || is_windows_special_component(part)
+            || crate::utils::validate_name(part).is_err()
+        {
+            return Err(format!(
+                "{archive_type} entry has unsafe path: {entry_name}"
+            ));
         }
         relative_path.push(part);
     }
 
     if relative_path.as_os_str().is_empty() {
-        return Err(format!("Zip entry has unsafe path: {entry_name}"));
-    }
-
-    Ok(relative_path)
-}
-
-fn archive_entry_relative_path(entry_path: &Path, archive_type: &str) -> Result<PathBuf, String> {
-    let mut relative_path = PathBuf::new();
-    for component in entry_path.components() {
-        match component {
-            Component::Normal(part) => relative_path.push(part),
-            Component::CurDir => {}
-            Component::ParentDir | Component::Prefix(_) | Component::RootDir => {
-                return Err(format!(
-                    "{} entry has unsafe path: {}",
-                    archive_type,
-                    entry_path.display()
-                ));
-            }
-        }
-    }
-
-    if relative_path.as_os_str().is_empty() {
         return Err(format!(
-            "{} entry has unsafe path: {}",
-            archive_type,
-            entry_path.display()
+            "{archive_type} entry has unsafe path: {entry_name}"
         ));
     }
 
@@ -567,9 +564,7 @@ fn archive_entry_relative_path(entry_path: &Path, archive_type: &str) -> Result<
 }
 
 fn is_windows_special_component(part: &str) -> bool {
-    let bytes = part.as_bytes();
-    bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic()
-        || cfg!(windows) && part.contains(':')
+    part.contains(':')
 }
 
 fn top_level_remap(dest: &Path, relative_paths: &[PathBuf]) -> Option<(OsString, OsString)> {
@@ -1512,6 +1507,25 @@ mod tests {
         zip.finish().expect("finish test zip");
     }
 
+    fn write_test_tar(tar_path: &Path, entries: &[(&str, &[u8])]) {
+        let file = fs::File::create(tar_path).expect("create test tar");
+        let mut archive = tar::Builder::new(file);
+
+        for &(name, contents) in entries {
+            let mut header = tar::Header::new_gnu();
+            header.set_path(name).expect("set tar entry path");
+            header.set_size(contents.len() as u64);
+            header.set_mode(0o644);
+            header.set_cksum();
+            let mut reader = contents;
+            archive
+                .append(&header, &mut reader)
+                .expect("append tar entry");
+        }
+
+        archive.finish().expect("finish test tar");
+    }
+
     #[test]
     fn extract_zip_allows_nested_folder_that_does_not_exist_yet() {
         let root = unique_temp_dir("nested");
@@ -1556,6 +1570,70 @@ mod tests {
     fn zip_entry_paths_reject_windows_drive_relative_names() {
         assert!(zip_entry_relative_path("C:evil.txt").is_err());
         assert!(zip_entry_relative_path("C:/evil.txt").is_err());
+        assert!(zip_entry_relative_path("folder/foo:bar.txt").is_err());
+        assert!(zip_entry_relative_path("folder/CON.txt").is_err());
+        assert!(zip_entry_relative_path("folder/bad?.txt").is_err());
+        assert!(zip_entry_relative_path("folder\0evil.txt").is_err());
+    }
+
+    #[test]
+    fn tar_and_rar_entry_paths_reject_windows_special_names() {
+        for archive_type in ["Tar", "RAR"] {
+            assert!(archive_entry_relative_path(Path::new("C:evil.txt"), archive_type).is_err());
+            assert!(
+                archive_entry_relative_path(Path::new("folder/foo:bar.txt"), archive_type).is_err()
+            );
+            assert!(
+                archive_entry_relative_path(Path::new("folder/CON.txt"), archive_type).is_err()
+            );
+            assert!(
+                archive_entry_relative_path(Path::new("folder/bad?.txt"), archive_type).is_err()
+            );
+            assert!(archive_entry_relative_path(Path::new("/absolute.txt"), archive_type).is_err());
+            assert!(archive_entry_relative_path(Path::new("../escape.txt"), archive_type).is_err());
+            assert!(archive_entry_relative_path(Path::new("."), archive_type).is_err());
+        }
+
+        assert_eq!(
+            archive_entry_relative_path(Path::new("folder/safe.txt"), "Tar").unwrap(),
+            PathBuf::from("folder").join("safe.txt")
+        );
+    }
+
+    #[test]
+    fn extract_tar_rejects_ads_like_entry_names() {
+        let root = unique_temp_dir("tar-ads");
+        let dest = root.join("out");
+        fs::create_dir_all(&dest).expect("create destination");
+        let tar_path = root.join("evil.tar");
+        write_test_tar(&tar_path, &[("foo:bar.txt", b"bad")]);
+
+        let err = extract_tar(tar_path.to_str().unwrap(), &dest, None)
+            .expect_err("ADS-like tar path should be rejected");
+
+        assert!(err.contains("Tar entry has unsafe path"));
+        assert!(!dest.join("foo:bar.txt").exists());
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn virtual_archive_listing_skips_unsafe_entries() {
+        let root = unique_temp_dir("virtual-listing-unsafe");
+        let zip_path = root.join("sample.zip");
+        write_test_zip(
+            &zip_path,
+            &[("safe.txt", b"safe"), ("folder/foo:bar.txt", b"bad")],
+        );
+
+        let root_listing = list_archive_directory(zip_path.to_str().unwrap())
+            .expect("list archive root")
+            .expect("archive root listing");
+
+        assert_eq!(root_listing.entries.len(), 1);
+        assert_eq!(root_listing.entries[0].name, "safe.txt");
+
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

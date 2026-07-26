@@ -2,7 +2,8 @@ use crate::models::ProgressUpdate;
 
 use crate::state::AppState;
 use crate::utils::{
-    generate_operation_id, validate_existing_path_no_resolve, validate_path_no_follow,
+    generate_operation_id, recreate_symlink, validate_existing_path_no_resolve,
+    validate_path_no_follow,
 };
 use serde::Serialize;
 use std::collections::HashSet;
@@ -324,28 +325,6 @@ impl CopyContext<'_> {
     }
 }
 
-fn copy_symlink(source_path: &Path, dst_path: &Path) -> Result<(), String> {
-    if let Some(parent) = dst_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
-    }
-    let link_target =
-        fs::read_link(source_path).map_err(|e| format!("Failed to read symlink target: {e}"))?;
-    let result = if link_target.is_dir() {
-        std::os::windows::fs::symlink_dir(&link_target, dst_path)
-    } else {
-        std::os::windows::fs::symlink_file(&link_target, dst_path)
-    };
-    result.map_err(|e| {
-        if e.kind() == std::io::ErrorKind::AlreadyExists {
-            conflict_for_existing_destination(dst_path)
-        } else {
-            format!("Failed to create symlink: {}", e)
-        }
-    })?;
-    Ok(())
-}
-
 fn create_dir_exclusive(path: &Path) -> Result<(), String> {
     fs::create_dir(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
@@ -522,7 +501,7 @@ fn copy_item_with_progress(
                 stack.push((entry.path(), dst_path.join(entry.file_name())));
             }
         } else if ft.is_symlink() {
-            copy_symlink(&src_path, &dst_path)?;
+            recreate_symlink(&src_path, &dst_path)?;
         } else {
             copy_file_with_progress(&src_path, &dst_path, ctx, completed_bytes)?;
         }

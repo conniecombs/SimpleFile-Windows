@@ -9,9 +9,7 @@
         kind: 'item';
         label: string;
       };
-
-  // @ts-ignore
-  import { state as appState } from '../../../vanilla-js/runtime/state.svelte.js';
+import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
 
   let entries = $derived.by<ContextMenuEntry[]>(() => {
     const activePane = appState.activePane === 'secondary' ? 'secondary' : 'primary';

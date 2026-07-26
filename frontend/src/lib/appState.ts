@@ -7,7 +7,6 @@ import type {
   OperationId,
   PathString,
   ProgressUpdate,
-  SearchOptions,
   SearchResult,
   SmartFolder,
   ThemeName,
@@ -15,12 +14,14 @@ import type {
   ViewMode,
   ColumnId,
 } from './types';
+import type { SearchWorkflowOptions } from './searchOptions';
 
 export interface AppSettings {
   theme: ThemeName;
   defaultView: ViewMode;
   defaultIconSize: number;
   showHidden: boolean;
+  useTrash: boolean;
   confirmDelete: boolean;
   openInNewTab: boolean;
   autoCollapseTree: boolean;
@@ -66,7 +67,10 @@ export interface UndoHistoryItem {
 
 export interface FileTag {
   color: string;
-  label: string;
+  emoji?: string;
+  id?: number;
+  label?: string;
+  name?: string;
 }
 
 export interface FolderStackItem {
@@ -111,6 +115,9 @@ export interface SimpleFileAppState {
   recentLocations: RecentLocation[];
   drives: DriveInfo[];
   theme: ThemeName;
+  settingsVisible: boolean;
+  aboutVisible: boolean;
+  commandPaletteVisible: boolean;
   settings: AppSettings;
   dualPaneEnabled: boolean;
   activePane: 'primary' | 'secondary';
@@ -122,12 +129,12 @@ export interface SimpleFileAppState {
   secondaryHistoryIndex: number;
   currentArchive: ArchiveInfo | null;
   searchQuery: string;
-  searchResults: FileEntry[];
+  searchResults: Array<SearchResult | FileEntry>;
   isSearching: boolean;
   searchMode: boolean;
   currentSearchId: string | null;
   searchCancelled: boolean;
-  searchOptions: SearchOptions | null;
+  searchOptions: SearchWorkflowOptions | null;
   smartFolders: SmartFolder[];
   cleanupInProgress: boolean;
   _savedEntries: FileEntry[] | null;
@@ -145,6 +152,7 @@ export function createDefaultSettings(): AppSettings {
     defaultView: 'list',
     defaultIconSize: 64,
     showHidden: false,
+    useTrash: true,
     confirmDelete: true,
     openInNewTab: false,
     autoCollapseTree: false,
@@ -201,6 +209,9 @@ export function createInitialAppState(): SimpleFileAppState {
     recentLocations: [],
     drives: [],
     theme: 'dark',
+    settingsVisible: false,
+    aboutVisible: false,
+    commandPaletteVisible: false,
     settings: createDefaultSettings(),
     dualPaneEnabled: false,
     activePane: 'primary',

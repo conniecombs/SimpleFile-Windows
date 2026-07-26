@@ -2,10 +2,14 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..', '..');
-const generatedRoot = 'frontend/src/vanilla-js/generated-svelte';
 
 function absolute(path) {
   return resolve(root, path);
+}
+
+function fail(message) {
+  console.error(message);
+  process.exitCode = 1;
 }
 
 function read(path) {
@@ -15,11 +19,6 @@ function read(path) {
     return '';
   }
   return readFileSync(resolved, 'utf8');
-}
-
-function fail(message) {
-  console.error(message);
-  process.exitCode = 1;
 }
 
 function assertContains(file, values, label = 'value') {
@@ -71,7 +70,6 @@ const bridgeContracts = [
   {
     name: 'breadcrumb',
     source: 'frontend/src/lib/components/breadcrumb/BreadcrumbTrail.svelte',
-    generated: `${generatedRoot}/breadcrumb.js`,
     events: [
       'simplefile:breadcrumb-focus',
       'simplefile:breadcrumb-navigate',
@@ -80,18 +78,14 @@ const bridgeContracts = [
   {
     name: 'file-list item interactions',
     source: 'frontend/src/lib/components/file-list/FileListItems.svelte',
-    generated: `${generatedRoot}/file-list.js`,
     events: [
       'simplefile:file-list-item-click',
       'simplefile:file-list-item-open',
     ],
   },
-
-
   {
     name: 'quick filter',
     source: 'frontend/src/lib/components/search-chrome/QuickFilterBar.svelte',
-    generated: `${generatedRoot}/search-chrome.js`,
     events: [
       'simplefile:quick-filter-clear',
       'simplefile:quick-filter-input',
@@ -100,7 +94,6 @@ const bridgeContracts = [
   {
     name: 'search results header',
     source: 'frontend/src/lib/components/search-chrome/SearchResultsHeader.svelte',
-    generated: `${generatedRoot}/search-chrome.js`,
     events: [
       'simplefile:search-results-clear',
     ],
@@ -108,7 +101,6 @@ const bridgeContracts = [
   {
     name: 'tabs',
     source: 'frontend/src/lib/components/tabs/TabsBar.svelte',
-    generated: `${generatedRoot}/tabs.js`,
     events: [
       'simplefile:tab-close',
       'simplefile:tab-focus-move',
@@ -119,7 +111,6 @@ const bridgeContracts = [
   {
     name: 'tree view',
     source: 'frontend/src/lib/components/tree-view/TreeView.svelte',
-    generated: `${generatedRoot}/tree-view.js`,
     events: [
       'simplefile:tree-node-focus-move',
       'simplefile:tree-node-focus-parent',
@@ -130,7 +121,6 @@ const bridgeContracts = [
   {
     name: 'toolbar and search',
     source: 'frontend/src/lib/components/layout-shell/ToolbarShell.svelte',
-    generated: `${generatedRoot}/layout-shell.js`,
     events: [
       'simplefile:search-cancel',
       'simplefile:search-clear',
@@ -144,7 +134,6 @@ const bridgeContracts = [
 
 for (const contract of bridgeContracts) {
   assertContains(contract.source, contract.events, `${contract.name} event`);
-  assertContains(contract.generated, contract.events, `${contract.name} generated event`);
 }
 
 assertContains('frontend/src/lib/components/file-list/FileListItems.svelte', [
@@ -153,28 +142,28 @@ assertContains('frontend/src/lib/components/file-list/FileListItems.svelte', [
   'data-is-dir={item.isDir}',
 ], 'file-list drag/drop source contract');
 
-assertContains(`${generatedRoot}/file-list.js`, [
-  'draggable="true"',
-  '"data-path"',
-  '"data-is-dir"',
-], 'file-list drag/drop generated contract');
-
 assertContains('frontend/src/App.svelte', [
-  "import { renderLayoutShell } from './lib/components/layout-shell';",
+  "import OverlayShell from './lib/components/OverlayShell.svelte';",
   'class="app-container"',
-  '{@html legacyOverlayMarkup}',
+  '<OverlayShell />',
 ], 'Svelte app shell owner');
 
-assertContains('frontend/src/lib/components/legacy-overlays.ts', [
-  '#settings-overlay',
-], 'retired legacy settings overlay removal');
-
-assertNoReferences([
-  'frontend/src/lib/components/legacy-shell-template.html',
-], [
-  'id="settings-overlay"',
-  'settings-modal',
-], 'retired legacy settings overlay source');
+assertContains('frontend/src/lib/components/OverlayShell.svelte', [
+  'id="context-menu"',
+  'id="modal-overlay"',
+  'id="modal-title"',
+  'id="modal-body"',
+  'id="progress-overlay"',
+  'id="progress-cancel"',
+  'id="quicklook-overlay"',
+  'id="quicklook-content"',
+  'id="archive-overlay"',
+  'id="create-archive-overlay"',
+  'id="advanced-rename-overlay"',
+  'id="keyboard-help-overlay"',
+  'id="about-overlay"',
+  'id="external-drop-overlay"',
+], 'native overlay shell contract');
 
 assertContains('frontend/scripts/migrate-components.ps1', [
   'one-shot Svelte component migration script is retired',
@@ -189,45 +178,36 @@ assertNoReferences([
   'R:\\SimpleFile-Svelte',
 ], 'destructive retired migration script command');
 
-assertNoReferences([
-  'frontend/src/lib/components/legacy-shell-template.html',
-], [
-  'src="js/app.js"',
-  'js/theme-preload.js',
-  'js/startup-guard.js',
-], 'retired legacy script reference');
-
-assertContains('frontend/src/vanilla-js/runtime/state.svelte.js', [
+assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [
+  'satisfies SimpleFileAppState',
   'export const state',
   'export function subscribe',
   'export function uniqueId',
   'smartFolders: []',
-], 'plain JavaScript runtime state');
+], 'typed runtime state');
 
-assertContains('frontend/src/vanilla-js/runtime/startup-location.js', [
+assertContains('frontend/src/vanilla-js/runtime/startup-location.ts', [
   'export function resolveStartupLocation',
   "mode === 'custom'",
   "mode === 'last'",
-], 'startup-location runtime helper');
+], 'typed startup-location runtime helper');
 
 assertContains('frontend/src/vanilla-js/README.md', [
   'runtime/',
-  'generated-svelte/',
+  'typed runtime helpers',
 ], 'vanilla JavaScript folder documentation');
 
 assertContains('README.md', [
   'frontend/src/vanilla-js/runtime/',
-  'frontend/src/vanilla-js/generated-svelte/',
-], 'README vanilla JavaScript documentation');
-
-const generatedFiles = readdirSync(absolute(generatedRoot)).filter((file) => extname(file) === '.js');
-if (generatedFiles.length < bridgeContracts.length) {
-  fail(`${generatedRoot} should contain generated Svelte JavaScript bundles`);
-}
+  'typed runtime helpers',
+], 'README runtime documentation');
 
 assertMissing('frontend/js', 'retired vanilla JavaScript runtime folder');
-assertMissing('frontend/src/lib/state.svelte.js', 'retired state runtime location');
+assertMissing('frontend/src/lib/state.svelte', 'retired state runtime location');
 assertMissing('frontend/src/lib/components/js', 'retired legacy bridge JavaScript folder');
+assertMissing('frontend/src/lib/components/legacy-overlays.ts', 'retired legacy overlay parser');
+assertMissing('frontend/src/lib/components/legacy-shell-template.html', 'retired legacy overlay template');
+assertMissing('frontend/src/vanilla-js/generated-svelte', 'retired generated Svelte audit bundles');
 
 const activeReferenceFiles = [
   ...collectFiles('frontend/src', new Set(['.svelte', '.ts', '.js', '.mjs', '.md'])),
@@ -235,21 +215,30 @@ const activeReferenceFiles = [
   ...collectFiles('scripts', new Set(['.js', '.mjs'])),
   'README.md',
   'docs/CONTRIBUTING.md',
+  'docs/SUPPORT.md',
+  'docs/STARTUP_FIX_NOTES.md',
   'package.json',
   'frontend/package.json',
-].filter((file) => file !== 'frontend\\scripts\\check-behavior-bridges.mjs'
-  && file !== 'frontend/scripts/check-behavior-bridges.mjs'
-  && file !== 'frontend\\scripts\\check-migration-complete.mjs'
-  && file !== 'frontend/scripts/check-migration-complete.mjs');
+].filter((file) => {
+  const normalized = toPosix(file);
+  return normalized !== 'frontend/scripts/check-behavior-bridges.mjs'
+    && normalized !== 'frontend/scripts/check-migration-complete.mjs';
+});
 
 assertNoReferences(activeReferenceFiles, [
   'frontend/js/',
   'frontend\\js\\',
-  'frontend/src/lib/state.svelte.js',
+  'frontend/src/lib/state.svelte',
   'frontend/src/lib/components/js/svelte',
-  './lib/state.svelte.js',
-  '../../state.svelte.js',
-], 'retired vanilla JavaScript path');
+  './lib/state.svelte',
+  '../../state.svelte',
+  'frontend/src/lib/components/legacy-overlays.ts',
+  'frontend/src/lib/components/legacy-shell-template.html',
+  'frontend/src/vanilla-js/generated-svelte/',
+  'generated-svelte/',
+  'legacyOverlayMarkup',
+  '{@html legacyOverlayMarkup}',
+], 'retired migration glue');
 
 assertNoReferences([
   'README.md',
@@ -263,8 +252,7 @@ assertNoReferences([
 const liveSvelteSourceFiles = collectFiles('frontend/src', new Set(['.svelte', '.ts', '.js', '.mjs']))
   .filter((file) => {
     const normalized = toPosix(file);
-    return !normalized.startsWith(`${generatedRoot}/`)
-      && normalized !== 'frontend/src/lib/tauri.ts'
+    return normalized !== 'frontend/src/lib/tauri.ts'
       && normalized !== 'frontend/src/lib/components/preview-pane/PreviewContent.svelte';
   });
 
@@ -272,10 +260,11 @@ assertNoReferences(liveSvelteSourceFiles, [
   '@tauri-apps/api/core',
   'invoke("get_license_status"',
   'invoke("verify_license"',
-], 'raw Tauri invoke bypass');
+  '@ts-ignore',
+], 'raw Tauri invoke bypass or migration type suppression');
 
 if (process.exitCode) {
   process.exit();
 }
 
-console.log('Checked current Svelte behavior bridges and vanilla JavaScript folder boundaries.');
+console.log('Checked current Svelte behavior bridges and retired migration-glue boundaries.');

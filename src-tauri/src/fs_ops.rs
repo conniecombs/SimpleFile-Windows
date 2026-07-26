@@ -2,7 +2,7 @@ use crate::models::{DirectoryListing, FileEntry, TreeNode};
 
 use crate::state::AppState;
 use crate::utils::{
-    count_directory_entries, count_items_scoped, dirs_home, get_file_entry,
+    count_directory_entries, count_items_scoped, dirs_home, get_file_entry, recreate_symlink,
     validate_existing_path_no_resolve, validate_name, validate_path_no_follow,
 };
 use serde::Deserialize;
@@ -453,7 +453,7 @@ pub async fn get_entry_info(
 
 #[tauri::command]
 pub fn copy_entry(source: String, destination: String) -> Result<String, String> {
-    let source_path = validate_existing_path_no_resolve(&source)?;
+    let source_path = validate_path_no_follow(&source)?;
     let dest_path = validate_existing_path_no_resolve(&destination)?;
     if !dest_path.is_dir() {
         return Err("Destination must be a directory".into());
@@ -465,15 +465,20 @@ pub fn copy_entry(source: String, destination: String) -> Result<String, String>
 
     // Refuse to silently overwrite an existing entry.  The caller (frontend)
     // should detect the CONFLICT prefix and prompt the user.
-    if std::fs::symlink_metadata(&final_dest).is_ok() {
+    if path_exists_no_follow(&final_dest) {
         return Err(format!(
             "CONFLICT: destination already exists: {}",
             final_dest.to_string_lossy()
         ));
     }
 
-    if source_path.is_dir() {
+    let source_meta =
+        fs::symlink_metadata(&source_path).map_err(|e| format!("Failed to stat source: {e}"))?;
+    let source_type = source_meta.file_type();
+    if source_type.is_dir() {
         copy_dir_iterative(&source_path, &final_dest)?;
+    } else if source_type.is_symlink() {
+        recreate_symlink(&source_path, &final_dest)?;
     } else {
         copy_file_exclusive_preserve_times(&source_path, &final_dest)?;
     }
@@ -527,20 +532,7 @@ pub(crate) fn copy_dir_iterative(src: &Path, dst: &Path) -> Result<(), String> {
             // Recreate the symlink itself rather than following it and copying
             // the target data — a symlink to a 50 GB file should copy as a
             // tiny link, not 50 GB of bytes.
-            if let Some(parent) = dst_path.parent() {
-                fs::create_dir_all(parent)
-                    .map_err(|e| format!("Failed to create parent directory: {e}"))?;
-            }
-            let link_target = fs::read_link(&src_path)
-                .map_err(|e| format!("Failed to read symlink target: {e}"))?;
-            // Windows requires separate calls for file vs directory targets.
-            if link_target.is_dir() {
-                std::os::windows::fs::symlink_dir(&link_target, &dst_path)
-                    .map_err(|e| format!("Failed to create directory symlink: {}", e))?;
-            } else {
-                std::os::windows::fs::symlink_file(&link_target, &dst_path)
-                    .map_err(|e| format!("Failed to create file symlink: {}", e))?;
-            }
+            recreate_symlink(&src_path, &dst_path)?;
         } else {
             if let Some(parent) = dst_path.parent() {
                 fs::create_dir_all(parent)
@@ -745,7 +737,7 @@ pub fn move_entry(source: String, destination: String) -> Result<String, String>
     // This also prevents the self-move data-loss scenario: if source and
     // final_dest resolve to the same file the fallback copy+delete path would
     // copy the file over itself (which may fail), then delete it on rollback.
-    if final_dest.exists() {
+    if path_exists_no_follow(&final_dest) {
         return Err(format!(
             "CONFLICT: destination already exists: {}",
             final_dest.to_string_lossy()
@@ -757,7 +749,10 @@ pub fn move_entry(source: String, destination: String) -> Result<String, String>
     // and go directly to copy+delete.
     let network_involved = false;
     if network_involved || fs::rename(&source_path, &final_dest).is_err() {
-        if source_path.is_dir() {
+        let source_meta = fs::symlink_metadata(&source_path)
+            .map_err(|e| format!("Failed to stat source: {e}"))?;
+        let source_type = source_meta.file_type();
+        if source_type.is_dir() {
             // If the copy fails partway (e.g. out of disk space), roll back by
             // removing any partially-written destination so the user is not
             // left with a corrupted, incomplete directory tree.
@@ -767,6 +762,15 @@ pub fn move_entry(source: String, destination: String) -> Result<String, String>
             }
             fs::remove_dir_all(&source_path)
                 .map_err(|e| format!("Copied but failed to delete source: {e}"))?;
+        } else if source_type.is_symlink() {
+            recreate_symlink(&source_path, &final_dest)?;
+            if source_meta.is_dir() {
+                fs::remove_dir(&source_path)
+                    .map_err(|e| format!("Copied but failed to delete source symlink: {e}"))?;
+            } else {
+                fs::remove_file(&source_path)
+                    .map_err(|e| format!("Copied but failed to delete source symlink: {e}"))?;
+            }
         } else {
             match copy_file_exclusive_preserve_times(&source_path, &final_dest) {
                 Ok(_) => {}
@@ -947,6 +951,10 @@ fn should_cancel_metadata(
 // Conflict-aware Copy/Move
 // ============================================================================
 
+fn path_exists_no_follow(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
+}
+
 fn remove_existing_path(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path)
         .map_err(|e| format!("Failed to stat existing destination: {e}"))?;
@@ -982,7 +990,7 @@ fn unique_destination_path(dest_dir: &Path, file_name: &std::ffi::OsStr) -> Path
             _ => format!("{stem} ({i})"),
         };
         let candidate = dest_dir.join(candidate_name);
-        if !candidate.exists() {
+        if !path_exists_no_follow(&candidate) {
             return candidate;
         }
     }
@@ -1005,7 +1013,7 @@ fn resolve_destination(
         .file_name()
         .ok_or_else(|| "Cannot get file name".to_string())?;
     let final_dest = dest_dir.join(file_name);
-    if !final_dest.exists() {
+    if !path_exists_no_follow(&final_dest) {
         return Ok(Some(final_dest));
     }
 
@@ -1038,20 +1046,7 @@ fn copy_path_to_destination(source_path: &Path, final_dest: &Path) -> Result<(),
     if meta.file_type().is_dir() {
         copy_dir_iterative(source_path, final_dest)
     } else if meta.file_type().is_symlink() {
-        if let Some(parent) = final_dest.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create parent directory: {e}"))?;
-        }
-        let link_target = fs::read_link(source_path)
-            .map_err(|e| format!("Failed to read symlink target: {e}"))?;
-        if link_target.is_dir() {
-            std::os::windows::fs::symlink_dir(&link_target, final_dest)
-                .map_err(|e| format!("Failed to create directory symlink: {}", e))?;
-        } else {
-            std::os::windows::fs::symlink_file(&link_target, final_dest)
-                .map_err(|e| format!("Failed to create file symlink: {}", e))?;
-        }
-        Ok(())
+        recreate_symlink(source_path, final_dest)
     } else {
         if let Some(parent) = final_dest.parent() {
             fs::create_dir_all(parent)

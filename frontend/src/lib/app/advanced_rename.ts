@@ -1,9 +1,6 @@
 
-import { onMount } from 'svelte';
-  // @ts-ignore
-  import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, removeBookmark, saveSettings, saveTabs, state as appState } from '../../vanilla-js/runtime/state.svelte.js';
-  // @ts-ignore
-  import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location.js';
+import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, removeBookmark, saveSettings, saveTabs, state as appState } from '../../vanilla-js/runtime/state.svelte';
+import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location';
   import {
     batchRename,
     calculateFolderSize,
@@ -82,9 +79,6 @@ import { onMount } from 'svelte';
   import { renderStatusBar } from '../components/status-bar';
   import { clearSettingsBody, renderSettingsBody } from '../components/settings-body';
   import { showError, showSuccess } from '../components/toasts';
-
-  import { legacyOverlayMarkup } from '../components/legacy-overlays';
-  import { renderLayoutShell } from '../components/layout-shell';
   import type {
     ArchiveFormat,
     ClipboardAction,
@@ -527,4 +521,3 @@ import { setElementText, setOverlayVisible, runWithProgress, refreshCurrentDirec
       showError(error);
     }
   }
-

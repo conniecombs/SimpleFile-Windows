@@ -21,14 +21,10 @@ The Svelte migration is complete for the shipping frontend.
   `frontend/src/lib/tauri.ts` own the typed Tauri API boundary.
 - `frontend/src/lib/` owns workflow modules, provider plugins, and mount
   helpers used by the Svelte shell.
-- `frontend/src/lib/components/legacy-shell-template.html` keeps only
-  compatibility overlay markup that older action code still addresses by ID.
-  The retired legacy settings overlay is excluded from this template, and the
-  runtime stripper still defensively removes it if an old artifact reappears.
-- `frontend/src/vanilla-js/runtime/` is the clearly defined home for live plain
-  JavaScript runtime helpers imported by Svelte.
-- `frontend/src/vanilla-js/generated-svelte/` contains generated JavaScript/CSS
-  audit artifacts used to verify Svelte-to-legacy behavior contracts.
+- `frontend/src/lib/components/OverlayShell.svelte` owns the remaining overlay
+  hosts with stable DOM IDs for workflows that still need concrete targets.
+- `frontend/src/vanilla-js/runtime/` is the clearly defined home for typed
+  runtime helpers imported by Svelte.
 - `frontend/scripts/` and root `scripts/` contain Node/PowerShell tooling only;
   they are not runtime frontend modules.
 
@@ -39,8 +35,11 @@ These paths are retired and must not regain ownership:
 - `svelte-frontend/`
 - `frontend/js/`
 - `frontend/src/legacy/`
-- `frontend/src/lib/state.svelte.js`
+- `frontend/src/lib/state.svelte`
 - `frontend/src/lib/components/js/`
+- `frontend/src/lib/components/legacy-overlays.ts`
+- `frontend/src/lib/components/legacy-shell-template.html`
+- `frontend/src/vanilla-js/generated-svelte/`
 - `../svelte-frontend/dist`
 
 The old one-shot `frontend/scripts/migrate-components.ps1` script is also
@@ -70,22 +69,20 @@ it; it must not move, delete, or rewrite source files.
 6. Legacy event and DOM bridge removal. Done:
    Svelte surfaces emit stable custom events for file-list, tree, tab,
    breadcrumb, toolbar, search, and drag/drop interactions.
-   Compatibility overlay IDs remain only where older action code still needs a
-   concrete DOM host.
+   Compatibility overlay IDs now live in native `OverlayShell.svelte` markup
+   where older action code still needs a concrete DOM host.
 7. Final cleanup and release verification. Done:
-   Tauri builds `../frontend/dist`; old runtime JavaScript is consolidated
-   under `frontend/src/vanilla-js`; stale source paths are guarded by migration
-   and behavior-bridge checks.
+   Tauri builds `../frontend/dist`; typed runtime helpers are consolidated
+   under `frontend/src/vanilla-js/runtime`; generated audit bundles are retired;
+   stale source paths are guarded by migration and behavior-bridge checks.
 
 ## Safety Rules
 
 - Keep `src-tauri/tauri.conf.json` pointed at `../frontend/dist`.
 - Put new Svelte components under `frontend/src/lib/components/`.
 - Put new frontend workflow/provider modules under `frontend/src/lib/`.
-- Put live plain JavaScript runtime helpers under
+- Put typed runtime helpers under
   `frontend/src/vanilla-js/runtime/`.
-- Keep generated audit bundles under
-  `frontend/src/vanilla-js/generated-svelte/`.
 - Add or update typed Tauri wrappers in `frontend/src/lib/api.ts` and command
   contracts in `frontend/src/lib/types.ts`; Svelte components should not call
   raw `invoke()` directly.

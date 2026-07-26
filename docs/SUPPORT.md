@@ -22,6 +22,6 @@ Use this file when collecting information for SimpleFile Windows support issues.
 
 - Drive names and mapped network shares: check `src-tauri/src/drives.rs`.
 - Folder navigation opening outside the app: check `frontend/src/lib/fileNavigationPrimary.ts` and `src-tauri/src/preview.rs`.
-- Settings startup behavior: check `frontend/src/lib/app/setup.ts` and `frontend/src/vanilla-js/runtime/startup-location.js`.
+- Settings startup behavior: check `frontend/src/lib/app/setup.ts` and `frontend/src/vanilla-js/runtime/startup-location.ts`.
 - Archive behavior: check `src-tauri/src/archive.rs`.
 - Release and updater behavior: check `.github/RELEASE.md`, `docs/UPDATER_RELEASE.md`, and `scripts/check-updater-config.mjs`.

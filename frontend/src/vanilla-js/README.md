@@ -1,8 +1,7 @@
 # Vanilla JavaScript
 
-This folder is the home for plain JavaScript used by the Svelte frontend.
+This folder is the home for runtime helpers shared by the Svelte frontend.
 
-- `runtime/` contains live app-side JavaScript modules that are imported by Svelte.
-- `generated-svelte/` contains generated JavaScript/CSS artifacts kept for migration audits.
+- `runtime/` contains typed runtime helpers that are imported by Svelte.
 
 Node tooling scripts stay in `scripts/` and `frontend/scripts/`.

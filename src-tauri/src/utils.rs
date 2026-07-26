@@ -130,18 +130,146 @@ pub(crate) fn validate_path_no_follow(path: &str) -> Result<PathBuf, String> {
     Ok(path_buf)
 }
 
-/// Validate that a file/directory name doesn't contain path traversal sequences
+/// Validate a single Windows file/directory name.
 pub(crate) fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name.trim().is_empty() {
         return Err("Name cannot be empty".to_string());
     }
-    if name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err("Invalid name: cannot contain path separators or '..'".to_string());
-    }
-    if name == "." {
+
+    if name == "." || name == ".." {
         return Err("Invalid name".to_string());
     }
+
+    if name.ends_with(' ') || name.ends_with('.') {
+        return Err("Invalid name: cannot end with a space or period".to_string());
+    }
+
+    if name.chars().any(is_windows_invalid_name_character) {
+        return Err(
+            "Invalid name: cannot contain Windows reserved characters or control characters"
+                .to_string(),
+        );
+    }
+
+    if is_windows_reserved_device_name(name) {
+        return Err("Invalid name: reserved Windows device name".to_string());
+    }
+
     Ok(())
+}
+
+fn is_windows_invalid_name_character(ch: char) -> bool {
+    ch.is_control() || matches!(ch, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
+}
+
+fn is_windows_reserved_device_name(name: &str) -> bool {
+    let base_name = name
+        .split('.')
+        .next()
+        .unwrap_or(name)
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+
+    matches!(base_name.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || matches!(
+            base_name.as_str(),
+            "COM1"
+                | "COM2"
+                | "COM3"
+                | "COM4"
+                | "COM5"
+                | "COM6"
+                | "COM7"
+                | "COM8"
+                | "COM9"
+                | "LPT1"
+                | "LPT2"
+                | "LPT3"
+                | "LPT4"
+                | "LPT5"
+                | "LPT6"
+                | "LPT7"
+                | "LPT8"
+                | "LPT9"
+        )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SymlinkTargetKind {
+    File,
+    Directory,
+}
+
+fn symlink_target_classification_path(source_path: &Path, link_target: &Path) -> PathBuf {
+    if link_target.is_absolute() {
+        link_target.to_path_buf()
+    } else {
+        source_path.parent().map_or_else(
+            || link_target.to_path_buf(),
+            |parent| parent.join(link_target),
+        )
+    }
+}
+
+fn classify_symlink_target(
+    source_path: &Path,
+    link_target: &Path,
+) -> Result<SymlinkTargetKind, String> {
+    let classification_path = symlink_target_classification_path(source_path, link_target);
+    if let Ok(metadata) = fs::metadata(&classification_path) {
+        return Ok(if metadata.is_dir() {
+            SymlinkTargetKind::Directory
+        } else {
+            SymlinkTargetKind::File
+        });
+    }
+
+    let source_metadata =
+        fs::symlink_metadata(source_path).map_err(|e| format!("Failed to stat symlink: {e}"))?;
+    Ok(if source_metadata.is_dir() {
+        SymlinkTargetKind::Directory
+    } else {
+        SymlinkTargetKind::File
+    })
+}
+
+pub(crate) fn recreate_symlink(source_path: &Path, dst_path: &Path) -> Result<(), String> {
+    if let Some(parent) = dst_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
+    }
+
+    match fs::symlink_metadata(dst_path) {
+        Ok(_) => {
+            return Err(format!(
+                "CONFLICT: destination already exists: {}",
+                dst_path.to_string_lossy()
+            ));
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(format!("Failed to stat destination: {e}")),
+    }
+
+    let link_target =
+        fs::read_link(source_path).map_err(|e| format!("Failed to read symlink target: {e}"))?;
+    let target_kind = classify_symlink_target(source_path, &link_target)?;
+    let result = match target_kind {
+        SymlinkTargetKind::Directory => std::os::windows::fs::symlink_dir(&link_target, dst_path),
+        SymlinkTargetKind::File => std::os::windows::fs::symlink_file(&link_target, dst_path),
+    };
+
+    result.map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            format!(
+                "CONFLICT: destination already exists: {}",
+                dst_path.to_string_lossy()
+            )
+        } else if target_kind == SymlinkTargetKind::Directory {
+            format!("Failed to create directory symlink: {e}")
+        } else {
+            format!("Failed to create file symlink: {e}")
+        }
+    })
 }
 
 fn should_cancel(
@@ -201,4 +329,216 @@ pub(crate) fn count_items_scoped(
         }
     }
     Some(count)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        classify_symlink_target, recreate_symlink, symlink_target_classification_path,
+        validate_name, SymlinkTargetKind,
+    };
+    use std::fs;
+    use std::io::ErrorKind;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn test_temp_dir(label: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "simplefile-{label}-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn remove_temp_dir(path: &Path) {
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[cfg(windows)]
+    fn symlink_unavailable(error: &std::io::Error) -> bool {
+        error.kind() == ErrorKind::PermissionDenied || error.raw_os_error() == Some(1314)
+    }
+
+    #[cfg(windows)]
+    fn try_symlink_file(target: &Path, link: &Path) -> bool {
+        match std::os::windows::fs::symlink_file(target, link) {
+            Ok(()) => true,
+            Err(e) if symlink_unavailable(&e) => false,
+            Err(e) => panic!("failed to create test file symlink: {e}"),
+        }
+    }
+
+    #[cfg(windows)]
+    fn try_symlink_dir(target: &Path, link: &Path) -> bool {
+        match std::os::windows::fs::symlink_dir(target, link) {
+            Ok(()) => true,
+            Err(e) if symlink_unavailable(&e) => false,
+            Err(e) => panic!("failed to create test directory symlink: {e}"),
+        }
+    }
+
+    #[test]
+    fn validate_name_rejects_windows_reserved_characters() {
+        for name in [
+            "bad<name.txt",
+            "bad>name.txt",
+            "bad:name.txt",
+            "bad\"name.txt",
+            "bad/name.txt",
+            "bad\\name.txt",
+            "bad|name.txt",
+            "bad?name.txt",
+            "bad*name.txt",
+            "bad\u{0007}name.txt",
+        ] {
+            assert!(validate_name(name).is_err(), "{name} should be rejected");
+        }
+    }
+
+    #[test]
+    fn validate_name_rejects_windows_reserved_device_names() {
+        for name in [
+            "CON", "CON.txt", "PRN", "AUX", "NUL", "COM1", "COM9.log", "LPT1", "LPT9.txt",
+        ] {
+            assert!(validate_name(name).is_err(), "{name} should be rejected");
+        }
+    }
+
+    #[test]
+    fn validate_name_rejects_empty_dot_and_trailing_space_or_period() {
+        for name in ["", "   ", ".", "..", "trailing.", "trailing "] {
+            assert!(validate_name(name).is_err(), "{name:?} should be rejected");
+        }
+    }
+
+    #[test]
+    fn validate_name_allows_normal_windows_names() {
+        for name in [
+            "Report 2026.txt",
+            "photo.final.jpg",
+            "archive (1)",
+            "name..with..dots.txt",
+            " leading-space.txt",
+        ] {
+            assert!(validate_name(name).is_ok(), "{name} should be accepted");
+        }
+    }
+
+    #[test]
+    fn relative_symlink_targets_are_classified_from_source_parent() {
+        let root = test_temp_dir("relative-symlink-classification");
+        let source_parent = root.join("source");
+        let unrelated_parent = root.join("unrelated");
+        fs::create_dir_all(&source_parent).unwrap();
+        fs::create_dir_all(&unrelated_parent).unwrap();
+        fs::create_dir(source_parent.join("target")).unwrap();
+        fs::write(unrelated_parent.join("target"), b"wrong target").unwrap();
+
+        let source_link = source_parent.join("link");
+        let raw_target = Path::new("target");
+
+        assert_eq!(
+            symlink_target_classification_path(&source_link, raw_target),
+            source_parent.join("target")
+        );
+        assert_eq!(
+            classify_symlink_target(&source_link, raw_target).unwrap(),
+            SymlinkTargetKind::Directory
+        );
+
+        remove_temp_dir(&root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn recreate_symlink_preserves_relative_file_target() {
+        let root = test_temp_dir("recreate-file-symlink");
+        let source_dir = root.join("source");
+        let dest_dir = root.join("destination");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&dest_dir).unwrap();
+        fs::write(source_dir.join("target.txt"), b"target").unwrap();
+
+        let source_link = source_dir.join("link.txt");
+        if !try_symlink_file(Path::new("target.txt"), &source_link) {
+            remove_temp_dir(&root);
+            return;
+        }
+
+        let dest_link = dest_dir.join("link.txt");
+        recreate_symlink(&source_link, &dest_link).unwrap();
+
+        assert!(fs::symlink_metadata(&dest_link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            fs::read_link(&dest_link).unwrap(),
+            PathBuf::from("target.txt")
+        );
+
+        remove_temp_dir(&root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn recreate_symlink_preserves_relative_directory_target() {
+        let root = test_temp_dir("recreate-directory-symlink");
+        let source_dir = root.join("source");
+        let dest_dir = root.join("destination");
+        fs::create_dir_all(source_dir.join("target-dir")).unwrap();
+        fs::create_dir_all(dest_dir.join("target-dir")).unwrap();
+
+        let source_link = source_dir.join("link-dir");
+        if !try_symlink_dir(Path::new("target-dir"), &source_link) {
+            remove_temp_dir(&root);
+            return;
+        }
+
+        let dest_link = dest_dir.join("link-dir");
+        recreate_symlink(&source_link, &dest_link).unwrap();
+
+        assert!(fs::symlink_metadata(&dest_link)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            fs::read_link(&dest_link).unwrap(),
+            PathBuf::from("target-dir")
+        );
+        assert!(fs::metadata(&dest_link).unwrap().is_dir());
+
+        remove_temp_dir(&root);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn recreate_symlink_reports_conflict_when_destination_exists() {
+        let root = test_temp_dir("recreate-symlink-conflict");
+        let source_dir = root.join("source");
+        let dest_dir = root.join("destination");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&dest_dir).unwrap();
+        fs::write(source_dir.join("target.txt"), b"target").unwrap();
+
+        let source_link = source_dir.join("link.txt");
+        if !try_symlink_file(Path::new("target.txt"), &source_link) {
+            remove_temp_dir(&root);
+            return;
+        }
+
+        let dest_link = dest_dir.join("link.txt");
+        fs::write(&dest_link, b"occupied").unwrap();
+
+        let err = recreate_symlink(&source_link, &dest_link).unwrap_err();
+        assert!(err.starts_with("CONFLICT: destination already exists: "));
+        assert_eq!(fs::read_to_string(&dest_link).unwrap(), "occupied");
+
+        remove_temp_dir(&root);
+    }
 }

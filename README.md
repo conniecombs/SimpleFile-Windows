@@ -92,8 +92,7 @@ npm run smoke:installer
 - `frontend/src/lib/components/` contains Svelte components.
 - `frontend/src/lib/app/` contains workflow orchestration.
 - `frontend/src/lib/api.ts` and `frontend/src/lib/tauri.ts` define the typed Tauri command and media URL boundary plus browser-dev fallback.
-- `frontend/src/vanilla-js/runtime/` contains live plain JavaScript state helpers that are still shared by the Svelte app.
-- `frontend/src/vanilla-js/generated-svelte/` contains generated migration-audit artifacts.
+- `frontend/src/vanilla-js/runtime/` contains typed runtime helpers still shared by the Svelte app.
 - `src-tauri/src/` contains Rust commands for filesystem, archive, preview, search, metadata, Git, cleanup, updater, and Windows drive behavior.
 - `.github/workflows/` contains CI and release automation.
 

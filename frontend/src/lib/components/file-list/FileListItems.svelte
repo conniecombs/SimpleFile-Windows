@@ -32,12 +32,16 @@
     items = [],
     mode = 'simple',
     pane = 'primary',
+    virtualOffset = 0,
+    virtualTotalSize = 0,
     visibleColumns = ['size', 'date', 'type'],
   }: {
     isGrid?: boolean;
     items?: FileListViewItem[];
     mode?: 'simple' | 'virtual';
     pane?: 'primary' | 'secondary';
+    virtualOffset?: number;
+    virtualTotalSize?: number;
     visibleColumns?: string[];
   } = $props();
 
@@ -179,8 +183,11 @@
 {/snippet}
 
 {#if mode === 'virtual'}
-  <div class="virtual-spacer">
-    <div class={`virtual-content${isGrid ? ' virtual-content--grid' : ''}`}>
+  <div class="virtual-spacer" style={`height: ${virtualTotalSize}px;`}>
+    <div
+      class={`virtual-content${isGrid ? ' virtual-content--grid' : ''}`}
+      style={`transform: translateY(${virtualOffset}px);`}
+    >
       {#each items as item (item.path)}
         {@render fileItem(item)}
       {/each}

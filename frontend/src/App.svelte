@@ -1,14 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { localState } from './lib/app/localState.svelte';
-  import { legacyOverlayMarkup } from './lib/components/legacy-overlays';
-  // Keep import for migration checks
-  import { renderLayoutShell } from './lib/components/layout-shell';
+  import OverlayShell from './lib/components/OverlayShell.svelte';
   import { initApp } from './lib/app/setup';
 
   onMount(() => {
-    // @ts-ignore
-    window.renderLayoutShell = renderLayoutShell; // prevent unused import warning
     return initApp();
   });
 </script>
@@ -20,4 +16,4 @@
   aria-label="SimpleFile File Explorer"
 ></div>
 
-{@html legacyOverlayMarkup}
+<OverlayShell />

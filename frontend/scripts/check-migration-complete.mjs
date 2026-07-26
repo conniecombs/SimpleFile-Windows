@@ -84,15 +84,23 @@ assertContains('frontend/src/main.ts', [
 ], 'shipping Svelte bootstrap');
 
 assertContains('frontend/src/App.svelte', [
-  "import { renderLayoutShell } from './lib/components/layout-shell';",
+  "import OverlayShell from './lib/components/OverlayShell.svelte';",
   'class="app-container"',
+  '<OverlayShell />',
 ], 'Svelte app bridge owner');
+
+assertNotContains('frontend/src/App.svelte', [
+  '{@html legacyOverlayMarkup}',
+  'legacyOverlayMarkup',
+  'window.renderLayoutShell',
+], 'retired App migration glue');
 
 assertContains('docs/svelte-migration-plan.md', [
   'frontend/src/main.ts',
   '../frontend/dist',
   'frontend/src/vanilla-js/runtime/',
-  'frontend/src/vanilla-js/generated-svelte/',
+  'frontend/src/lib/components/OverlayShell.svelte',
+  'generated audit bundles are retired',
   '3. File navigation workflow retirement. Done:',
   '4. Dialog and command workflow retirement. Done:',
   '5. Search and transfer workflow retirement. Done:',
@@ -103,6 +111,7 @@ assertContains('docs/svelte-migration-plan.md', [
 
 assertNotContains('docs/svelte-migration-plan.md', [
   'In progress:',
+  'Keep generated audit bundles under',
 ], 'unfinished migration status');
 
 assertContains('frontend/scripts/migrate-components.ps1', [
@@ -121,25 +130,27 @@ assertNotContains('frontend/scripts/migrate-components.ps1', [
 assertContains('README.md', [
   'frontend/src/main.ts',
   'frontend/src/vanilla-js/runtime/',
-  'frontend/src/vanilla-js/generated-svelte/',
+  'typed runtime helpers',
 ], 'current README frontend layout');
 
 assertNotContains('README.md', [
   'svelte-frontend/dist',
   'svelte-frontend/',
   'frontend/js/',
+  'frontend/src/vanilla-js/generated-svelte/',
 ], 'retired README frontend layout');
 
 assertContains('docs/CONTRIBUTING.md', [
   'frontend/src/main.ts',
   'frontend/src/lib/components/',
   'frontend/src/vanilla-js/runtime/',
-  'frontend/src/vanilla-js/generated-svelte/',
+  'typed runtime helpers',
 ], 'current contributor frontend layout');
 
 assertNotContains('docs/CONTRIBUTING.md', [
   'svelte-frontend/',
   'frontend/js/',
+  'frontend/src/vanilla-js/generated-svelte/',
 ], 'retired contributor frontend layout');
 
 if (process.exitCode) {

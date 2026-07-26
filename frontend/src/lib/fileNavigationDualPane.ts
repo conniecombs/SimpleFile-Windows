@@ -72,27 +72,24 @@ export function createDualPaneNavigationActions(host: FileNavigationHost): DualP
         const listing = await host.listDirectory(state.secondaryPath);
         if (myToken !== secondaryNavigationToken) return;
 
-        let statuses: Record<string, string> = {};
-        if (state.settings?.enableGitIntegration) {
-          try {
-            statuses = await host.getGitFileStatuses(state.secondaryPath);
-          } catch (err) {
-            // Probably not a git repo or git is not installed, ignore
-          }
-        }
-
-        const enrichedEntries = listing.entries.map((entry) => {
-          if (statuses[entry.name]) {
-            return { ...entry, git_status: statuses[entry.name] };
-          }
-          return entry;
-        });
-
         state.secondaryPath = listing.path;
-        state.secondaryEntries = enrichedEntries;
+        state.secondaryEntries = listing.entries;
         state.secondarySelectedEntries = new Set();
         host.renderSecondaryFileList();
         host.updateSecondaryUI();
+
+        if (state.settings?.enableGitIntegration) {
+          void host.getGitFileStatuses(listing.path).then((statuses) => {
+            if (myToken !== secondaryNavigationToken || state.secondaryPath !== listing.path) return;
+            state.secondaryEntries = state.secondaryEntries.map((entry) => (
+              statuses[entry.name] ? { ...entry, git_status: statuses[entry.name] } : entry
+            ));
+            host.renderSecondaryFileList();
+            host.updateSecondaryUI();
+          }).catch(() => {
+            // Probably not a git repo or git is not installed, ignore
+          });
+        }
       } catch (error) {
         host.showError(error);
       }

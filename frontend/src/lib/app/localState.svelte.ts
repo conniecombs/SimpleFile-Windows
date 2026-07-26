@@ -1,16 +1,53 @@
-export const localState = $state({
-  appContainer: undefined as any,
+import type { FileEntry, OperationId, PathString } from '../types';
+
+interface AdvancedRenameTarget {
+  entry: FileEntry;
+  index: number;
+  parentPath: PathString;
+}
+
+interface AdvancedRenamePlan {
+  changed: boolean;
+  detail: PathString;
+  error: string | null;
+  newName: string;
+  oldName: string;
+  parentPath: PathString;
+  path: PathString;
+}
+
+interface LocalState {
+  appContainer: HTMLElement | undefined;
+  folderMetricsToken: number;
+  navigationToken: number;
+  previewPaneToken: number;
+  secondaryNavigationToken: number;
+  currentQuickLookPath: PathString | null;
+  currentArchivePath: PathString | null;
+  currentProgressCancel: (() => unknown) | null;
+  currentProgressOperationId: OperationId | null;
+  watchedDirectoryPath: PathString | null;
+  fileChangeRefreshTimer: number | null;
+  isSettingColorLabel: boolean;
+  MAX_UNDO_STACK: number;
+  advancedRenameTargets: AdvancedRenameTarget[];
+  advancedRenamePlans: AdvancedRenamePlan[];
+}
+
+export const localState = $state<LocalState>({
+  appContainer: undefined,
+  folderMetricsToken: 0,
   navigationToken: 0,
   previewPaneToken: 0,
-  currentQuickLookPath: null as any,
-  currentArchivePath: null as any,
-  currentProgressOperationId: null as any,
-  watchedDirectoryPath: null as any,
-  fileChangeRefreshTimer: null as any,
-  undoStack: [] as any[],
-  redoStack: [] as any[],
+  secondaryNavigationToken: 0,
+  currentQuickLookPath: null,
+  currentArchivePath: null,
+  currentProgressCancel: null,
+  currentProgressOperationId: null,
+  watchedDirectoryPath: null,
+  fileChangeRefreshTimer: null,
   isSettingColorLabel: false,
   MAX_UNDO_STACK: 50,
-  advancedRenameTargets: [] as any[],
-  advancedRenamePlans: [] as any[]
+  advancedRenameTargets: [],
+  advancedRenamePlans: []
 });

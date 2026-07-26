@@ -9,8 +9,8 @@ const {
   saveSettings,
   saveTabs,
   state,
-} = await import('../frontend/src/vanilla-js/runtime/state.svelte.js');
-const { resolveStartupLocation } = await import('../frontend/src/vanilla-js/runtime/startup-location.js');
+} = await import('../frontend/src/vanilla-js/runtime/state.svelte.ts');
+const { resolveStartupLocation } = await import('../frontend/src/vanilla-js/runtime/startup-location.ts');
 
 function createMemoryStorage() {
   const values = new Map();

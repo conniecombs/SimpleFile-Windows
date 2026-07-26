@@ -37,9 +37,7 @@
       quickAccess: quickAccessCollapsed,
     });
   });
-
-  // @ts-ignore
-  import { state as appState } from '../../../vanilla-js/runtime/state.svelte.js';
+import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   import type { DriveInfo } from '../../types';
   import TreeView from '../tree-view/TreeView.svelte';
   import type { TreeViewNode } from '../tree-view/TreeView.svelte';

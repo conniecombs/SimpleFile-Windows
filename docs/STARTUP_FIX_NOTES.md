@@ -9,7 +9,7 @@ Startup changes made:
 2. `frontend/src/main.ts` mounts the Svelte shell from `frontend/src/App.svelte`
    as the shipping frontend entry point.
 3. Frontend startup and settings recovery live in `frontend/src/lib/app/setup.ts`
-   and `frontend/src/vanilla-js/runtime/startup-location.js`.
+   and `frontend/src/vanilla-js/runtime/startup-location.ts`.
 4. The configured CSP allows the Svelte/Vite bundle while keeping object,
    frame, form, worker, and remote script surfaces closed.
 5. The updater plugin now has production configuration in

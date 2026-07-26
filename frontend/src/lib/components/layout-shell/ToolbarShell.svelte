@@ -1,6 +1,5 @@
 <script lang="ts">
-  // @ts-ignore
-  import { state as appState } from '../../../vanilla-js/runtime/state.svelte.js';
+import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   import BreadcrumbTrail from '../breadcrumb/BreadcrumbTrail.svelte';
   import type { BreadcrumbSegment } from '../breadcrumb/BreadcrumbTrail.svelte';
 

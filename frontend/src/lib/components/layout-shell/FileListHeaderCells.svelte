@@ -1,10 +1,12 @@
 <script lang="ts">
-  // @ts-ignore
-  import { state as appState } from '../../../vanilla-js/runtime/state.svelte.js';
+import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
+import type { ColumnId } from '../../types';
+
+  type FileListColumnId = 'name' | ColumnId;
 
   export type FileListHeaderColumn = {
     className?: string;
-    id: string;
+    id: FileListColumnId;
     label: string;
     resizable?: boolean;
     sort: string;

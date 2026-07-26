@@ -135,11 +135,22 @@ function cloneDevSmartFolder(folder: SmartFolder): SmartFolder {
 
 function validateDevName(name: string) {
   const trimmed = name.trim();
-  if (!trimmed || /[<>:"/\\|?*\u0000-\u001F]/.test(trimmed) || trimmed === '.' || trimmed === '..') {
+  const baseName = name.split('.')[0]?.replace(/ +$/, '').toUpperCase() || '';
+  const reserved = ['CON', 'PRN', 'AUX', 'NUL'].includes(baseName)
+    || /^COM[1-9]$/.test(baseName)
+    || /^LPT[1-9]$/.test(baseName);
+  if (
+    !trimmed
+    || /[<>:"/\\|?*\u0000-\u001F]/.test(trimmed)
+    || trimmed === '.'
+    || trimmed === '..'
+    || /[ .]$/.test(name)
+    || reserved
+  ) {
     throw new Error(`Invalid file name: ${name}`);
   }
 
-  return trimmed;
+  return name;
 }
 
 function setDevDirectory(path: string, entries: FileEntry[]) {

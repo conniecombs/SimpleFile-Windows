@@ -7,8 +7,7 @@
   import CommandPalette from './CommandPalette.svelte';
 
   import TabsBar from '../tabs/TabsBar.svelte';
-  // @ts-ignore
-  import { state as appState } from '../../../vanilla-js/runtime/state.svelte.js';
+import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
 
   const SIDEBAR_MIN_WIDTH = 150;
   const SIDEBAR_MAX_WIDTH = 600;

@@ -58,7 +58,7 @@ assertContains('frontend/src/lib/app/setup.ts', [
 assertNotMatches('frontend/src/lib/app/core.ts', /\bimport\s*\{[^}]*\bcopyEntry\s*,/s, 'direct copyEntry imports');
 assertNotMatches('frontend/src/lib/app/core.ts', /\bimport\s*\{[^}]*\bmoveEntry\s*,/s, 'direct moveEntry imports');
 
-assertContains('frontend/src/vanilla-js/runtime/state.svelte.js', [
+assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [
   'undoStack: []',
   'redoStack: []',
   'clipboardHistory: []',

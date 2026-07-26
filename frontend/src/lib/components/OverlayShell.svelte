@@ -1,24 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SimpleFile - File Explorer</title>
-    <link rel="stylesheet" href="css/styles.css">
-</head>
-<body>
-    <div class="app-container" role="application" aria-label="SimpleFile File Explorer">
-        <!-- Content migrated to Svelte components (AppShell.svelte, SidebarShell.svelte, ToolbarShell.svelte, ContentShell.svelte) -->
-    </div>
+<script lang="ts"></script>
 
-    <div class="context-menu" id="context-menu" role="menu" aria-label="File actions">
+<!-- Native Svelte overlay shell. IDs remain stable for the DOM-based workflow controllers. -->
+<div class="context-menu" id="context-menu" role="menu" aria-label="File actions">
         <button class="context-item" id="ctx-open" role="menuitem">Open</button>
         <button class="context-item" id="ctx-open-with" role="menuitem">Open With...</button>
         <button class="context-item" id="ctx-preview" role="menuitem">Quick Look</button>
         <button class="context-item" id="ctx-compare" role="menuitem" style="display: none;">Compare Files</button>
         <button class="context-item" id="ctx-terminal" role="menuitem">Open Terminal Here</button>
         <button class="context-item" id="ctx-powershell-admin" role="menuitem">Open PowerShell as Administrator</button>
-        <hr class="context-divider" role="separator">
+        <hr class="context-divider">
         <button class="context-item" id="ctx-rename" role="menuitem">Rename</button>
         <button class="context-item" id="ctx-advanced-rename" role="menuitem">Advanced Rename...</button>
         <button class="context-item" id="ctx-copy" role="menuitem">Copy</button>
@@ -28,13 +18,13 @@
         <button class="context-item" id="ctx-move-to-pane" role="menuitem" style="display: none;">Move to Other Pane</button>
         <button class="context-item" id="ctx-pack" role="menuitem">Pack into Folder...</button>
         <button class="context-item" id="ctx-unpack" role="menuitem" style="display: none;">Unpack Folder Here</button>
-        <hr class="context-divider" role="separator">
+        <hr class="context-divider">
         <button class="context-item" id="ctx-compress" role="menuitem">Compress...</button>
         <button class="context-item" id="ctx-extract" role="menuitem" style="display: none;">Extract Here</button>
         <button class="context-item" id="ctx-extract-to" role="menuitem" style="display: none;">Extract To...</button>
-        <hr class="context-divider" role="separator">
+        <hr class="context-divider">
         <button class="context-item" id="ctx-delete" role="menuitem">Delete</button>
-        <hr class="context-divider" role="separator">
+        <hr class="context-divider">
         <button class="context-item" id="ctx-info" role="menuitem">Properties</button>
     </div>
 
@@ -117,11 +107,11 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label class="form-label">Archive Name:</label>
+                    <label class="form-label" for="archive-name">Archive Name:</label>
                     <input type="text" class="form-input" id="archive-name" placeholder="archive.zip">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Format:</label>
+                    <label class="form-label" for="archive-format">Format:</label>
                     <select class="form-input" id="archive-format">
                         <option value="zip">ZIP (.zip)</option>
                         <option value="tar">TAR (.tar)</option>
@@ -130,8 +120,8 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Files to compress:</label>
-                    <div id="archive-files-list" class="archive-files-preview">
+                    <div class="form-label" id="archive-files-list-label">Files to compress:</div>
+                    <div id="archive-files-list" class="archive-files-preview" aria-labelledby="archive-files-list-label">
                         </div>
                 </div>
             </div>
@@ -201,7 +191,7 @@
                         <div class="adv-op-body">
                             <div class="adv-field-row">
                                 <label for="adv-template-pattern">Pattern:</label>
-                                <input type="text" class="form-input" id="adv-template-pattern" value="{base}_{n}" placeholder="{base}_{n}">
+                                <input type="text" class="form-input" id="adv-template-pattern" value={'{base}_{n}'} placeholder={'{base}_{n}'}>
                                 <label class="adv-inline-check">
                                     <input type="checkbox" id="adv-template-keep-ext" checked> Keep extension
                                 </label>
@@ -209,14 +199,14 @@
                             <div class="adv-template-help">
                                 <p><strong>Available Variables:</strong></p>
                                 <ul class="adv-template-vars">
-                                    <li><code>{base}</code>: Original file name without extension</li>
-                                    <li><code>{ext}</code>: Original file extension</li>
-                                    <li><code>{name}</code>: Full original file name</li>
-                                    <li><code>{parent}</code>: Parent folder name</li>
-                                    <li><code>{n}</code>: Sequence number (from 'Sequential Numbering' section)</li>
-                                    <li><code>{yyyy}</code>, <code>{mm}</code>, <code>{dd}</code>: Current Year, Month, Day</li>
-                                    <li><code>{hh}</code>, <code>{min}</code>, <code>{ss}</code>: Current Hour, Minute, Second</li>
-                                    <li><code>{date}</code>, <code>{time}</code>: Current date (YYYY-MM-DD) and time (HHMMSS)</li>
+                                    <li><code>{'{base}'}</code>: Original file name without extension</li>
+                                    <li><code>{'{ext}'}</code>: Original file extension</li>
+                                    <li><code>{'{name}'}</code>: Full original file name</li>
+                                    <li><code>{'{parent}'}</code>: Parent folder name</li>
+                                    <li><code>{'{n}'}</code>: Sequence number (from 'Sequential Numbering' section)</li>
+                                    <li><code>{'{yyyy}'}</code>, <code>{'{mm}'}</code>, <code>{'{dd}'}</code>: Current Year, Month, Day</li>
+                                    <li><code>{'{hh}'}</code>, <code>{'{min}'}</code>, <code>{'{ss}'}</code>: Current Hour, Minute, Second</li>
+                                    <li><code>{'{date}'}</code>, <code>{'{time}'}</code>: Current date (YYYY-MM-DD) and time (HHMMSS)</li>
                                 </ul>
                             </div>
                         </div>
@@ -566,5 +556,3 @@
         </div>
     </div>
 
-</body>
-</html>

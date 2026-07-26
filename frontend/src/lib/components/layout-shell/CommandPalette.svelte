@@ -1,6 +1,5 @@
 <script lang="ts">
-  // @ts-ignore
-  import { state as globalState } from '../../../vanilla-js/runtime/state.svelte.js';
+import { state as globalState } from '../../../vanilla-js/runtime/state.svelte';
   import { gitPull, gitPush } from '../../api';
 
 
@@ -150,4 +149,3 @@
     </div>
   </div>
 {/if}
-

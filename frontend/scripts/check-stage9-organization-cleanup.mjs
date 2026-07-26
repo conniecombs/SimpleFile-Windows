@@ -136,7 +136,7 @@ assertContains('frontend/src/css/modules/modal.css', [
   '.tag-swatch',
 ], 'Stage 9 cleanup and tag modal styles');
 
-assertCount('frontend/src/vanilla-js/runtime/state.svelte.js', /fileTags:\s*\{\}/g, 1, 'fileTags declarations');
+assertCount('frontend/src/vanilla-js/runtime/state.svelte.ts', /fileTags:\s*\{\}/g, 1, 'fileTags declarations');
 
 assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
   'id="btn-secondary-edit-path"',

@@ -39,6 +39,8 @@
         --file-list-columns,
         var(--col-name-width, 240px) var(--col-size-width, 100px) var(--col-date-width, 140px) var(--col-type-width, 100px)
     );
+    box-sizing: border-box;
+    height: var(--file-list-row-height, 36px);
     width: 100%;
 }
 
@@ -139,7 +141,9 @@
     /* Must match the minmax() min in the grid-template-columns rule above
        (var(--icon-size) + 48px) so items fill their cell symmetrically and
        don't shift off-centre due to the 8 px discrepancy that existed before. */
-    width: calc(var(--icon-size, 64px) + 48px);
+    box-sizing: border-box;
+    height: var(--file-list-grid-item-height, calc(var(--icon-size, 64px) + 56px));
+    width: var(--file-list-grid-item-width, calc(var(--icon-size, 64px) + 48px));
 }
 
 .file-list.grid-view .file-icon {
@@ -229,19 +233,20 @@
 
 /* ── Virtual Scroll Layout ────────────────────────────────────────────────── */
 
-/* Height is set dynamically via element.style.height in renderVisibleItems(). */
 .virtual-spacer {
+    min-height: 100%;
     position: relative;
     width: 100%;
     pointer-events: none;
 }
 
-/* top is set dynamically via element.style.top in renderVisibleItems(). */
 .virtual-content {
     position: absolute;
     left: 0;
     right: 0;
+    top: 0;
     pointer-events: auto;
+    will-change: transform;
 }
 
 .grid-items-container,

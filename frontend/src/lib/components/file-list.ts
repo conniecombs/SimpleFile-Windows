@@ -8,6 +8,8 @@ export type RenderFileListItemsProps = {
   isGrid?: boolean;
   items?: FileListViewItem[];
   mode?: 'simple' | 'virtual';
+  virtualOffset?: number;
+  virtualTotalSize?: number;
   visibleColumns?: string[];
 };
 
@@ -51,6 +53,8 @@ export function renderFileListItems(
       isGrid: props.isGrid ?? false,
       items: props.items ?? [],
       mode: props.mode ?? 'simple',
+      virtualOffset: props.virtualOffset ?? 0,
+      virtualTotalSize: props.virtualTotalSize ?? 0,
       visibleColumns: props.visibleColumns ?? ['size', 'date', 'type'],
     },
   });

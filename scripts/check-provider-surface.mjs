@@ -17,7 +17,6 @@ const ignoredFiles = new Set([
   'frontend/package-lock.json',
   'src-tauri/Cargo.lock',
   'docs/CHANGELOG.md',
-  'frontend/src/vanilla-js/generated-svelte/preview-pane.js',
   'scripts/check-provider-surface.mjs',
 ]);
 

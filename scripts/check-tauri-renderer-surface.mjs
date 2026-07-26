@@ -34,7 +34,7 @@ function collectSourceFiles(directory) {
     .flatMap((entry) => {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (['node_modules', 'dist', '.svelte-kit', 'generated-svelte'].includes(entry.name)) {
+        if (['node_modules', 'dist', '.svelte-kit'].includes(entry.name)) {
           return [];
         }
         return collectSourceFiles(path);

@@ -35,9 +35,6 @@ function collectFiles(directory, extensions) {
     const relativePath = toPosix(relative(root, absolutePath));
 
     if (entry.isDirectory()) {
-      if (relativePath === 'frontend/src/vanilla-js/generated-svelte') {
-        return [];
-      }
       return collectFiles(relativePath, extensions);
     }
 
@@ -57,22 +54,9 @@ function assertMissing(source, file, value, label) {
 
 const allowedHtmlSinks = new Map([
   [
-    'frontend/src/App.svelte',
-    new Set([
-      '{@html legacyOverlayMarkup}',
-    ]),
-  ],
-  [
     'frontend/src/lib/app/core.ts',
     new Set([
       'body.innerHTML = sanitizeModalHtml(bodyHtml);',
-    ]),
-  ],
-  [
-    'frontend/src/lib/components/legacy-overlays.ts',
-    new Set([
-      'template.innerHTML = legacyBodyMatch[1];',
-      'export const legacyOverlayMarkup = template.innerHTML.trim();',
     ]),
   ],
   [

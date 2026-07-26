@@ -37,24 +37,8 @@ export function createPrimaryNavigationActions(host: FileNavigationHost): Primar
 
         if (myToken !== navigationToken) return;
         
-        let statuses: Record<string, string> = {};
-        if (state.settings?.enableGitIntegration) {
-          try {
-            statuses = await host.getGitFileStatuses(path);
-          } catch (err) {
-            // Probably not a git repo or git is not installed, ignore
-          }
-        }
-
-        const enrichedEntries = listing.entries.map((entry) => {
-          if (statuses[entry.name]) {
-            return { ...entry, git_status: statuses[entry.name] };
-          }
-          return entry;
-        });
-
         state.currentPath = listing.path;
-        state.entries = enrichedEntries;
+        state.entries = listing.entries;
         state.selectedEntries = new Set();
         state.lastSelectedIndex = -1;
         state.focusedIndex = -1;
@@ -73,6 +57,19 @@ export function createPrimaryNavigationActions(host: FileNavigationHost): Primar
 
         host.updateActiveTab();
         host.updateUI();
+
+        if (state.settings?.enableGitIntegration) {
+          void host.getGitFileStatuses(listing.path).then((statuses) => {
+            if (myToken !== navigationToken || state.currentPath !== listing.path) return;
+            state.entries = state.entries.map((entry) => (
+              statuses[entry.name] ? { ...entry, git_status: statuses[entry.name] } : entry
+            ));
+            host.updateFilteredEntries();
+            host.updateUI();
+          }).catch(() => {
+            // Probably not a git repo or git is not installed, ignore
+          });
+        }
 
         if (host.isArchivePath(state.currentPath)) {
           await host.unwatchDirectory();

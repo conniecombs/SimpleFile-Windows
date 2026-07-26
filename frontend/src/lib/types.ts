@@ -22,6 +22,8 @@ export interface FileEntry {
   size: number;
   modified: string;
   extension: string;
+  git_status?: string | null;
+  itemCount?: string | number;
   permissions?: string;
   symlink_target?: string;
 }
