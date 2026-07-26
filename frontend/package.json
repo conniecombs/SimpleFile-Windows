@@ -29,7 +29,7 @@
     "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:markdown-preview-safety && npm run check:html-sink-safety && npm run check:huge-folder && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run build"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@tsconfig/svelte": "^5.0.8",
     "@types/sanitize-html": "^2.16.1",
     "svelte": "^5.56.6",
