@@ -23,7 +23,7 @@ md-5 = "0.11"
 sha1 = "0.11"
 tokio = { version = "1", features = ["sync", "rt", "rt-multi-thread", "macros", "fs", "io-util", "net"] }
 parking_lot = "0.12"
-base64 = "0.22"
+base64 = "0.23"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "webp", "bmp"] }
 zip = { version = "8", default-features = false, features = ["bzip2", "deflate64", "deflate", "lzma", "ppmd", "time", "zstd", "xz"] }
 flate2 = "1"
