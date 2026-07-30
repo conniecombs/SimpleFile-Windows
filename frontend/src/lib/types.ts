@@ -293,8 +293,8 @@ export interface TauriCommandMap {
   install_rar: CommandContract<{ confirmationToken: string }, string>;
   get_db_setting: CommandContract<{ key: string }, string | null>;
   set_db_setting: CommandContract<{ key: string; value: string }, void>;
-  git_pull: CommandContract<{ path?: string }, string | void>;
-  git_push: CommandContract<{ path?: string }, string | void>;
+  git_pull: CommandContract<{ path: PathString }, string | void>;
+  git_push: CommandContract<{ path: PathString }, string | void>;
   open_terminal: CommandContract<{ path: PathString }, void>;
   open_powershell_admin: CommandContract<{ path: PathString }, void>;
   search_files: CommandContract<{ options: SearchOptions }, SearchResult[]>;
@@ -316,7 +316,7 @@ export interface TauriCommandMap {
   check_for_update: CommandContract<NoArgs, Nullable<UpdateInfo>>;
   install_update: CommandContract<NoArgs, void>;
   show_main_window: CommandContract<NoArgs, void>;
-  get_git_file_statuses: CommandContract<{ path: string }, Record<string, string>>;
+  get_git_file_statuses: CommandContract<{ path: PathString }, Record<string, string>>;
   get_all_tags: CommandContract<NoArgs, any[]>;
   create_tag: CommandContract<{ name: string; color: string }, any>;
   update_tag: CommandContract<{ id: number; name: string; color: string }, void>;

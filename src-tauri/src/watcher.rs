@@ -1,11 +1,31 @@
 use crate::models::FileChangeEvent;
 
 use crate::state::AppState;
+use crate::utils::validate_existing_path_no_resolve;
 use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
 use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
+
+fn is_ignored_watcher_path(path: &Path) -> bool {
+    if path.extension().is_some_and(|ext| {
+        let ext = ext.to_ascii_lowercase();
+        ext == "tmp" || ext == "part" || ext == "crdownload"
+    }) {
+        return true;
+    }
+
+    path.file_name()
+        .map(|name| name.to_string_lossy().to_ascii_lowercase())
+        .is_some_and(|name| matches!(name.as_str(), ".ds_store" | "desktop.ini" | "thumbs.db"))
+}
+
+fn debounce_eviction_cutoff(now: Instant) -> Instant {
+    now.checked_sub(Duration::from_secs(10)).unwrap_or(now)
+}
 
 #[tauri::command]
 pub fn watch_directory(
@@ -13,27 +33,20 @@ pub fn watch_directory(
     app: AppHandle,
     state: tauri::State<'_, Arc<AppState>>,
 ) -> Result<(), String> {
-    if false {
-        let mut watcher_state = state.watcher_state.lock();
-        watcher_state.watcher = None;
-        watcher_state.watched_path = Some(path);
-        return Ok(());
+    let validated_path = validate_existing_path_no_resolve(&path)?;
+    if !validated_path.is_dir() {
+        return Err("Watch path must be a directory".to_string());
     }
 
-    let mut watcher_state = state.watcher_state.lock();
-    watcher_state.watcher = None;
-    watcher_state.watched_path = None;
-
-    let path_clone = path.clone();
     let app_clone = app.clone();
 
     // Per-path debounce to prevent refresh loops while not dropping unrelated events.
     // Each unique path gets its own cooldown window.
-    let path_timestamps: Arc<Mutex<HashMap<String, std::time::Instant>>> =
+    let path_timestamps: Arc<Mutex<HashMap<String, Instant>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let debounce_ms = 500u128;
 
-    let watcher = RecommendedWatcher::new(
+    let mut watcher = RecommendedWatcher::new(
         move |res: Result<Event, notify::Error>| {
             if let Ok(event) = res {
                 // Strictly filter events to prevent infinite loops (ghosting)
@@ -52,22 +65,13 @@ pub fn watch_directory(
                     | notify::EventKind::Other => return,
                 };
 
-                let now = std::time::Instant::now();
+                let now = Instant::now();
 
                 for path in event.paths {
                     let path_str = path.to_string_lossy().to_string();
 
                     // Filter common system noise files
-                    if std::path::Path::new(&path_str)
-                        .extension()
-                        .is_some_and(|ext| {
-                            let ext = ext.to_ascii_lowercase();
-                            ext == "tmp" || ext == "part" || ext == "crdownload"
-                        })
-                        || path_str.ends_with(".DS_Store")
-                        || path_str.ends_with("desktop.ini")
-                        || path_str.ends_with("thumbs.db")
-                    {
+                    if is_ignored_watcher_path(&path) {
                         continue;
                     }
 
@@ -82,8 +86,7 @@ pub fn watch_directory(
                         timestamps.insert(path_str.clone(), now);
                         // Evict old entries to prevent unbounded growth
                         if timestamps.len() > 1000 {
-                            let cutoff =
-                                now.checked_sub(std::time::Duration::from_secs(10)).unwrap();
+                            let cutoff = debounce_eviction_cutoff(now);
                             timestamps.retain(|_, v| *v > cutoff);
                         }
                     }
@@ -100,11 +103,12 @@ pub fn watch_directory(
     )
     .map_err(|e| format!("Failed to create watcher: {e}"))?;
 
+    watcher
+        .watch(validated_path.as_path(), RecursiveMode::NonRecursive)
+        .map_err(|e| format!("Failed to watch directory: {e}"))?;
+
+    let mut watcher_state = state.watcher_state.lock();
     watcher_state.watcher = Some(watcher);
-    if let Some(ref mut w) = watcher_state.watcher {
-        w.watch(path_clone.as_ref(), RecursiveMode::NonRecursive)
-            .map_err(|e| format!("Failed to watch directory: {e}"))?;
-    }
     watcher_state.watched_path = Some(path);
     Ok(())
 }
@@ -114,4 +118,35 @@ pub fn unwatch_directory(state: tauri::State<'_, Arc<AppState>>) {
     let mut watcher_state = state.watcher_state.lock();
     watcher_state.watcher = None;
     watcher_state.watched_path = None;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{debounce_eviction_cutoff, is_ignored_watcher_path};
+    use std::path::Path;
+    use std::time::Instant;
+
+    #[test]
+    fn ignored_watcher_path_matches_noise_names_case_insensitively() {
+        assert!(is_ignored_watcher_path(Path::new("C:/Users/me/Thumbs.db")));
+        assert!(is_ignored_watcher_path(Path::new(
+            "C:/Users/me/DESKTOP.INI"
+        )));
+        assert!(is_ignored_watcher_path(Path::new("C:/Users/me/.DS_Store")));
+    }
+
+    #[test]
+    fn ignored_watcher_path_matches_temporary_extensions_case_insensitively() {
+        assert!(is_ignored_watcher_path(Path::new("download.CRDOWNLOAD")));
+        assert!(is_ignored_watcher_path(Path::new("archive.part")));
+        assert!(is_ignored_watcher_path(Path::new("draft.TMP")));
+        assert!(!is_ignored_watcher_path(Path::new("real-file.txt")));
+    }
+
+    #[test]
+    fn debounce_eviction_cutoff_never_panics() {
+        let now = Instant::now();
+
+        assert!(debounce_eviction_cutoff(now) <= now);
+    }
 }

@@ -1,5 +1,7 @@
 use crate::models::GitStatus;
 use crate::utils::validate_existing_path;
+use std::ffi::OsString;
+use std::path::Path;
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -178,20 +180,34 @@ fn get_git_credentials(db: tauri::State<'_, crate::db::DbState>) -> Option<Strin
         .filter(|t| !t.is_empty())
 }
 
-#[tauri::command]
-pub async fn git_pull(
-    path: String,
-    db: tauri::State<'_, crate::db::DbState>,
-) -> Result<String, String> {
+fn git_remote_args(path: &Path, subcommand: &str, token: Option<&str>) -> Vec<OsString> {
     use base64::{engine::general_purpose, Engine as _};
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(&path).arg("pull");
 
-    if let Some(token) = get_git_credentials(db) {
+    let mut args = vec![OsString::from("-C"), path.as_os_str().to_os_string()];
+
+    if let Some(token) = token {
         let auth = general_purpose::STANDARD.encode(format!("token:{token}"));
-        cmd.arg("-c")
-            .arg(format!("http.extraHeader=AUTHORIZATION: basic {auth}"));
+        args.push(OsString::from("-c"));
+        args.push(OsString::from(format!(
+            "http.extraHeader=AUTHORIZATION: basic {auth}"
+        )));
     }
+
+    args.push(OsString::from(subcommand));
+    args
+}
+
+fn run_git_remote_command(
+    path: &str,
+    subcommand: &str,
+    token: Option<&str>,
+) -> Result<String, String> {
+    let path_buf = validate_existing_path(path)?;
+    let mut cmd = Command::new("git");
+    cmd.args(git_remote_args(&path_buf, subcommand, token));
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
 
     let output = cmd.output().map_err(|e| e.to_string())?;
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -205,27 +221,57 @@ pub async fn git_pull(
 }
 
 #[tauri::command]
+pub async fn git_pull(
+    path: String,
+    db: tauri::State<'_, crate::db::DbState>,
+) -> Result<String, String> {
+    let token = get_git_credentials(db);
+    run_git_remote_command(&path, "pull", token.as_deref())
+}
+
+#[tauri::command]
 pub async fn git_push(
     path: String,
     db: tauri::State<'_, crate::db::DbState>,
 ) -> Result<String, String> {
-    use base64::{engine::general_purpose, Engine as _};
-    let mut cmd = Command::new("git");
-    cmd.arg("-C").arg(&path).arg("push");
+    let token = get_git_credentials(db);
+    run_git_remote_command(&path, "push", token.as_deref())
+}
 
-    if let Some(token) = get_git_credentials(db) {
-        let auth = general_purpose::STANDARD.encode(format!("token:{token}"));
-        cmd.arg("-c")
-            .arg(format!("http.extraHeader=AUTHORIZATION: basic {auth}"));
+#[cfg(test)]
+mod tests {
+    use super::git_remote_args;
+    use std::path::Path;
+
+    fn to_strings(args: Vec<std::ffi::OsString>) -> Vec<String> {
+        args.into_iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect()
     }
 
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    #[test]
+    fn git_remote_args_put_auth_header_before_subcommand() {
+        let args = to_strings(git_remote_args(
+            Path::new("repo"),
+            "pull",
+            Some("ghp_example"),
+        ));
 
-    if output.status.success() {
-        Ok(stdout)
-    } else {
-        Err(stderr)
+        assert_eq!(args[0], "-C");
+        assert_eq!(args[1], "repo");
+        assert_eq!(args[2], "-c");
+        assert!(args[3].starts_with("http.extraHeader=AUTHORIZATION: basic "));
+        assert_eq!(args[4], "pull");
+        assert!(
+            args.iter().position(|arg| arg == "-c").unwrap()
+                < args.iter().position(|arg| arg == "pull").unwrap()
+        );
+    }
+
+    #[test]
+    fn git_remote_args_without_token_do_not_add_auth_config() {
+        let args = to_strings(git_remote_args(Path::new("repo"), "push", None));
+
+        assert_eq!(args, vec!["-C", "repo", "push"]);
     }
 }
