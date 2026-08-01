@@ -1,6 +1,7 @@
 <script lang="ts">
   export type TreeViewNode = {
     children: TreeViewNode[];
+    description?: string;
     hasChildren: boolean;
     icon: string;
     isActive: boolean;
@@ -8,6 +9,8 @@
     isLoaded: boolean;
     name: string;
     path: string;
+    status?: string;
+    title?: string;
   };
 
   let {
@@ -30,7 +33,8 @@
   }
 
   function itemClass(node: TreeViewNode) {
-    return `tree-item${node.isActive ? ' active' : ''}`;
+    const statusClass = node.status ? ` status-${node.status}` : '';
+    return `tree-item${node.isActive ? ' active' : ''}${statusClass}`;
   }
 
   function emitTreeEvent(type: string, event: MouseEvent | KeyboardEvent, node: TreeViewNode, detail = {}) {
@@ -120,6 +124,7 @@
       aria-expanded={node.isExpanded}
       aria-selected={node.isActive}
       tabindex={0}
+      title={node.title || node.path}
       onclick={(event) => handleItemClick(event, node)}
       onkeydown={(event) => handleItemKeydown(event, node)}
     >
@@ -136,7 +141,12 @@
         <span class="tree-expand empty" data-path={node.path} aria-hidden="true">&#9654;</span>
       {/if}
       <span class="tree-icon" aria-hidden="true">{node.icon}</span>
-      <span class="tree-name">{node.name}</span>
+      <span class="tree-label">
+        <span class="tree-name">{node.name}</span>
+        {#if node.description}
+          <span class="tree-description">{node.description}</span>
+        {/if}
+      </span>
     </div>
 
     {#if node.hasChildren}

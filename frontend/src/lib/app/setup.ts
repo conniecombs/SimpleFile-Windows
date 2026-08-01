@@ -1,5 +1,5 @@
 
-import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, removeBookmark, saveSettings, saveTabs, state as appState } from '../../vanilla-js/runtime/state.svelte';
+import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, loadWorkspaceLayout, removeBookmark, saveSettings, saveTabs, saveWorkspaceLayout, state as appState, subscribe } from '../../vanilla-js/runtime/state.svelte';
 import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location';
   import {
     batchRename,
@@ -97,10 +97,10 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
 import type { TransferAction } from "../transferPathUtils.js";
-import { handleKeyDown, registerShortcut, unregisterShortcut, type ShortcutOptions } from "../keyboardShortcuts.js";
+import { handleKeyDown, normalizeShortcutCombo, registerShortcut, unregisterShortcut, type ShortcutOptions } from "../keyboardShortcuts.js";
 import { showAdvancedRenameFlow, closeAdvancedRenameFlow, applyAdvancedRenameFlow, updateAdvancedRenameOperationClasses, refreshAdvancedRenamePreview } from "./advanced_rename.js";
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow } from "./archive.js";
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput } from "./core.js";
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
 
 
@@ -109,12 +109,61 @@ export function initApp() {
     loadBookmarks();
     loadRecentLocations();
     const tabsLoaded = loadTabs();
+    const workspaceLayoutLoaded = loadWorkspaceLayout();
     applyPersistedViewSettings();
     renderLayoutShell(localState.appContainer);
     renderContextMenu(document.getElementById('context-menu'));
     updateStatusBar();
     void loadSmartFoldersFlow();
     void loadTagsFlow();
+
+    let workspacePersistenceReady = false;
+    let workspaceLayoutSaveTimer: number | null = null;
+    const workspaceLayoutProperties = new Set([
+      'activePane',
+      'activeTabId',
+      'currentPath',
+      'dualPaneEnabled',
+      'history',
+      'historyIndex',
+      'iconSize',
+      'isGridView',
+      'secondaryHistory',
+      'secondaryHistoryIndex',
+      'secondaryPath',
+      'settings',
+      'showPreviewPane',
+      'tabs',
+    ]);
+
+    const queueWorkspaceLayoutSave = () => {
+      if (!workspacePersistenceReady) return;
+
+      if (workspaceLayoutSaveTimer !== null) {
+        window.clearTimeout(workspaceLayoutSaveTimer);
+      }
+
+      workspaceLayoutSaveTimer = window.setTimeout(() => {
+        workspaceLayoutSaveTimer = null;
+        saveWorkspaceLayout();
+      }, 120);
+    };
+
+    const flushWorkspaceLayoutSave = () => {
+      if (workspaceLayoutSaveTimer !== null) {
+        window.clearTimeout(workspaceLayoutSaveTimer);
+        workspaceLayoutSaveTimer = null;
+      }
+      if (workspacePersistenceReady) {
+        saveWorkspaceLayout();
+      }
+    };
+
+    const unsubscribeWorkspaceLayout = subscribe((property) => {
+      if (workspaceLayoutProperties.has(String(property))) {
+        queueWorkspaceLayoutSave();
+      }
+    });
 
     getHomeDir().then(async (home) => {
       appState.homePath = home;
@@ -128,7 +177,7 @@ export function initApp() {
         homePath: home,
         settings: appState.settings,
         tabs: appState.tabs,
-        tabsLoaded,
+        tabsLoaded: tabsLoaded || workspaceLayoutLoaded,
       });
       appState.tabs = startup.tabs;
       appState.activeTabId = startup.activeTabId;
@@ -136,6 +185,24 @@ export function initApp() {
       appState.historyIndex = startup.historyIndex;
 
       await loadDirectory(startup.startPath, appState.history.length > 0 ? 'replace-current' : 'push');
+      if (appState.dualPaneEnabled) {
+        const secondaryStartPath = appState.secondaryPath || appState.currentPath;
+        if (secondaryStartPath) {
+          const restoredActivePane = appState.activePane;
+          await loadSecondaryDirectory(
+            secondaryStartPath,
+            appState.secondaryHistory.length > 0 ? 'replace-current' : 'push',
+            false,
+          );
+          appState.activePane = restoredActivePane === 'secondary' && appState.secondaryPath ? 'secondary' : 'primary';
+        } else {
+          appState.dualPaneEnabled = false;
+          appState.activePane = 'primary';
+        }
+      }
+      if (appState.showPreviewPane) void updatePreviewPane();
+      workspacePersistenceReady = true;
+      saveWorkspaceLayout();
     }).catch(console.error);
 
     listDrives().then((drives) => {
@@ -235,6 +302,8 @@ export function initApp() {
         void redoLastFlow();
       } else if (command === 'clipboard-history') {
         void showClipboardHistoryFlow();
+      } else if (command === 'operation-history') {
+        void showOperationHistoryFlow();
       } else if (command === 'color-label') {
         void showSetColorLabelFlow();
       } else if (command === 'folder-metrics') {
@@ -421,6 +490,10 @@ export function initApp() {
       showKeyboardHelpFlow();
     };
 
+    const handleOperationHistory = () => {
+      void showOperationHistoryFlow();
+    };
+
     const handleSetColorLabel = () => {
       void showSetColorLabelFlow();
     };
@@ -534,12 +607,20 @@ export function initApp() {
     const handleSettingsChange = (event: Event) => {
       const target = event.target;
       if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement)) return;
+      if (target instanceof HTMLInputElement && target.dataset.shortcutInput) {
+        saveShortcutSettingFromInput(target);
+        return;
+      }
       if (!target.closest('.settings-body') || !persistedSettingsControlIds.has(target.id)) return;
       saveSettingsFromControls();
     };
 
     const handleSettingsInput = (event: Event) => {
       const target = event.target;
+      if (target instanceof HTMLInputElement && target.dataset.shortcutInput) {
+        previewShortcutSettingInput(target);
+        return;
+      }
       if (!(target instanceof HTMLInputElement) || target.id !== 'settings-icon-size') return;
       if (!target.closest('.settings-body')) return;
       saveSettingsFromControls();
@@ -547,11 +628,20 @@ export function initApp() {
 
     const handleSettingsClick = (event: MouseEvent) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
-      const button = target?.closest<HTMLButtonElement>('.settings-body button[id]');
+      const button = target?.closest<HTMLButtonElement>('.settings-body button');
       if (!button || button.disabled) return;
+
+      const shortcutResetId = button.dataset.shortcutReset;
+      if (shortcutResetId) {
+        resetShortcutSetting(shortcutResetId);
+        return;
+      }
 
       let handled = true;
       switch (button.id) {
+        case 'settings-shortcuts-reset-all':
+          resetAllShortcutSettings();
+          break;
         case 'settings-custom-path-browse':
           void (async () => {
             try {
@@ -812,13 +902,32 @@ export function initApp() {
 
     const registerAppShortcuts = () => {
       const shortcutIds: string[] = [];
+      const usedShortcutCombos = new Set<string>();
       const addShortcut = (
         id: string,
         combo: string,
         handler: (event: KeyboardEvent) => void | Promise<void>,
         options: ShortcutOptions = {},
       ) => {
-        registerShortcut(id, combo, handler, options);
+        const override = appState.settings?.shortcutOverrides?.[id];
+        let comboToRegister = combo;
+
+        try {
+          if (override) {
+            const normalizedOverride = normalizeShortcutCombo(override);
+            if (options.when || !usedShortcutCombos.has(normalizedOverride)) {
+              comboToRegister = normalizedOverride;
+            }
+          }
+        } catch {
+          comboToRegister = combo;
+        }
+
+        const normalizedCombo = normalizeShortcutCombo(comboToRegister);
+        if (!options.when) {
+          usedShortcutCombos.add(normalizedCombo);
+        }
+        registerShortcut(id, comboToRegister, handler, options);
         shortcutIds.push(id);
       };
 
@@ -995,6 +1104,7 @@ export function initApp() {
     document.addEventListener('simplefile:create-archive', handleCreateArchive);
     document.addEventListener('simplefile:advanced-rename', handleAdvancedRename);
     document.addEventListener('simplefile:keyboard-help', handleKeyboardHelp);
+    document.addEventListener('simplefile:operation-history', handleOperationHistory);
     document.addEventListener('simplefile:set-color-label', handleSetColorLabel);
     document.addEventListener('simplefile:folder-metrics', handleFolderMetrics);
     document.addEventListener('simplefile:disk-cleanup', handleDiskCleanup);
@@ -1021,6 +1131,8 @@ export function initApp() {
         window.clearTimeout(localState.fileChangeRefreshTimer);
         localState.fileChangeRefreshTimer = null;
       }
+      flushWorkspaceLayoutSave();
+      unsubscribeWorkspaceLayout();
       unwatchDirectory().catch(() => {});
       Promise.all(unlistenPromises).then((unlisteners) => {
         for (const unlisten of unlisteners) void unlisten();
@@ -1056,6 +1168,7 @@ export function initApp() {
       document.removeEventListener('simplefile:create-archive', handleCreateArchive);
       document.removeEventListener('simplefile:advanced-rename', handleAdvancedRename);
       document.removeEventListener('simplefile:keyboard-help', handleKeyboardHelp);
+      document.removeEventListener('simplefile:operation-history', handleOperationHistory);
       document.removeEventListener('simplefile:set-color-label', handleSetColorLabel);
       document.removeEventListener('simplefile:folder-metrics', handleFolderMetrics);
       document.removeEventListener('simplefile:disk-cleanup', handleDiskCleanup);

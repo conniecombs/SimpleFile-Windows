@@ -397,6 +397,7 @@ function devArchiveInfo(path: string): ArchiveInfo {
     format: devArchiveFormat(normalizedPath),
     path: normalizedPath,
     total_size: 0,
+    unsafe_entries: [],
   };
 }
 
@@ -450,9 +451,12 @@ function devDirectoryListing(path: string): DirectoryListing {
 function devDrives(): DriveInfo[] {
   return [{
     drive_type: 'Fixed',
+    drive_status: 'available',
     free_space: 0,
     name: 'Local Disk (C:)',
     path: 'C:\\',
+    remote_path: null,
+    status_detail: null,
     total_space: 0,
   }];
 }
@@ -887,6 +891,7 @@ async function invokeDevCommand<Name extends TauriCommandName>(
         format,
         path: normalizedArchivePath,
         total_size: totalSize,
+        unsafe_entries: [],
       });
       return undefined as CommandResult<Name>;
     }

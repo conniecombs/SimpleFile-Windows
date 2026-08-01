@@ -41,16 +41,22 @@ assertContains('frontend/src/lib/app/core.ts', [
   'function pushUndoEntry',
   'async function undoLastFlow',
   'async function redoLastFlow',
+  'function startOperationLog',
+  'function failOperationLog',
+  'function confirmBulkTransferPreflight',
   'async function chooseConflictAction',
   'async function transferEntriesWithSafety',
   'function safeDeletePaths',
+  'function deletePathsWithOperationLog',
   'name="transfer-conflict-action"',
   'name="clipboard-history-entry"',
+  'name="operation-history-entry"',
 ], 'Stage 10 transfer safety flow wiring');
 
 assertContains('frontend/src/lib/app/setup.ts', [
   'onOperationProgress',
   'onExternalFileDrop',
+  'showOperationHistoryFlow',
   "document.addEventListener('dragstart', handleDragStart);",
   "document.addEventListener('drop', handleDrop);",
 ], 'Stage 10 transfer event wiring');
@@ -62,13 +68,16 @@ assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [
   'undoStack: []',
   'redoStack: []',
   'clipboardHistory: []',
+  'operationHistory: []',
   'draggedItems: []',
 ], 'Stage 10 runtime state');
 
 assertContains('frontend/src/lib/appState.ts', [
   'export interface UndoHistoryItem',
+  'export interface OperationLogEntry',
   'undoStack: UndoHistoryItem[];',
   'redoStack: UndoHistoryItem[];',
+  'operationHistory: OperationLogEntry[];',
 ], 'Stage 10 typed state');
 
 assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
@@ -80,6 +89,7 @@ assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
 
 assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte', [
   "id: 'clipboard-history'",
+  "id: 'operation-history'",
   "id: 'undo'",
   "id: 'redo'",
 ], 'Stage 10 command palette actions');

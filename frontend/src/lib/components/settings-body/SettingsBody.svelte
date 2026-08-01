@@ -4,6 +4,7 @@
     | 'file-list'
     | 'navigation'
     | 'behavior'
+    | 'shortcuts'
     | 'tools'
     | 'updates'
     | 'about';
@@ -42,6 +43,12 @@
       id: 'behavior',
       label: 'Behavior',
       searchText: 'behavior delete deletion confirm before delete move deleted items trash recycle bin remove',
+    },
+    {
+      id: 'shortcuts',
+      label: 'Shortcuts',
+      searchText:
+        'shortcuts keyboard key bindings remap customize reset duplicate navigation file operations tabs view tools',
     },
     {
       id: 'tools',
@@ -415,6 +422,32 @@
           </label>
         </div>
       </div>
+    </div>
+
+    <div
+      class="settings-tab-panel"
+      id="settings-panel-shortcuts"
+      data-settings-panel="shortcuts"
+      role="tabpanel"
+      aria-labelledby="settings-tab-shortcuts"
+      hidden={isPanelHidden('shortcuts')}
+    >
+      <div class="settings-panel-heading">
+        <h4>Shortcuts</h4>
+        <button
+          type="button"
+          class="btn btn-secondary settings-heading-action"
+          id="settings-shortcuts-reset-all"
+          title="Reset all shortcuts"
+        >
+          Reset All
+        </button>
+      </div>
+      <div
+        class="shortcut-settings-list"
+        id="settings-shortcut-list"
+        aria-label="Keyboard shortcut customizations"
+      ></div>
     </div>
 
     <div

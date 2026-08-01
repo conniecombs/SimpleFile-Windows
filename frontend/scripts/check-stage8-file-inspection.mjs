@@ -30,9 +30,14 @@ assertContains('frontend/src/lib/app/search.ts', [
   'computeChecksum',
   'getEntryInfo',
   'getImageMetadata',
-  'id="prop-md5"',
-  'id="prop-sha256"',
+  'function documentKindForExtension',
+  'function copyablePropertyValue',
+  "copyablePropertyValue('prop-md5'",
+  "copyablePropertyValue('prop-sha256'",
   'id="prop-dimensions"',
+  'Git State',
+  'Document',
+  'prop-copy-btn',
   'className = \'exif-grid\'',
 ], 'Stage 8 properties inspection wiring');
 
@@ -78,6 +83,8 @@ assertContains('frontend/src/css/modules/modal.css', [
   '.diff-removed',
   '.diff-modified',
   '.exif-grid',
+  '.prop-value-row',
+  '.prop-copy-btn',
 ], 'Stage 8 comparison/properties styles');
 
 if (process.exitCode) {

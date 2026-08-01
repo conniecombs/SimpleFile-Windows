@@ -7,12 +7,14 @@
     entries = [],
     format = '',
     totalSize = null,
+    unsafeEntries = [],
   }: {
     archivePath?: string;
     compressedSize?: number | null;
     entries?: ArchiveEntry[];
     format?: string;
     totalSize?: number | null;
+    unsafeEntries?: string[];
   } = $props();
 
   function formatSize(bytes: number | null | undefined) {
@@ -51,6 +53,10 @@
   function resolvedFormat() {
     return format ? format.toUpperCase() : 'Unknown';
   }
+
+  function unsafeEntrySummary() {
+    return `${unsafeEntries.length} skipped`;
+  }
 </script>
 
 <div class="archive-info-item">
@@ -73,3 +79,9 @@
   <span class="archive-info-label">Format</span>
   <span class="archive-info-value">{resolvedFormat()}</span>
 </div>
+{#if unsafeEntries.length > 0}
+  <div class="archive-info-item archive-info-warning" title={unsafeEntries.join('\n')}>
+    <span class="archive-info-label">Unsafe Names</span>
+    <span class="archive-info-value">{unsafeEntrySummary()}</span>
+  </div>
+{/if}

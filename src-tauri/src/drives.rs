@@ -85,18 +85,75 @@ fn network_remote_display_name(remote_path: &str) -> Option<String> {
     }
 }
 
+fn windows_error_detail(error_code: u32) -> String {
+    use winapi::shared::winerror::{
+        ERROR_ACCESS_DENIED, ERROR_BAD_NETPATH, ERROR_BAD_NET_NAME, ERROR_NOT_READY,
+        ERROR_PATH_NOT_FOUND,
+    };
+
+    match error_code {
+        ERROR_BAD_NETPATH => {
+            "Network path was not found. Check the server name or VPN connection.".to_string()
+        }
+        ERROR_BAD_NET_NAME => {
+            "Network share was not found. The server may be online but the share is unavailable."
+                .to_string()
+        }
+        ERROR_PATH_NOT_FOUND => {
+            "Mapped path was not found. Open the drive to reconnect or remap it.".to_string()
+        }
+        ERROR_ACCESS_DENIED => {
+            "Access was denied. Reconnect with the right credentials.".to_string()
+        }
+        ERROR_NOT_READY => "Drive is not ready. Open it to reconnect.".to_string(),
+        0 => "Windows reported the mapped drive as unavailable.".to_string(),
+        code => format!("Windows error {code}. Open the drive to reconnect or check credentials."),
+    }
+}
+
+fn network_drive_status(wide_path: &[u16], remote_path: Option<&str>) -> (String, Option<String>) {
+    use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
+
+    let attributes = unsafe { GetFileAttributesW(wide_path.as_ptr()) };
+    if attributes != INVALID_FILE_ATTRIBUTES {
+        let detail = remote_path
+            .map(|remote| format!("Connected to {remote}"))
+            .or_else(|| Some("Network drive is reachable; share name is unavailable.".to_string()));
+        return ("available".to_string(), detail);
+    }
+
+    let error_code = std::io::Error::last_os_error()
+        .raw_os_error()
+        .unwrap_or(0)
+        .max(0) as u32;
+    if remote_path.is_some() {
+        return (
+            "offline".to_string(),
+            Some(format!(
+                "{} The mapping is still present; open the drive to reconnect.",
+                windows_error_detail(error_code)
+            )),
+        );
+    }
+
+    (
+        "stale".to_string(),
+        Some(format!(
+            "{} Windows did not return a share name for this mapping; reconnect or remove the stale drive.",
+            windows_error_detail(error_code)
+        )),
+    )
+}
+
 fn windows_drive_display_name(
     drive_type: u32,
     wide_path: &[u16],
-    drive_path: &str,
+    remote_path: Option<&str>,
     fallback_name: &str,
 ) -> String {
     match drive_type {
         3 => windows_volume_label(wide_path),
-        4 => windows_volume_label(wide_path).or_else(|| {
-            mapped_network_remote_path(drive_path)
-                .and_then(|remote_path| network_remote_display_name(&remote_path))
-        }),
+        4 => remote_path.and_then(network_remote_display_name),
         _ => None,
     }
     .unwrap_or_else(|| fallback_name.to_string())
@@ -139,10 +196,20 @@ fn list_drives_blocking() -> Result<Vec<DriveInfo>, String> {
                 6 => "RAM Disk",
                 _ => "Drive",
             };
+            let remote_path = if dt == 4 {
+                mapped_network_remote_path(&drive_path)
+            } else {
+                None
+            };
+            let (drive_status, status_detail) = if dt == 4 {
+                network_drive_status(&wide_path, remote_path.as_deref())
+            } else {
+                ("available".to_string(), None)
+            };
             let display_name =
-                windows_drive_display_name(dt, &wide_path, &drive_path, fallback_name);
+                windows_drive_display_name(dt, &wide_path, remote_path.as_deref(), fallback_name);
 
-            let (total_space, free_space) = if dt == 3 {
+            let (total_space, free_space) = if dt == 3 || (dt == 4 && drive_status == "available") {
                 let mut free_bytes_available: u64 = 0;
                 let mut total_bytes: u64 = 0;
                 let mut total_free_bytes: u64 = 0;
@@ -168,6 +235,9 @@ fn list_drives_blocking() -> Result<Vec<DriveInfo>, String> {
                 drive_type,
                 total_space,
                 free_space,
+                remote_path,
+                drive_status,
+                status_detail,
             });
         }
     }

@@ -54,6 +54,13 @@ assertContains('frontend/src/lib/fileNavigation.ts', [
 
 assertContains('frontend/src/lib/app/setup.ts', [
   'onFileChange',
+  'loadWorkspaceLayout',
+  'saveWorkspaceLayout',
+  'subscribe',
+  'workspaceLayoutProperties',
+  'workspacePersistenceReady',
+  'flushWorkspaceLayoutSave',
+  'tabsLoaded || workspaceLayoutLoaded',
   'const toggleDualPane = () => {',
   "addShortcut('pane.toggleDual', 'F6', toggleDualPane);",
   'const handleSecondaryPaneCommand',
@@ -62,6 +69,19 @@ assertContains('frontend/src/lib/app/setup.ts', [
   "document.removeEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
   'onFileChange(handleFileChange)',
 ], 'Stage 11 navigation and watcher setup events');
+
+assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [
+  "const WORKSPACE_LAYOUT_KEY = 'simplefile-workspace-layout';",
+  'export interface WorkspaceLayoutState',
+  'export function currentWorkspaceLayout',
+  'export function saveWorkspaceLayout',
+  'export function loadWorkspaceLayout',
+  'dualPaneEnabled',
+  'secondaryPath',
+  'previewVisible',
+  'visibleColumns',
+  'columnWidths',
+], 'Stage 11 persisted workspace layout state');
 
 assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
   'secondaryPathSegments',

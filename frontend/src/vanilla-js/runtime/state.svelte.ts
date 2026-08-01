@@ -1,5 +1,5 @@
-import type { Bookmark, FileTab, RecentLocation, SimpleFileAppState } from '../../lib/appState';
-import type { PathString } from '../../lib/types';
+import type { AppSettings, Bookmark, FileTab, RecentLocation, SimpleFileAppState } from '../../lib/appState';
+import type { ColumnId, PathString } from '../../lib/types';
 
 type StateChangeListener = (
   property: string | symbol,
@@ -8,6 +8,8 @@ type StateChangeListener = (
 ) => void;
 
 let idCounter = 0;
+
+const WORKSPACE_LAYOUT_KEY = 'simplefile-workspace-layout';
 
 export function uniqueId(prefix: string) {
   return `${prefix}_${Date.now()}_${++idCounter}`;
@@ -67,6 +69,7 @@ const initialState = {
     showFolderSizes: true,
     startLocation: 'home',
     customPath: '',
+    shortcutOverrides: {},
     visibleColumns: ['size', 'date', 'type'],
     columnWidths: {
       name: 240,
@@ -101,6 +104,7 @@ const initialState = {
   isNavigating: false,
   filterQuery: '',
   clipboardHistory: [],
+  operationHistory: [],
 } satisfies SimpleFileAppState;
 
 const listeners = new Set<StateChangeListener>();
@@ -116,6 +120,7 @@ function cloneInitialState(stateToClone: SimpleFileAppState): SimpleFileAppState
     secondarySelectedEntries: new Set(stateToClone.secondarySelectedEntries),
     settings: {
       ...stateToClone.settings,
+      shortcutOverrides: { ...stateToClone.settings.shortcutOverrides },
       visibleColumns: [...stateToClone.settings.visibleColumns],
       columnWidths: { ...stateToClone.settings.columnWidths },
     },
@@ -135,6 +140,7 @@ function cloneInitialState(stateToClone: SimpleFileAppState): SimpleFileAppState
     undoStack: [...stateToClone.undoStack],
     redoStack: [...stateToClone.redoStack],
     clipboardHistory: [...stateToClone.clipboardHistory],
+    operationHistory: [...stateToClone.operationHistory],
     fileTags: { ...stateToClone.fileTags },
     tags: [...stateToClone.tags],
   };
@@ -191,6 +197,10 @@ export function loadSettings() {
       state.settings = {
         ...state.settings,
         ...parsed,
+        shortcutOverrides: {
+          ...state.settings.shortcutOverrides,
+          ...parsed.shortcutOverrides,
+        },
         columnWidths: {
           ...state.settings.columnWidths,
           ...parsed.columnWidths,
@@ -227,6 +237,171 @@ export function loadTabs() {
     }
   } catch (error) {
     console.warn('Could not load tabs:', error);
+  }
+
+  return false;
+}
+
+export interface WorkspaceLayoutState {
+  activePane: 'primary' | 'secondary';
+  activeTabId: string | null;
+  columnWidths: Partial<Record<'name' | ColumnId, number>>;
+  dualPaneEnabled: boolean;
+  iconSize: number;
+  isGridView: boolean;
+  primaryPath: PathString;
+  previewVisible: boolean;
+  secondaryHistory: PathString[];
+  secondaryHistoryIndex: number;
+  secondaryPath: PathString;
+  tabs: FileTab[];
+  visibleColumns: ColumnId[];
+}
+
+function isPathString(value: unknown): value is PathString {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function sanitizeHistory(value: unknown) {
+  return Array.isArray(value) ? value.filter(isPathString) : [];
+}
+
+function sanitizeHistoryIndex(value: unknown, history: PathString[]) {
+  const index = Number.isInteger(value) ? Number(value) : -1;
+  if (history.length === 0) return -1;
+  return Math.max(0, Math.min(index, history.length - 1));
+}
+
+function sanitizeTabs(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((tab): FileTab | null => {
+      if (!tab || typeof tab !== 'object') return null;
+      const candidate = tab as Partial<FileTab>;
+      if (!candidate.id || !isPathString(candidate.path)) return null;
+      const history = sanitizeHistory(candidate.history);
+      return {
+        id: String(candidate.id),
+        path: candidate.path,
+        title: typeof candidate.title === 'string' && candidate.title ? candidate.title : candidate.path,
+        history: history.length > 0 ? history : [candidate.path],
+        historyIndex: sanitizeHistoryIndex(candidate.historyIndex, history.length > 0 ? history : [candidate.path]),
+      };
+    })
+    .filter((tab): tab is FileTab => Boolean(tab));
+}
+
+function sanitizeVisibleColumns(value: unknown, fallback: ColumnId[]) {
+  const validColumns = new Set<ColumnId>(['size', 'items', 'date', 'type']);
+  if (!Array.isArray(value)) return fallback;
+  const columns = value.filter((column): column is ColumnId => validColumns.has(column as ColumnId));
+  return columns.length > 0 ? columns : fallback;
+}
+
+function sanitizeColumnWidths(value: unknown, fallback: AppSettings['columnWidths']) {
+  if (!value || typeof value !== 'object') return fallback;
+  const next = { ...fallback };
+  const record = value as Record<string, unknown>;
+  for (const key of ['name', 'size', 'items', 'date', 'type'] as const) {
+    const width = Number(record[key]);
+    if (Number.isFinite(width) && width > 0) {
+      next[key] = width;
+    }
+  }
+  return next;
+}
+
+function readWorkspaceLayout(): WorkspaceLayoutState | null {
+  const saved = localStorage.getItem(WORKSPACE_LAYOUT_KEY);
+  if (!saved) return null;
+
+  const parsed = JSON.parse(saved) as Partial<WorkspaceLayoutState>;
+  const tabs = sanitizeTabs(parsed.tabs);
+  const secondaryHistory = sanitizeHistory(parsed.secondaryHistory);
+  const secondaryPath = isPathString(parsed.secondaryPath) ? parsed.secondaryPath : '';
+  const primaryPath = isPathString(parsed.primaryPath) ? parsed.primaryPath : '';
+  const activeTabId = typeof parsed.activeTabId === 'string'
+    && tabs.some((tab) => tab.id === parsed.activeTabId)
+    ? parsed.activeTabId
+    : tabs[0]?.id ?? null;
+
+  return {
+    activePane: parsed.activePane === 'secondary' ? 'secondary' : 'primary',
+    activeTabId,
+    columnWidths: sanitizeColumnWidths(parsed.columnWidths, state.settings.columnWidths),
+    dualPaneEnabled: Boolean(parsed.dualPaneEnabled),
+    iconSize: Number(parsed.iconSize || state.iconSize || state.settings.defaultIconSize || 64),
+    isGridView: Boolean(parsed.isGridView),
+    primaryPath,
+    previewVisible: Boolean(parsed.previewVisible),
+    secondaryHistory,
+    secondaryHistoryIndex: sanitizeHistoryIndex(parsed.secondaryHistoryIndex, secondaryHistory),
+    secondaryPath,
+    tabs,
+    visibleColumns: sanitizeVisibleColumns(parsed.visibleColumns, state.settings.visibleColumns),
+  };
+}
+
+export function currentWorkspaceLayout(): WorkspaceLayoutState {
+  return {
+    activePane: state.activePane === 'secondary' && state.dualPaneEnabled ? 'secondary' : 'primary',
+    activeTabId: state.activeTabId,
+    columnWidths: { ...state.settings.columnWidths },
+    dualPaneEnabled: Boolean(state.dualPaneEnabled),
+    iconSize: Number(state.iconSize || state.settings.defaultIconSize || 64),
+    isGridView: Boolean(state.isGridView),
+    primaryPath: state.currentPath,
+    previewVisible: Boolean(state.showPreviewPane),
+    secondaryHistory: [...state.secondaryHistory],
+    secondaryHistoryIndex: state.secondaryHistoryIndex,
+    secondaryPath: state.secondaryPath,
+    tabs: state.tabs.map((tab) => ({
+      ...tab,
+      history: [...(tab.history || [])],
+    })),
+    visibleColumns: [...state.settings.visibleColumns],
+  };
+}
+
+export function saveWorkspaceLayout() {
+  try {
+    localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(currentWorkspaceLayout()));
+  } catch (error) {
+    console.warn('Could not save workspace layout:', error);
+  }
+}
+
+export function loadWorkspaceLayout() {
+  try {
+    const layout = readWorkspaceLayout();
+    if (!layout) return false;
+
+    state.tabs = layout.tabs;
+    state.activeTabId = layout.activeTabId;
+    state.dualPaneEnabled = layout.dualPaneEnabled;
+    state.secondaryPath = layout.secondaryPath;
+    state.secondaryHistory = layout.secondaryHistory;
+    state.secondaryHistoryIndex = layout.secondaryHistoryIndex;
+    state.activePane = layout.dualPaneEnabled ? layout.activePane : 'primary';
+    state.showPreviewPane = layout.previewVisible;
+    state.isGridView = layout.isGridView;
+    state.iconSize = layout.iconSize;
+    state.settings = {
+      ...state.settings,
+      columnWidths: sanitizeColumnWidths(layout.columnWidths, state.settings.columnWidths),
+      defaultIconSize: layout.iconSize,
+      defaultView: layout.isGridView ? 'grid' : 'list',
+      visibleColumns: layout.visibleColumns,
+    };
+
+    if (layout.primaryPath && state.tabs.length === 0) {
+      state.currentPath = layout.primaryPath;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn('Could not load workspace layout:', error);
   }
 
   return false;

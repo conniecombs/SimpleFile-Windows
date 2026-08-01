@@ -40,6 +40,7 @@ assertContains('frontend/src/lib/coreFileManager.ts', [
   'export function isValidFileName',
   'export function visibleEntries',
   'export function formatFileSize',
+  "drive_status: 'available'",
 ], 'core file manager helper');
 
 assertContains('frontend/src/lib/app/core.ts', [
@@ -84,7 +85,25 @@ assertContains('frontend/src/lib/components/layout-shell/SidebarShell.svelte', [
   'appState.treeData?.get',
   'appState.treeExpanded?.has',
   'children.map(toTreeNode)',
+  'function driveStatus',
+  'function driveDescription',
+  'drive.remote_path',
+  'drive.status_detail',
 ], 'stateful tree expansion');
+
+assertContains('frontend/src/lib/components/tree-view/TreeView.svelte', [
+  'description?: string;',
+  'status?: string;',
+  'title={node.title || node.path}',
+  'class="tree-label"',
+  'class="tree-description"',
+], 'tree view drive status rendering');
+
+assertContains('frontend/src/lib/types.ts', [
+  'remote_path?: string | null;',
+  'drive_status?:',
+  'status_detail?: string | null;',
+], 'typed drive status metadata');
 
 assertContains('frontend/src/lib/components/layout-shell/FileListHeaderCells.svelte', [
   "simplefile:file-list-sort",

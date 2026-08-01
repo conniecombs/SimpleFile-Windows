@@ -35,6 +35,16 @@
     opacity: 0.6;
 }
 
+.tree-item.status-offline,
+.tree-item.status-stale {
+    color: var(--text-muted);
+}
+
+.tree-item.status-offline .tree-icon,
+.tree-item.status-stale .tree-icon {
+    opacity: 0.65;
+}
+
 .tree-expand {
     appearance: none;
     background: transparent;
@@ -71,10 +81,24 @@
     flex-shrink: 0;
 }
 
-.tree-name {
+.tree-label {
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    overflow: hidden;
+}
+
+.tree-name,
+.tree-description {
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.tree-description {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.2;
 }
 
 .tree-children {

@@ -63,6 +63,9 @@ pub struct DriveInfo {
     pub drive_type: String,
     pub total_space: u64,
     pub free_space: u64,
+    pub remote_path: Option<String>,
+    pub drive_status: String,
+    pub status_detail: Option<String>,
 }
 
 // ============================================================================
@@ -231,6 +234,7 @@ pub struct ArchiveInfo {
     pub path: String,
     pub format: String,
     pub entries: Vec<ArchiveEntry>,
+    pub unsafe_entries: Vec<String>,
     pub total_size: u64,
     pub compressed_size: u64,
 }

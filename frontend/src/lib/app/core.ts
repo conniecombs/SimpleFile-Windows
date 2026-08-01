@@ -103,7 +103,7 @@ import {
     TransferResult,
     ViewMode,
   } from '../types';
-  import type { FileTab } from '../appState';
+  import type { FileTab, OperationLogEntry, OperationLogRetry, OperationLogStatus } from '../appState';
 
   export type ColorLabelTag = {
     color: string;
@@ -121,7 +121,7 @@ import {
 
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
-import { getShortcutMap } from "../keyboardShortcuts.js";
+import { findShortcutConflict, getShortcutDefinitions, getShortcutMap, normalizeShortcutCombo, resetShortcutCombo, updateShortcutCombo } from "../keyboardShortcuts.js";
 import type { TransferAction } from "../transferPathUtils.js";
 import { setTransferClipboard } from "../transferClipboard.js";
 import { showAdvancedRenameFlow } from "./advanced_rename.js";
@@ -953,6 +953,268 @@ const defaultColorLabels = [
     });
   }
 
+  const MAX_OPERATION_HISTORY = 50;
+  const BULK_TRANSFER_PREFLIGHT_THRESHOLD = 10;
+
+  type OperationLogConfig = {
+    action: string;
+    detail?: string;
+    itemCount?: number;
+    retry?: OperationLogRetry;
+    target?: PathString;
+    title: string;
+  };
+
+  type OperationProgressLogConfig = OperationLogConfig & {
+    item: string;
+    onCancel?: (() => unknown) | null;
+  };
+
+  function operationErrorMessage(error: unknown) {
+    if (typeof error === 'string') return error;
+    if (error instanceof Error && error.message) return error.message;
+    if (error && typeof error === 'object' && 'message' in error) {
+      const value = (error as { message?: unknown }).message;
+      if (typeof value === 'string' && value) return value;
+    }
+    return String(error ?? 'Operation failed');
+  }
+
+  function isCancellationError(error: unknown) {
+    return /cancelled|canceled|operation cancelled/i.test(operationErrorMessage(error));
+  }
+
+  function updateOperationLogEntry(id: OperationId, patch: Partial<OperationLogEntry>, force = false) {
+    appState.operationHistory = (appState.operationHistory || []).map((entry) => {
+      if (entry.id !== id) return entry;
+      if (!force && entry.status !== 'running') return entry;
+      return { ...entry, ...patch };
+    });
+  }
+
+  function operationLogEntry(id: OperationId) {
+    return (appState.operationHistory || []).find((entry) => entry.id === id) || null;
+  }
+
+  export function startOperationLog({
+    action,
+    detail,
+    itemCount = 0,
+    retry,
+    target,
+    title,
+  }: OperationLogConfig) {
+    const id = uniqueId(`history-${action}`);
+    const entry: OperationLogEntry = {
+      id,
+      action,
+      detail,
+      itemCount,
+      retry,
+      startedAt: Date.now(),
+      status: 'running',
+      target,
+      title,
+    };
+    appState.operationHistory = [entry, ...(appState.operationHistory || [])].slice(0, MAX_OPERATION_HISTORY);
+    return id;
+  }
+
+  export function completeOperationLog(id: OperationId, detail?: string) {
+    updateOperationLogEntry(id, {
+      detail: detail || operationLogEntry(id)?.detail,
+      finishedAt: Date.now(),
+      status: 'completed',
+    });
+  }
+
+  export function failOperationLog(id: OperationId, error: unknown) {
+    updateOperationLogEntry(id, {
+      error: operationErrorMessage(error),
+      finishedAt: Date.now(),
+      status: 'failed',
+    });
+  }
+
+  export function cancelOperationLog(id: OperationId, detail = 'Cancelled') {
+    updateOperationLogEntry(id, {
+      detail,
+      finishedAt: Date.now(),
+      status: 'cancelled',
+    });
+  }
+
+  export async function runWithOperationLog<T>(
+    {
+      action,
+      detail,
+      item,
+      itemCount = 0,
+      onCancel,
+      retry,
+      target,
+      title,
+    }: OperationProgressLogConfig,
+    work: () => Promise<T>,
+  ) {
+    const historyId = startOperationLog({ action, detail, itemCount, retry, target, title });
+    let cancelRequested = false;
+
+    try {
+      const result = await runWithProgress(title, item, work, {
+        onCancel: onCancel
+          ? () => {
+              cancelRequested = true;
+              cancelOperationLog(historyId);
+              return onCancel();
+            }
+          : null,
+      });
+      if (!cancelRequested) completeOperationLog(historyId);
+      return result;
+    } catch (error) {
+      if (cancelRequested || isCancellationError(error)) cancelOperationLog(historyId);
+      else failOperationLog(historyId, error);
+      throw error;
+    }
+  }
+
+  function operationStatusLabel(status: OperationLogStatus) {
+    if (status === 'completed') return 'Completed';
+    if (status === 'failed') return 'Failed';
+    if (status === 'cancelled') return 'Cancelled';
+    return 'Running';
+  }
+
+  function operationTimeLabel(timestamp: number) {
+    if (!timestamp) return '';
+    return new Date(timestamp).toLocaleString([], {
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      month: 'short',
+    });
+  }
+
+  function operationPreviewList(paths: PathString[], limit = 8) {
+    const rows = paths.slice(0, limit).map((path) => `
+      <li title="${escapeHtml(path)}">${escapeHtml(basename(path))}</li>
+    `).join('');
+    const extra = paths.length > limit
+      ? `<p class="settings-section-hint">And ${paths.length - limit} more item${paths.length - limit === 1 ? '' : 's'}.</p>`
+      : '';
+    return `${rows ? `<ul class="preflight-item-list">${rows}</ul>` : ''}${extra}`;
+  }
+
+  function operationHistoryBody(history: OperationLogEntry[]) {
+    if (history.length === 0) {
+      return '<p class="placeholder-msg">No recent operations yet.</p>';
+    }
+
+    const firstRetryableId = history.find((entry) => entry.status === 'failed' && entry.retry)?.id || '';
+
+    return `
+      <div class="operation-history-list">
+        ${history.map((entry) => {
+          const retryable = entry.status === 'failed' && Boolean(entry.retry);
+          const detail = entry.error || entry.detail || entry.target || '';
+          const itemCount = entry.itemCount > 0
+            ? `${entry.itemCount} item${entry.itemCount === 1 ? '' : 's'}`
+            : '';
+          return `
+            <label class="operation-history-item operation-history-item--${escapeHtml(entry.status)} ${retryable ? 'operation-history-item--retryable' : ''}">
+              ${retryable ? `<input type="radio" name="operation-history-entry" value="${escapeHtml(entry.id)}" ${entry.id === firstRetryableId ? 'checked' : ''}>` : '<span class="operation-history-spacer" aria-hidden="true"></span>'}
+              <span class="operation-history-main">
+                <span class="operation-history-title">${escapeHtml(entry.title)}</span>
+                <span class="operation-history-detail" title="${escapeHtml(detail)}">${escapeHtml(detail || itemCount || entry.action)}</span>
+              </span>
+              <span class="operation-history-meta">
+                <span class="operation-history-count">${escapeHtml(itemCount)}</span>
+                <span class="operation-history-status">${escapeHtml(operationStatusLabel(entry.status))}</span>
+                <span class="operation-history-time">${escapeHtml(operationTimeLabel(entry.finishedAt || entry.startedAt))}</span>
+              </span>
+            </label>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  async function retryOperation(retry: OperationLogRetry) {
+    if (retry.kind === 'transfer') {
+      await transferEntriesWithSafety(retry.sources, retry.destination, retry.action, retry.options || {});
+      return;
+    }
+
+    if (retry.kind === 'delete') {
+      await deletePathsWithOperationLog(retry.paths, retry.useTrash);
+      return;
+    }
+
+    if (retry.kind === 'create-archive') {
+      await runWithOperationLog({
+        action: 'create-archive',
+        item: basename(retry.archivePath),
+        itemCount: retry.sourcePaths.length,
+        retry,
+        target: retry.archivePath,
+        title: 'Creating Archive',
+      }, () => createArchive(retry.sourcePaths, retry.archivePath, retry.format));
+      showSuccess(`Created ${basename(retry.archivePath)}`);
+      await refreshTransferSurfaces();
+      return;
+    }
+
+    if (retry.kind === 'extract-archive') {
+      await runWithOperationLog({
+        action: 'extract-archive',
+        item: basename(retry.archivePath),
+        itemCount: 1,
+        retry,
+        target: retry.targetDirectory,
+        title: 'Extracting Archive',
+      }, () => extractArchive(retry.archivePath, retry.targetDirectory));
+      showSuccess(`Extracted ${basename(retry.archivePath)}`);
+      await refreshTransferSurfaces();
+      return;
+    }
+
+    await runWithOperationLog({
+      action: 'advanced-rename',
+      item: `${retry.requests.length} item${retry.requests.length === 1 ? '' : 's'}`,
+      itemCount: retry.requests.length,
+      retry,
+      title: 'Renaming Items',
+    }, () => batchRename(retry.requests));
+    showSuccess(`Renamed ${retry.requests.length} item${retry.requests.length === 1 ? '' : 's'}`);
+    await refreshTransferSurfaces();
+  }
+
+  export async function showOperationHistoryFlow() {
+    const history = appState.operationHistory || [];
+    const retryable = history.some((entry) => entry.status === 'failed' && entry.retry);
+
+    const result = await showHtmlDialog({
+      bodyHtml: operationHistoryBody(history),
+      confirmText: retryable ? 'Retry Selected' : 'Close',
+      onConfirm: () => (
+        document.querySelector<HTMLInputElement>('input[name="operation-history-entry"]:checked')?.value || ''
+      ),
+      showCancel: retryable,
+      title: 'Operation History',
+    });
+
+    if (result === false || !retryable) return;
+    const entry = history.find((candidate) => candidate.id === String(result));
+    if (!entry?.retry) return;
+
+    try {
+      await retryOperation(entry.retry);
+    } catch (error) {
+      showError(error);
+    }
+  }
+
 
 
   export function startDirectoryWatch(path: PathString) {
@@ -1219,6 +1481,32 @@ const defaultColorLabels = [
     return String(result || 'rename') as ConflictAction;
   }
 
+  async function confirmBulkTransferPreflight(
+    sources: PathString[],
+    destination: PathString,
+    action: TransferAction,
+  ) {
+    if (sources.length < BULK_TRANSFER_PREFLIGHT_THRESHOLD) return true;
+
+    const actionLabel = action === 'move' ? 'Move' : 'Copy';
+    const result = await showHtmlDialog({
+      bodyHtml: `
+        <div class="preflight-summary">
+          <dl class="preflight-detail-list">
+            <div><dt>Action</dt><dd>${actionLabel}</dd></div>
+            <div><dt>Items</dt><dd>${sources.length}</dd></div>
+            <div><dt>Destination</dt><dd title="${escapeHtml(destination)}">${escapeHtml(destination)}</dd></div>
+          </dl>
+          ${operationPreviewList(sources)}
+        </div>
+      `,
+      confirmText: actionLabel,
+      title: `${actionLabel} ${sources.length} Items`,
+    });
+
+    return result !== false;
+  }
+
   export function normalizeTransferResults(result: unknown, sources: PathString[]) {
     if (!Array.isArray(result)) return [];
     return result
@@ -1308,16 +1596,39 @@ const defaultColorLabels = [
     });
     if (sources.length === 0 || !destination) return [];
 
+    const preflightConfirmed = await confirmBulkTransferPreflight(sources, destination, action);
+    if (!preflightConfirmed) return [];
+
     const conflictAction = await chooseConflictAction(sources, destination, action);
     if (conflictAction === null) return [];
 
     const operationId = uniqueId(action === 'move' ? 'file-move' : 'file-copy');
+    const historyId = startOperationLog({
+      action,
+      detail: `To ${destination}`,
+      itemCount: sources.length,
+      retry: {
+        kind: 'transfer',
+        action,
+        destination,
+        options: { ...options },
+        sources: [...sources],
+      },
+      target: destination,
+      title: transferProgressTitle(action),
+    });
     const label = sources.length === 1 ? basename(sources[0]) : `${sources.length} items`;
-    showProgressFlow(transferProgressTitle(action), label, 0, operationId);
+    showProgressFlow(transferProgressTitle(action), label, 0, operationId, {
+      onCancel: () => cancelOperationLog(historyId),
+    });
 
     try {
       const transferred = await runTransferCommand(sources, destination, action, conflictAction, operationId);
       updateProgressFlow(100, label);
+      completeOperationLog(
+        historyId,
+        `${transferVerb(action)} ${transferred.length} item${transferred.length === 1 ? '' : 's'}`,
+      );
 
       if (options.pushUndo !== false && transferred.length > 0) {
         const description = `${action === 'move' ? 'Move' : 'Copy'} ${transferred.length} item${transferred.length === 1 ? '' : 's'}`;
@@ -1330,6 +1641,10 @@ const defaultColorLabels = [
         showSuccess(options.successMessage || `${transferVerb(action)} ${transferred.length} item${transferred.length === 1 ? '' : 's'}`);
       }
       return transferred;
+    } catch (error) {
+      if (isCancellationError(error)) cancelOperationLog(historyId);
+      else failOperationLog(historyId, error);
+      throw error;
     } finally {
       window.setTimeout(() => {
         if (localState.currentProgressOperationId === operationId) hideProgressFlow();
@@ -1469,28 +1784,94 @@ const defaultColorLabels = [
     if (!shouldConfirmDelete) return true;
 
     const selectedItems = selectedItemCountText(paths.length);
-    return Boolean(await showDialog({
+    return Boolean(await showHtmlDialog({
+      bodyHtml: `
+        <div class="preflight-summary preflight-summary--danger">
+          <dl class="preflight-detail-list">
+            <div><dt>Action</dt><dd>${useTrash ? 'Move to Trash' : 'Permanent Delete'}</dd></div>
+            <div><dt>Items</dt><dd>${paths.length}</dd></div>
+          </dl>
+          <p>${useTrash
+            ? `Move ${selectedItems} to trash?`
+            : `Permanently delete ${selectedItems}?`}</p>
+          ${operationPreviewList(paths)}
+        </div>
+      `,
       confirmText: useTrash ? 'Move to Trash' : 'Delete',
-      message: useTrash
-        ? `Move ${selectedItems} to trash?`
-        : `Permanently delete ${selectedItems}?`,
       title: useTrash ? 'Delete Items' : 'Confirm Permanent Delete',
     }));
   }
 
   async function confirmPermanentDeleteFallback(paths: PathString[]) {
     const selectedItems = selectedItemCountText(paths.length);
-    return Boolean(await showDialog({
+    return Boolean(await showHtmlDialog({
+      bodyHtml: `
+        <div class="preflight-summary preflight-summary--danger">
+          <p>Trash is unavailable. Permanently delete ${selectedItems} instead?</p>
+          ${operationPreviewList(paths)}
+        </div>
+      `,
       confirmText: 'Delete',
-      message: `Trash is unavailable. Permanently delete ${selectedItems} instead?`,
       title: 'Confirm Permanent Delete',
     }));
   }
 
-  async function permanentlyDeletePaths(paths: PathString[]) {
-    for (const path of paths) await getActiveFileSystem().deleteEntry(path);
+  async function permanentlyDeletePaths(
+    paths: PathString[],
+    options: { onCancel?: (() => unknown) | null } = {},
+  ) {
+    let cancelRequested = false;
+    showProgressFlow('Deleting Items', selectedItemCountText(paths.length), 0, null, {
+      onCancel: () => {
+        cancelRequested = true;
+        return options.onCancel?.();
+      },
+    });
+
+    try {
+      for (let index = 0; index < paths.length; index += 1) {
+        if (cancelRequested) throw new Error('Operation cancelled');
+        const path = paths[index];
+        updateProgressFlow((index / Math.max(1, paths.length)) * 95, basename(path));
+        await getActiveFileSystem().deleteEntry(path);
+      }
+    } finally {
+      window.setTimeout(() => {
+        if (!localState.currentProgressOperationId) hideProgressFlow();
+      }, 180);
+    }
+
     updateProgressFlow(100, `Deleted ${paths.length} items`);
-    hideProgressFlow();
+  }
+
+  async function deletePathsWithOperationLog(paths: PathString[], useTrash: boolean) {
+    const title = useTrash ? 'Moving to Trash' : 'Deleting Items';
+    const historyId = startOperationLog({
+      action: useTrash ? 'trash' : 'delete',
+      detail: useTrash ? 'Move selected items to trash' : 'Permanent delete',
+      itemCount: paths.length,
+      retry: {
+        kind: 'delete',
+        paths: [...paths],
+        useTrash,
+      },
+      title,
+    });
+
+    try {
+      if (useTrash) {
+        await getActiveFileSystem().moveToTrash(paths);
+      } else {
+        await permanentlyDeletePaths(paths, {
+          onCancel: () => cancelOperationLog(historyId),
+        });
+      }
+      completeOperationLog(historyId, `Deleted ${paths.length} item${paths.length === 1 ? '' : 's'}`);
+    } catch (error) {
+      if (isCancellationError(error)) cancelOperationLog(historyId);
+      else failOperationLog(historyId, error);
+      throw error;
+    }
   }
 
   export async function deleteSelectedFlow({ mode = 'settings' }: { mode?: DeleteSelectedMode } = {}) {
@@ -1504,11 +1885,7 @@ const defaultColorLabels = [
     if (!confirmed) return;
 
     try {
-      if (useTrash) {
-        await getActiveFileSystem().moveToTrash(paths);
-      } else {
-        await permanentlyDeletePaths(paths);
-      }
+      await deletePathsWithOperationLog(paths, useTrash);
       showSuccess(`Deleted ${paths.length} item${paths.length === 1 ? '' : 's'}`);
       if (activePane === 'secondary') await refreshSecondaryPane();
       else await refreshCurrentDirectory();
@@ -1517,7 +1894,7 @@ const defaultColorLabels = [
         try {
           const confirmedPermanentDelete = await confirmPermanentDeleteFallback(paths);
           if (!confirmedPermanentDelete) return;
-          await permanentlyDeletePaths(paths);
+          await deletePathsWithOperationLog(paths, false);
           showSuccess(`Deleted ${paths.length} item${paths.length === 1 ? '' : 's'}`);
           if (activePane === 'secondary') await refreshSecondaryPane();
           else await refreshCurrentDirectory();
@@ -2107,6 +2484,172 @@ const defaultColorLabels = [
     },
   ] as const;
 
+  function shortcutLabelMap() {
+    const labels = new Map<string, string>();
+    for (const section of keyboardShortcutSections) {
+      for (const [shortcutId, label] of section.rows) {
+        labels.set(shortcutId, label);
+      }
+    }
+    return labels;
+  }
+
+  function shortcutElementId(shortcutId: string) {
+    return shortcutId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  }
+
+  function setShortcutInputStatus(input: HTMLInputElement, message: string, kind: 'error' | 'muted' | 'success') {
+    const row = input.closest<HTMLElement>('.shortcut-settings-row');
+    const status = row?.querySelector<HTMLElement>('[data-shortcut-status]');
+    if (!status) return;
+    status.textContent = message;
+    status.dataset.status = kind;
+  }
+
+  function shortcutOverrideMap() {
+    return { ...(appState.settings?.shortcutOverrides || {}) };
+  }
+
+  export function renderShortcutSettingsControls() {
+    const container = document.getElementById('settings-shortcut-list');
+    if (!container) return;
+
+    const labels = shortcutLabelMap();
+    const definitions = getShortcutDefinitions()
+      .filter((definition) => labels.has(definition.id));
+
+    const rows = definitions.map((definition) => {
+      const row = document.createElement('div');
+      row.className = 'shortcut-settings-row';
+      row.dataset.shortcutId = definition.id;
+
+      const label = document.createElement('label');
+      label.htmlFor = `settings-shortcut-${shortcutElementId(definition.id)}`;
+      label.textContent = labels.get(definition.id) || definition.id;
+
+      const controls = document.createElement('div');
+      controls.className = 'shortcut-settings-controls';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.id = `settings-shortcut-${shortcutElementId(definition.id)}`;
+      input.value = definition.combo;
+      input.dataset.shortcutInput = definition.id;
+      input.setAttribute('aria-label', `${label.textContent} shortcut`);
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'btn btn-secondary shortcut-reset-btn';
+      reset.dataset.shortcutReset = definition.id;
+      reset.textContent = 'Reset';
+      reset.disabled = normalizeShortcutCombo(definition.combo) === normalizeShortcutCombo(definition.defaultCombo);
+
+      const status = document.createElement('span');
+      status.className = 'shortcut-settings-status';
+      status.dataset.shortcutStatus = '';
+      status.dataset.status = 'muted';
+      status.textContent = `Default: ${definition.defaultCombo}`;
+
+      controls.append(input, reset, status);
+      row.append(label, controls);
+      return row;
+    });
+
+    container.replaceChildren(...rows);
+  }
+
+  export function previewShortcutSettingInput(input: HTMLInputElement) {
+    const shortcutId = input.dataset.shortcutInput;
+    if (!shortcutId) return;
+
+    const value = input.value.trim();
+    if (!value) {
+      setShortcutInputStatus(input, 'Enter a shortcut', 'error');
+      return;
+    }
+
+    try {
+      const normalized = normalizeShortcutCombo(value);
+      const conflict = findShortcutConflict(shortcutId, normalized);
+      if (conflict) {
+        const labels = shortcutLabelMap();
+        setShortcutInputStatus(input, `Already used by ${labels.get(conflict.id) || conflict.id}`, 'error');
+        return;
+      }
+      setShortcutInputStatus(input, `Will save as ${normalized}`, 'success');
+    } catch (error) {
+      setShortcutInputStatus(input, error instanceof Error ? error.message : String(error), 'error');
+    }
+  }
+
+  export function saveShortcutSettingFromInput(input: HTMLInputElement) {
+    const shortcutId = input.dataset.shortcutInput;
+    if (!shortcutId) return;
+
+    const value = input.value.trim();
+    try {
+      const normalized = normalizeShortcutCombo(value);
+      const conflict = findShortcutConflict(shortcutId, normalized);
+      if (conflict) {
+        const labels = shortcutLabelMap();
+        throw new Error(`Shortcut is already used by ${labels.get(conflict.id) || conflict.id}.`);
+      }
+
+      updateShortcutCombo(shortcutId, normalized);
+      const definition = getShortcutDefinitions().find((candidate) => candidate.id === shortcutId);
+      const overrides = shortcutOverrideMap();
+      if (definition && normalized === normalizeShortcutCombo(definition.defaultCombo)) {
+        delete overrides[shortcutId];
+      } else {
+        overrides[shortcutId] = normalized;
+      }
+
+      appState.settings = {
+        ...appState.settings,
+        shortcutOverrides: overrides,
+      };
+      saveSettings();
+      renderShortcutSettingsControls();
+      showSuccess('Shortcut updated');
+    } catch (error) {
+      input.value = getShortcutMap()[shortcutId] || input.value;
+      previewShortcutSettingInput(input);
+      showError(error);
+    }
+  }
+
+  export function resetShortcutSetting(shortcutId: string) {
+    try {
+      resetShortcutCombo(shortcutId);
+      const overrides = shortcutOverrideMap();
+      delete overrides[shortcutId];
+      appState.settings = {
+        ...appState.settings,
+        shortcutOverrides: overrides,
+      };
+      saveSettings();
+      renderShortcutSettingsControls();
+      showSuccess('Shortcut reset');
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  export function resetAllShortcutSettings() {
+    for (const definition of getShortcutDefinitions()) {
+      resetShortcutCombo(definition.id);
+    }
+    appState.settings = {
+      ...appState.settings,
+      shortcutOverrides: {},
+    };
+    saveSettings();
+    renderShortcutSettingsControls();
+    showSuccess('Shortcuts reset');
+  }
+
   function renderKeyboardHelpBody() {
     const shortcutMap = getShortcutMap();
     const sections: HTMLElement[] = [];
@@ -2293,6 +2836,7 @@ const defaultColorLabels = [
     setCheckbox('settings-col-items', visibleColumns.has('items'));
     setCheckbox('settings-col-date', visibleColumns.has('date'));
     setCheckbox('settings-col-type', visibleColumns.has('type'));
+    renderShortcutSettingsControls();
   }
 
   export function saveSettingsFromControls() {

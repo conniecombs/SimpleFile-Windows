@@ -45,6 +45,11 @@
     font-weight: 500;
 }
 
+.archive-info-warning .archive-info-label,
+.archive-info-warning .archive-info-value {
+    color: var(--accent-warning);
+}
+
 .archive-list {
     flex: 1;
     overflow-y: auto;

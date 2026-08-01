@@ -25,6 +25,7 @@ import { state as globalState } from '../../../vanilla-js/runtime/state.svelte';
     { id: 'cut', label: 'Cut', action: () => dispatchToolbarCommand('cut') },
     { id: 'paste', label: 'Paste', action: () => dispatchToolbarCommand('paste') },
     { id: 'clipboard-history', label: 'Clipboard History', action: () => dispatchToolbarCommand('clipboard-history') },
+    { id: 'operation-history', label: 'Operation History', action: () => dispatchToolbarCommand('operation-history') },
     { id: 'undo', label: 'Undo', action: () => dispatchToolbarCommand('undo') },
     { id: 'redo', label: 'Redo', action: () => dispatchToolbarCommand('redo') },
     { id: 'delete', label: 'Delete', action: () => dispatchToolbarCommand('delete') },

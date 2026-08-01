@@ -38,6 +38,10 @@ function assertNotContains(file, values, label = 'retired value') {
 assertContains('frontend/src/lib/app/core.ts', [
   'function syncSettingsControls',
   'function saveSettingsFromControls',
+  'function renderShortcutSettingsControls',
+  'function saveShortcutSettingFromInput',
+  'function resetShortcutSetting',
+  'function resetAllShortcutSettings',
   'async function confirmDeleteSelection',
   'const shouldConfirmDelete = appState.settings?.confirmDelete !== false;',
   'if (!shouldConfirmDelete) return true;',
@@ -59,8 +63,11 @@ if (deleteFlowStart === -1 || deleteFlowEnd === -1) {
   if (deleteFlow.includes('showDialog(')) {
     fail('deleteSelectedFlow must route confirmations through the delete confirmation policy helpers.');
   }
-  if (!deleteFlow.includes('if (useTrash) {')) {
-    fail('deleteSelectedFlow must keep trash and permanent delete execution paths split.');
+  if (!deleteFlow.includes('deletePathsWithOperationLog(paths, useTrash)')) {
+    fail('deleteSelectedFlow must route delete execution through the operation-log helper.');
+  }
+  if (!deleteFlow.includes('TRASH_UNAVAILABLE')) {
+    fail('deleteSelectedFlow must keep trash fallback behavior visible.');
   }
 }
 
@@ -68,7 +75,12 @@ assertContains('frontend/src/lib/app/setup.ts', [
   'selectDirectory,',
   'checkRarInstalled,',
   'installRarFlow,',
+  'previewShortcutSettingInput,',
+  'saveShortcutSettingFromInput',
+  'resetShortcutSetting',
+  'resetAllShortcutSettings',
   "case 'settings-custom-path-browse':",
+  "case 'settings-shortcuts-reset-all':",
   "case 'rar-install-btn':",
   "case 'update-check-btn':",
   "case 'update-install-btn':",
@@ -79,6 +91,15 @@ assertContains('frontend/src/lib/app/setup.ts', [
   "document.removeEventListener('click', handleSettingsClick);",
   "document.removeEventListener('click', handleSettingsListClick);",
 ], 'Stage 4 settings command');
+
+assertContains('frontend/src/lib/keyboardShortcuts.ts', [
+  'defaultCombo: string;',
+  'normalizedDefaultCombo: string;',
+  'function updateShortcutCombo',
+  'function resetShortcutCombo',
+  'function findShortcutConflict',
+  'function getShortcutDefinitions',
+], 'Stage 4 customizable shortcut registry');
 
 assertContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', [
   'class="settings-layout"',
@@ -92,6 +113,7 @@ assertContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', 
   "id: 'file-list'",
   "id: 'navigation'",
   "id: 'behavior'",
+  "id: 'shortcuts'",
   "id: 'about'",
   "searchText: 'appearance theme dark light default view list grid default icon size icons display'",
   'id="settings-theme"',
@@ -99,6 +121,8 @@ assertContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', 
   'id="settings-icon-size"',
   'id="settings-start-location"',
   'id="settings-use-trash"',
+  'id="settings-shortcuts-reset-all"',
+  'id="settings-shortcut-list"',
   'id="settings-custom-path-browse"',
   'id="rar-install-btn"',
   'id="update-check-btn"',
@@ -130,6 +154,8 @@ assertContains('frontend/src/css/modules/settings.css', [
   '.settings-tabs-shell::after',
   '.settings-switch',
   '.settings-section-grid',
+  '.shortcut-settings-list',
+  '.shortcut-settings-row',
   'scroll-snap-type: x proximity;',
 ], 'Stage 4 settings sidebar layout styles');
 
@@ -139,6 +165,7 @@ assertContains('frontend/scripts/smoke-settings-ui.mjs', [
   'Settings UI smoke passed.',
   '#settings-search',
   'Move Deleted Items to Trash',
+  'data-shortcut-input="directory.refresh"',
   'scrollSnapType.includes',
 ], 'Stage 4 settings UI smoke');
 

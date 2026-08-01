@@ -343,6 +343,57 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
     await runSearch(query, options);
   }
 
+  function documentKindForExtension(extension: string) {
+    const documentKinds: Record<string, string> = {
+      csv: 'CSV spreadsheet',
+      doc: 'Word document',
+      docx: 'Word document',
+      md: 'Markdown document',
+      odp: 'Presentation',
+      ods: 'Spreadsheet',
+      odt: 'Text document',
+      pdf: 'PDF document',
+      ppt: 'PowerPoint presentation',
+      pptx: 'PowerPoint presentation',
+      rtf: 'Rich Text document',
+      txt: 'Text document',
+      xls: 'Excel spreadsheet',
+      xlsx: 'Excel spreadsheet',
+    };
+    return documentKinds[extension] || '';
+  }
+
+  function copyablePropertyValue(id: string, value: unknown, className = '') {
+    return `
+      <span class="prop-value-row">
+        <span class="prop-value ${escapeHtml(className)}" id="${escapeHtml(id)}">${escapeHtml(value)}</span>
+        <button class="btn btn-secondary btn-sm prop-copy-btn" type="button" data-index="${escapeHtml(id)}" title="Copy" aria-label="Copy value">Copy</button>
+      </span>
+    `;
+  }
+
+  async function copyTextToClipboard(text: string) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      if (!document.execCommand('copy')) {
+        throw new Error('System clipboard is unavailable.');
+      }
+    } finally {
+      textarea.remove();
+    }
+  }
+
   export async function showPropertiesFlow() {
     const activePane = appState.activePane as PaneId;
     if (selectedSetForPane(activePane).size !== 1) return;
@@ -355,16 +406,27 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
       const extension = String(info.extension || info.name.split('.').pop() || '').toLowerCase();
       const imageExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']);
       const isImage = !info.is_dir && imageExts.has(extension);
+      const documentKind = !info.is_dir ? documentKindForExtension(extension) : '';
+      const gitStatus = info.git_status || fallbackEntry.git_status || '';
+      const documentKindRow = documentKind
+        ? `<span class="prop-label">Document</span><span class="prop-value">${escapeHtml(documentKind)}</span>`
+        : '';
+      const extensionRow = !info.is_dir && extension
+        ? `<span class="prop-label">Extension</span><span class="prop-value">${escapeHtml(extension)}</span>`
+        : '';
+      const gitRow = gitStatus
+        ? `<span class="prop-label">Git State</span>${copyablePropertyValue('prop-git-state', gitStatus)}`
+        : '';
       const permissionsRow = info.permissions
         ? `<span class="prop-label">Permissions</span><span class="prop-value prop-permissions">${escapeHtml(info.permissions)}</span>`
         : '';
       const symlinkRow = info.is_symlink
-        ? `<span class="prop-label">Symlink target</span><span class="prop-value">${escapeHtml(info.symlink_target || '(unknown)')}</span>`
+        ? `<span class="prop-label">Symlink target</span>${copyablePropertyValue('prop-symlink-target', info.symlink_target || '(unknown)')}`
         : '';
       const checksumRows = info.is_dir ? '' : `
-          <span class="prop-label">MD5</span><span class="prop-value prop-hash" id="prop-md5">Computing...</span>
-          <span class="prop-label">SHA-1</span><span class="prop-value prop-hash" id="prop-sha1">Computing...</span>
-          <span class="prop-label">SHA-256</span><span class="prop-value prop-hash" id="prop-sha256">Computing...</span>
+          <span class="prop-label">MD5</span>${copyablePropertyValue('prop-md5', 'Computing...', 'prop-hash')}
+          <span class="prop-label">SHA-1</span>${copyablePropertyValue('prop-sha1', 'Computing...', 'prop-hash')}
+          <span class="prop-label">SHA-256</span>${copyablePropertyValue('prop-sha256', 'Computing...', 'prop-hash')}
         `;
       const imageRows = isImage ? `
           <span class="prop-label">Dimensions</span><span class="prop-value" id="prop-dimensions">Computing...</span>
@@ -375,10 +437,13 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
         bodyHtml: `
           <div class="properties-grid">
             <span class="prop-label">Name</span><span class="prop-value">${escapeHtml(info.name)}</span>
-            <span class="prop-label">Path</span><span class="prop-value">${escapeHtml(info.path)}</span>
+            <span class="prop-label">Path</span>${copyablePropertyValue('prop-path', info.path)}
             <span class="prop-label">Type</span><span class="prop-value">${escapeHtml(fileType(info))}</span>
+            ${extensionRow}
+            ${documentKindRow}
             <span class="prop-label">Size</span><span class="prop-value">${escapeHtml(formatFileSize(info.size, info.is_dir) || 'Folder')}</span>
             <span class="prop-label">Modified</span><span class="prop-value">${escapeHtml(formatModified(info.modified))}</span>
+            ${gitRow}
             ${permissionsRow}
             ${symlinkRow}
             ${imageRows}
@@ -389,6 +454,21 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
         showCancel: false,
         title: 'Properties',
       });
+
+      const modalBody = document.getElementById('modal-body');
+      const handlePropertyCopy = (event: MouseEvent) => {
+        const button = event.target instanceof HTMLElement
+          ? event.target.closest<HTMLButtonElement>('.prop-copy-btn')
+          : null;
+        const valueId = button?.dataset.index || '';
+        const value = valueId ? document.getElementById(valueId)?.textContent?.trim() || '' : '';
+        if (!button || !value || value === 'Computing...') return;
+        event.preventDefault();
+        copyTextToClipboard(value)
+          .then(() => showSuccess('Copied detail'))
+          .catch(showError);
+      };
+      modalBody?.addEventListener('click', handlePropertyCopy);
 
       if (!info.is_dir) {
         computeChecksum(info.path).then((hashes) => {
@@ -431,7 +511,11 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
         });
       }
 
-      await dialogPromise;
+      try {
+        await dialogPromise;
+      } finally {
+        modalBody?.removeEventListener('click', handlePropertyCopy);
+      }
     } catch (error) {
       showError(error);
     }

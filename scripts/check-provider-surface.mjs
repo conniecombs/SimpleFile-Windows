@@ -17,6 +17,7 @@ const ignoredFiles = new Set([
   'frontend/package-lock.json',
   'src-tauri/Cargo.lock',
   'docs/CHANGELOG.md',
+  'docs/changelog.md',
   'scripts/check-provider-surface.mjs',
 ]);
 

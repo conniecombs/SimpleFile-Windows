@@ -81,6 +81,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import { showError, showSuccess } from '../components/toasts';
   import type {
     ArchiveFormat,
+    ArchiveInfo,
     ClipboardAction,
     CleanupResult,
     ConflictAction,
@@ -96,7 +97,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   } from '../types';
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
-import { setOverlayVisible, singleSelectedEntry, overlayById, setElementText, pathForPane, runWithProgress, refreshSecondaryPane, refreshCurrentDirectory, selectedFileEntries, showHtmlDialog, openEntryPath } from "./core.js";
+import { setOverlayVisible, singleSelectedEntry, overlayById, setElementText, pathForPane, refreshSecondaryPane, refreshCurrentDirectory, selectedFileEntries, showHtmlDialog, openEntryPath, runWithOperationLog, escapeHtml } from "./core.js";
 
 const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
 
@@ -148,6 +149,40 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
     localState.currentArchivePath = null;
   }
 
+  function renderExtractArchivePreflight(info: ArchiveInfo, targetDirectory: PathString) {
+    const safeRows = info.entries.slice(0, 8).map((entry) => `
+      <li title="${escapeHtml(entry.path || entry.name)}">${escapeHtml(entry.path || entry.name)}</li>
+    `).join('');
+    const safeExtra = info.entries.length > 8
+      ? `<p class="settings-section-hint">And ${info.entries.length - 8} more safe entr${info.entries.length - 8 === 1 ? 'y' : 'ies'}.</p>`
+      : '';
+    const unsafeRows = (info.unsafe_entries || []).slice(0, 5).map((entry) => `
+      <li title="${escapeHtml(entry)}">${escapeHtml(entry)}</li>
+    `).join('');
+    const unsafeExtra = (info.unsafe_entries || []).length > 5
+      ? `<p class="settings-section-hint">And ${(info.unsafe_entries || []).length - 5} more skipped unsafe name${(info.unsafe_entries || []).length - 5 === 1 ? '' : 's'}.</p>`
+      : '';
+
+    return `
+      <div class="preflight-summary">
+        <dl class="preflight-detail-list">
+          <div><dt>Archive</dt><dd title="${escapeHtml(info.path)}">${escapeHtml(basename(info.path))}</dd></div>
+          <div><dt>Destination</dt><dd title="${escapeHtml(targetDirectory)}">${escapeHtml(targetDirectory)}</dd></div>
+          <div><dt>Safe Entries</dt><dd>${info.entries.length}</dd></div>
+          <div><dt>Expanded Size</dt><dd>${escapeHtml(formatFileSize(info.total_size || 0))}</dd></div>
+        </dl>
+        ${(info.unsafe_entries || []).length > 0
+          ? `<div class="preflight-warning">
+              <strong>${(info.unsafe_entries || []).length} unsafe name${(info.unsafe_entries || []).length === 1 ? '' : 's'} will be skipped.</strong>
+              <ul class="preflight-item-list">${unsafeRows}</ul>
+              ${unsafeExtra}
+            </div>`
+          : ''}
+        ${safeRows ? `<ul class="preflight-item-list">${safeRows}</ul>${safeExtra}` : '<p class="placeholder-msg">No safe entries were found.</p>'}
+      </div>
+    `;
+  }
+
   export async function showArchiveContentsFlow(entry = singleSelectedEntry()) {
     if (!isArchiveEntry(entry)) {
       showError('Select a ZIP, TAR, TAR.GZ, or RAR archive.');
@@ -170,6 +205,7 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
         entries: info.entries,
         format: info.format,
         totalSize: info.total_size,
+        unsafeEntries: info.unsafe_entries || [],
       });
       renderArchiveContents(document.getElementById('archive-list'), {
         entries: info.entries,
@@ -198,7 +234,27 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
     if (!archivePath) return;
 
     try {
-      await runWithProgress('Extracting Archive', basename(archivePath), async () => {
+      const info = await listArchive(archivePath);
+      const confirmed = await showHtmlDialog({
+        bodyHtml: renderExtractArchivePreflight(info, targetDirectory),
+        confirmText: 'Extract',
+        title: 'Extract Archive',
+      });
+      if (confirmed === false) return;
+
+      await runWithOperationLog({
+        action: 'extract-archive',
+        detail: `To ${targetDirectory}`,
+        item: basename(archivePath),
+        itemCount: info.entries.length,
+        retry: {
+          kind: 'extract-archive',
+          archivePath,
+          targetDirectory,
+        },
+        target: targetDirectory,
+        title: 'Extracting Archive',
+      }, async () => {
         await extractArchive(archivePath, targetDirectory);
       });
       showSuccess(`Extracted ${basename(archivePath)}`);
@@ -236,7 +292,20 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
         const archivePath = joinPath(archiveDirectory, archiveName);
         void (async () => {
           try {
-            await runWithProgress('Creating Archive', archiveName, async () => {
+            await runWithOperationLog({
+              action: 'create-archive',
+              detail: `From ${selectedPaths.length} selected item${selectedPaths.length === 1 ? '' : 's'}`,
+              item: archiveName,
+              itemCount: selectedPaths.length,
+              retry: {
+                kind: 'create-archive',
+                archivePath,
+                format,
+                sourcePaths: [...selectedPaths],
+              },
+              target: archivePath,
+              title: 'Creating Archive',
+            }, async () => {
               await createArchive(selectedPaths, archivePath, format);
             });
             showSuccess(`Created ${archiveName}`);

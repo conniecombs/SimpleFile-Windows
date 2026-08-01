@@ -16,6 +16,7 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
     | 'forward'
     | 'new-file'
     | 'new-folder'
+    | 'operation-history'
     | 'paste'
     | 'preview-toggle'
     | 'redo'
@@ -229,6 +230,10 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
           <button class="more-actions-item toolbar-btn" id="btn-clipboard-history" title="Clipboard History (Ctrl+Shift+V)" aria-label="Show clipboard history" role="menuitem" onclick={(event) => emitMoreActionCommand(event, 'clipboard-history')}>
             <span class="icon" aria-hidden="true">📋</span>
             <span class="more-actions-label">Clipboard History</span>
+          </button>
+          <button class="more-actions-item toolbar-btn" id="btn-operation-history" title="Operation History" aria-label="Show operation history" role="menuitem" onclick={(event) => emitMoreActionCommand(event, 'operation-history')}>
+            <span class="icon" aria-hidden="true">↺</span>
+            <span class="more-actions-label">Operation History</span>
           </button>
         </div>
         <div class="more-actions-divider" role="separator"></div>

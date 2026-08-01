@@ -15,6 +15,7 @@ export type RenderArchiveInfoProps = {
   entries?: ArchiveEntry[];
   format?: string;
   totalSize?: number | null;
+  unsafeEntries?: string[];
 };
 
 export type RenderCreateArchiveBodyProps = {

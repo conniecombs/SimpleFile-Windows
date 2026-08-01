@@ -8,8 +8,8 @@ import { createServer as createNetServer } from 'node:net';
 import { createServer } from 'vite';
 
 const frontendRoot = resolve(import.meta.dirname, '..');
-const sectionIds = ['appearance', 'file-list', 'navigation', 'behavior', 'tools', 'updates', 'about'];
-const sectionLabels = ['Appearance', 'File List', 'Navigation', 'Behavior', 'Tools', 'Updates', 'About'];
+const sectionIds = ['appearance', 'file-list', 'navigation', 'behavior', 'shortcuts', 'tools', 'updates', 'about'];
+const sectionLabels = ['Appearance', 'File List', 'Navigation', 'Behavior', 'Shortcuts', 'Tools', 'Updates', 'About'];
 
 function delay(ms) {
   return new Promise((resolveDelay) => {
@@ -366,6 +366,7 @@ async function runSettingsUiSmoke() {
       const cases = [
         { query: 'Trash', expectedTabs: ['Behavior'], expectedPanel: 'behavior', expectedText: 'Move Deleted Items to Trash' },
         { query: 'RAR', expectedTabs: ['Tools'], expectedPanel: 'tools', expectedText: 'RAR Tools' },
+        { query: 'Shortcut', expectedTabs: ['Shortcuts'], expectedPanel: 'shortcuts', expectedText: 'Reset All' },
         { query: 'Git', expectedTabs: ['File List', 'Tools'], expectedPanel: 'file-list', expectedText: 'Enable Git Integration' },
         { query: 'Icon size', expectedTabs: ['Appearance'], expectedPanel: 'appearance', expectedText: 'Default Icon Size' },
         { query: 'not-a-setting', expectedTabs: [], expectedPanel: null, expectedText: 'No settings found.' },
@@ -433,6 +434,70 @@ async function runSettingsUiSmoke() {
     })()`);
 
     assert.equal(customPathResult.visibleDisplay, 'grid');
+
+    const shortcutResult = await evaluate(page, `(async () => {
+      document.querySelector('[data-settings-tab="shortcuts"]').click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const input = document.querySelector('[data-shortcut-input="directory.refresh"]');
+      const originalValue = input.value;
+      input.value = 'Ctrl+R';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const saved = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      const overriddenValue = document.querySelector('[data-shortcut-input="directory.refresh"]').value;
+      const duplicateInput = document.querySelector('[data-shortcut-input="directory.refresh"]');
+      duplicateInput.value = 'Ctrl+C';
+      duplicateInput.dispatchEvent(new Event('input', { bubbles: true }));
+      duplicateInput.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const afterDuplicate = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      const duplicateRejectedValue = document.querySelector('[data-shortcut-input="directory.refresh"]').value;
+      document.querySelector('[data-shortcut-reset="directory.refresh"]').click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const resetSaved = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      return {
+        duplicateRejectedValue,
+        originalValue,
+        overriddenValue,
+        resetValue: document.querySelector('[data-shortcut-input="directory.refresh"]').value,
+        savedAfterDuplicate: afterDuplicate.shortcutOverrides?.['directory.refresh'],
+        savedOverride: saved.shortcutOverrides?.['directory.refresh'],
+        resetOverride: resetSaved.shortcutOverrides?.['directory.refresh'] || null,
+      };
+    })()`);
+
+    assert.equal(shortcutResult.originalValue, 'F5');
+    assert.equal(shortcutResult.overriddenValue, 'Ctrl+R');
+    assert.equal(shortcutResult.savedOverride, 'Ctrl+R');
+    assert.equal(shortcutResult.duplicateRejectedValue, 'Ctrl+R');
+    assert.equal(shortcutResult.savedAfterDuplicate, 'Ctrl+R');
+    assert.equal(shortcutResult.resetValue, 'F5');
+    assert.equal(shortcutResult.resetOverride, null);
+
+    const workspaceLayoutResult = await evaluate(page, `(async () => {
+      document.dispatchEvent(new CustomEvent('simplefile:toolbar-command', { detail: { command: 'dual-pane' } }));
+      document.dispatchEvent(new CustomEvent('simplefile:toolbar-command', { detail: { command: 'preview-toggle' } }));
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const saved = JSON.parse(localStorage.getItem('simplefile-workspace-layout') || '{}');
+      return {
+        activePane: saved.activePane,
+        columnWidthName: saved.columnWidths?.name,
+        dualPaneEnabled: saved.dualPaneEnabled,
+        hasTabs: Array.isArray(saved.tabs),
+        previewVisible: saved.previewVisible,
+        secondaryPathType: typeof saved.secondaryPath,
+        visibleColumns: saved.visibleColumns,
+      };
+    })()`);
+
+    assert.equal(workspaceLayoutResult.dualPaneEnabled, true);
+    assert.equal(workspaceLayoutResult.previewVisible, true);
+    assert.equal(workspaceLayoutResult.activePane, 'primary');
+    assert.equal(workspaceLayoutResult.secondaryPathType, 'string');
+    assert.equal(workspaceLayoutResult.hasTabs, true);
+    assert.deepEqual(workspaceLayoutResult.visibleColumns, ['size', 'date', 'type']);
+    assert.equal(workspaceLayoutResult.columnWidthName, 240);
 
     await page.send('Emulation.setDeviceMetricsOverride', {
       deviceScaleFactor: 1,

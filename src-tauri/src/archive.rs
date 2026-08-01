@@ -130,10 +130,17 @@ fn list_zip_archive(path: &str) -> Result<ArchiveInfo, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
     let mut entries = Vec::new();
+    let mut unsafe_entries = Vec::new();
     let mut total_size = 0u64;
     let mut compressed_size = 0u64;
     for i in 0..archive.len() {
         let file = archive.by_index(i).map_err(|e| e.to_string())?;
+        let entry_path = file.name().to_string();
+        if listing_entry_relative_path(ArchiveFormat::Zip, &entry_path).is_err() {
+            unsafe_entries.push(entry_path);
+            continue;
+        }
+
         let entry = ArchiveEntry {
             name: file
                 .name()
@@ -141,7 +148,7 @@ fn list_zip_archive(path: &str) -> Result<ArchiveInfo, String> {
                 .next_back()
                 .unwrap_or(file.name())
                 .to_string(),
-            path: file.name().to_string(),
+            path: entry_path,
             is_dir: file.is_dir(),
             size: file.size(),
             compressed_size: file.compressed_size(),
@@ -154,6 +161,7 @@ fn list_zip_archive(path: &str) -> Result<ArchiveInfo, String> {
         path: path.to_string(),
         format: "zip".to_string(),
         entries,
+        unsafe_entries,
         total_size,
         compressed_size,
     })
@@ -162,6 +170,7 @@ fn list_zip_archive(path: &str) -> Result<ArchiveInfo, String> {
 fn list_tar_archive(path: &str, compression: Option<&str>) -> Result<ArchiveInfo, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut entries = Vec::new();
+    let mut unsafe_entries = Vec::new();
     let mut total_size = 0u64;
     match compression {
         Some("gz") => {
@@ -175,6 +184,10 @@ fn list_tar_archive(path: &str, compression: Option<&str>) -> Result<ArchiveInfo
                     .to_string_lossy()
                     .to_string();
                 let size = entry.size();
+                if listing_entry_relative_path(ArchiveFormat::TarGz, &path_str).is_err() {
+                    unsafe_entries.push(path_str);
+                    continue;
+                }
                 total_size += size;
                 entries.push(ArchiveEntry {
                     name: path_str
@@ -199,6 +212,10 @@ fn list_tar_archive(path: &str, compression: Option<&str>) -> Result<ArchiveInfo
                     .to_string_lossy()
                     .to_string();
                 let size = entry.size();
+                if listing_entry_relative_path(ArchiveFormat::Tar, &path_str).is_err() {
+                    unsafe_entries.push(path_str);
+                    continue;
+                }
                 total_size += size;
                 entries.push(ArchiveEntry {
                     name: path_str
@@ -224,6 +241,7 @@ fn list_tar_archive(path: &str, compression: Option<&str>) -> Result<ArchiveInfo
             "tar".to_string()
         },
         entries,
+        unsafe_entries,
         total_size,
         compressed_size,
     })
@@ -234,11 +252,17 @@ fn list_rar_archive(path: &str) -> Result<ArchiveInfo, String> {
         .open_for_listing()
         .map_err(|e| format!("Failed to open RAR archive: {e}"))?;
     let mut entries = Vec::new();
+    let mut unsafe_entries = Vec::new();
     let mut total_size = 0u64;
     for entry_result in archive {
         let entry = entry_result.map_err(|e| format!("Failed to read RAR entry: {e}"))?;
-        total_size += entry.unpacked_size;
         let filename_str = entry.filename.to_string_lossy().to_string();
+        if listing_entry_relative_path(ArchiveFormat::Rar, &filename_str).is_err() {
+            unsafe_entries.push(filename_str);
+            continue;
+        }
+
+        total_size += entry.unpacked_size;
         entries.push(ArchiveEntry {
             name: entry
                 .filename
@@ -255,6 +279,7 @@ fn list_rar_archive(path: &str) -> Result<ArchiveInfo, String> {
         path: path.to_string(),
         format: "rar".to_string(),
         entries,
+        unsafe_entries,
         total_size,
         compressed_size,
     })
@@ -1632,6 +1657,12 @@ mod tests {
 
         assert_eq!(root_listing.entries.len(), 1);
         assert_eq!(root_listing.entries[0].name, "safe.txt");
+
+        let archive_info =
+            list_archive(zip_path.to_str().unwrap().to_string()).expect("list archive info");
+        assert_eq!(archive_info.entries.len(), 1);
+        assert_eq!(archive_info.entries[0].path, "safe.txt");
+        assert_eq!(archive_info.unsafe_entries, vec!["folder/foo:bar.txt"]);
 
         let _ = fs::remove_dir_all(root);
     }

@@ -55,6 +55,9 @@ export interface DriveInfo {
   drive_type: string;
   total_space: number;
   free_space: number;
+  remote_path?: string | null;
+  drive_status?: 'available' | 'offline' | 'stale' | 'unknown' | string;
+  status_detail?: string | null;
 }
 
 export interface TreeNode {
@@ -149,6 +152,7 @@ export interface ArchiveInfo {
   path: PathString;
   format: string;
   entries: ArchiveEntry[];
+  unsafe_entries: string[];
   total_size: number;
   compressed_size: number;
 }

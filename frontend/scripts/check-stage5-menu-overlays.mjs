@@ -44,25 +44,40 @@ assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte',
   "simplefile:advanced-rename",
   "simplefile:create-archive",
   "simplefile:keyboard-help",
+  "id: 'operation-history'",
 ], 'Stage 5 command palette action');
 
 assertContains('frontend/src/lib/app/archive.ts', [
   'renderArchiveContents',
   'renderArchiveInfo',
   'renderCreateArchiveBody',
+  'renderExtractArchivePreflight',
+  'unsafeEntries: info.unsafe_entries || []',
+  'unsafe name',
+  'runWithOperationLog',
   'async function showArchiveContentsFlow',
   'async function showCreateArchiveFlow',
 ], 'Stage 5 archive flow wiring');
+
+assertContains('frontend/src/lib/components/archive-surfaces/ArchiveInfo.svelte', [
+  'unsafeEntries = []',
+  'archive-info-warning',
+  'Unsafe Names',
+  'unsafeEntries.join',
+], 'Stage 5 archive unsafe-entry warning');
 
 assertContains('frontend/src/lib/app/advanced_rename.ts', [
   'renderAdvancedRenamePreview',
   'async function showAdvancedRenameFlow',
   'async function applyAdvancedRenameFlow',
+  'preflight-rename-row',
+  'runWithOperationLog',
 ], 'Stage 5 advanced rename wiring');
 
 assertContains('frontend/src/lib/app/core.ts', [
   'renderQuickLook',
   'async function showQuickLookFlow',
+  'showOperationHistoryFlow',
   'function showKeyboardHelpFlow',
   'function showProgressFlow',
 ], 'Stage 5 core overlay wiring');
@@ -72,6 +87,7 @@ assertContains('frontend/src/lib/app/setup.ts', [
   "document.addEventListener('simplefile:create-archive', handleCreateArchive);",
   "document.addEventListener('simplefile:advanced-rename', handleAdvancedRename);",
   "document.addEventListener('simplefile:keyboard-help', handleKeyboardHelp);",
+  "document.addEventListener('simplefile:operation-history', handleOperationHistory);",
   "document.addEventListener('click', handleStage5OverlayClick);",
 ], 'Stage 5 setup event wiring');
 
@@ -92,6 +108,7 @@ assertContains('frontend/src/lib/app/core.ts', [
 
 assertContains('frontend/src/lib/tauri.ts', [
   'const devArchives = new Map<string, ArchiveInfo>();',
+  'unsafe_entries: []',
   "case 'batch_rename':",
   "case 'list_archive':",
   "case 'create_archive':",

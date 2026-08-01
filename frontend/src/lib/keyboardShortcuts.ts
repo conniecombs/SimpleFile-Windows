@@ -10,10 +10,18 @@ export type ShortcutOptions = {
 
 export type ShortcutRegistration = {
   combo: string;
+  defaultCombo: string;
   handler: ShortcutHandler;
   id: string;
   normalizedCombo: string;
+  normalizedDefaultCombo: string;
   options: Required<Omit<ShortcutOptions, 'when'>> & Pick<ShortcutOptions, 'when'>;
+};
+
+export type ShortcutDefinition = {
+  combo: string;
+  defaultCombo: string;
+  id: string;
 };
 
 export const ShortcutRegistry = new Map<string, ShortcutRegistration>();
@@ -92,6 +100,10 @@ export function normalizeShortcutCombo(combo: string) {
   ].join('+');
 }
 
+export function validateShortcutCombo(combo: string) {
+  return normalizeShortcutCombo(combo);
+}
+
 export function comboFromKeyboardEvent(event: KeyboardEvent) {
   const modifiers = new Set<string>();
   if (event.ctrlKey) modifiers.add('Ctrl');
@@ -152,9 +164,11 @@ export function registerShortcut(
   const normalizedCombo = normalizeShortcutCombo(defaultCombo);
   ShortcutRegistry.set(id, {
     combo: defaultCombo,
+    defaultCombo,
     handler,
     id,
     normalizedCombo,
+    normalizedDefaultCombo: normalizedCombo,
     options: {
       allowInControls: options.allowInControls ?? false,
       allowInEditable: options.allowInEditable ?? false,
@@ -169,12 +183,54 @@ export function unregisterShortcut(id: string) {
   ShortcutRegistry.delete(id);
 }
 
+export function updateShortcutCombo(id: string, combo: string) {
+  const shortcut = ShortcutRegistry.get(id);
+  if (!shortcut) {
+    throw new Error(`Shortcut "${id}" is not registered.`);
+  }
+
+  const normalizedCombo = normalizeShortcutCombo(combo);
+  shortcut.combo = normalizedCombo;
+  shortcut.normalizedCombo = normalizedCombo;
+}
+
+export function resetShortcutCombo(id: string) {
+  const shortcut = ShortcutRegistry.get(id);
+  if (!shortcut) {
+    throw new Error(`Shortcut "${id}" is not registered.`);
+  }
+
+  shortcut.combo = shortcut.defaultCombo;
+  shortcut.normalizedCombo = shortcut.normalizedDefaultCombo;
+}
+
+export function findShortcutConflict(id: string, combo: string) {
+  const normalizedCombo = normalizeShortcutCombo(combo);
+  const currentShortcut = ShortcutRegistry.get(id);
+  for (const shortcut of ShortcutRegistry.values()) {
+    if (currentShortcut?.options.when || shortcut.options.when) continue;
+    if (shortcut.id !== id && shortcut.normalizedCombo === normalizedCombo) {
+      return shortcut;
+    }
+  }
+
+  return null;
+}
+
 export function getShortcutMap() {
   const shortcutMap: Record<string, string> = {};
   for (const shortcut of ShortcutRegistry.values()) {
     shortcutMap[shortcut.id] = shortcut.combo;
   }
   return shortcutMap;
+}
+
+export function getShortcutDefinitions() {
+  return [...ShortcutRegistry.values()].map((shortcut): ShortcutDefinition => ({
+    combo: shortcut.combo,
+    defaultCombo: shortcut.defaultCombo,
+    id: shortcut.id,
+  }));
 }
 
 export function handleKeyDown(event: KeyboardEvent) {

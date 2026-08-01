@@ -61,6 +61,28 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
     }
   }
 
+  function driveStatus(drive: DriveInfo) {
+    const status = String(drive.drive_status || 'available').toLowerCase();
+    return ['available', 'offline', 'stale', 'unknown'].includes(status) ? status : 'unknown';
+  }
+
+  function driveDescription(drive: DriveInfo) {
+    const status = driveStatus(drive);
+    const type = String(drive.drive_type || '').toLowerCase();
+    if (status === 'offline') return 'Offline';
+    if (status === 'stale') return 'Stale mapping';
+    if (type === 'network') return drive.remote_path || drive.status_detail || 'Network share';
+    return '';
+  }
+
+  function driveTitle(drive: DriveInfo) {
+    return [
+      drive.name || drive.path,
+      drive.remote_path,
+      drive.status_detail,
+    ].filter(Boolean).join('\n');
+  }
+
   function toTreeNode(node: any): TreeViewNode {
     const path = node.path;
     const children = appState.treeData?.get(path) || [];
@@ -81,13 +103,16 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   let treeRoots = $derived.by(() => {
     return (appState.drives || []).map((drive: DriveInfo) => ({
       children: (appState.treeData?.get(drive.path) || []).map(toTreeNode),
+      description: driveDescription(drive),
       hasChildren: true,
       icon: driveIcon(drive),
       isActive: appState.currentPath === drive.path,
       isExpanded: appState.treeExpanded?.has(drive.path) || false,
       isLoaded: appState.treeData?.has(drive.path) || false,
       name: drive.name || drive.path,
-      path: drive.path
+      path: drive.path,
+      status: driveStatus(drive),
+      title: driveTitle(drive)
     })) as TreeViewNode[];
   });
 

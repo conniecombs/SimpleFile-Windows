@@ -96,7 +96,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   } from '../types';
 import { localState } from './localState.svelte';
 import { extensionForPath } from "./archive.js";
-import { setElementText, setOverlayVisible, runWithProgress, refreshCurrentDirectory, applyPersistedViewSettings, showDialog, overlayById, refreshSecondaryPane, selectedFileEntries } from "./core.js";
+import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersistedViewSettings, showDialog, showHtmlDialog, escapeHtml, overlayById, refreshSecondaryPane, selectedFileEntries, runWithOperationLog } from "./core.js";
 
   type AdvancedRenameTarget = {
     entry: FileEntry;
@@ -509,8 +509,44 @@ import { setElementText, setOverlayVisible, runWithProgress, refreshCurrentDirec
       return;
     }
 
+    const changedPlans = localState.advancedRenamePlans.filter((plan) => plan.changed);
+    const previewRows = changedPlans.slice(0, 8).map((plan) => `
+      <li class="preflight-rename-row">
+        <span title="${escapeHtml(plan.oldName)}">${escapeHtml(plan.oldName)}</span>
+        <strong title="${escapeHtml(plan.newName)}">${escapeHtml(plan.newName)}</strong>
+      </li>
+    `).join('');
+    const extraRows = changedPlans.length > 8
+      ? `<p class="settings-section-hint">And ${changedPlans.length - 8} more rename${changedPlans.length - 8 === 1 ? '' : 's'}.</p>`
+      : '';
+
+    const confirmed = await showHtmlDialog({
+      bodyHtml: `
+        <div class="preflight-summary">
+          <dl class="preflight-detail-list">
+            <div><dt>Action</dt><dd>Rename</dd></div>
+            <div><dt>Items</dt><dd>${requests.length}</dd></div>
+          </dl>
+          <ul class="preflight-item-list preflight-rename-list">${previewRows}</ul>
+          ${extraRows}
+        </div>
+      `,
+      confirmText: 'Rename',
+      title: `Rename ${requests.length} Items`,
+    });
+    if (confirmed === false) return;
+
     try {
-      await runWithProgress('Renaming Items', `${requests.length} item${requests.length === 1 ? '' : 's'}`, async () => {
+      await runWithOperationLog({
+        action: 'advanced-rename',
+        item: `${requests.length} item${requests.length === 1 ? '' : 's'}`,
+        itemCount: requests.length,
+        retry: {
+          kind: 'advanced-rename',
+          requests: requests.map((request) => ({ ...request })),
+        },
+        title: 'Renaming Items',
+      }, async () => {
         await batchRename(requests);
       });
       showSuccess(`Renamed ${requests.length} item${requests.length === 1 ? '' : 's'}`);

@@ -78,9 +78,12 @@ export function createFallbackDriveForPath(path: PathString): DriveInfo | null {
 
   return {
     drive_type: windowsRoot ? 'Fixed' : 'Mount',
+    drive_status: 'available',
     free_space: 0,
     name: windowsRoot ? `Local Disk (${rootPath.slice(0, 2)})` : rootPath,
     path: rootPath,
+    remote_path: null,
+    status_detail: null,
     total_space: 0,
   };
 }

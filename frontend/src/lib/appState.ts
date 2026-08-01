@@ -1,5 +1,6 @@
 import type {
   ArchiveInfo,
+  ArchiveFormat,
   ClipboardAction,
   DriveInfo,
   FileEntry,
@@ -30,6 +31,7 @@ export interface AppSettings {
   enableGitIntegration?: boolean;
   startLocation: 'home' | 'last' | 'custom' | string;
   customPath: PathString;
+  shortcutOverrides: Record<string, string>;
   visibleColumns: ColumnId[];
   columnWidths: Record<'name' | ColumnId, number>;
 }
@@ -63,6 +65,55 @@ export interface UndoHistoryItem {
   description: string;
   redo?: () => Promise<unknown>;
   undo: () => Promise<unknown>;
+}
+
+export type OperationLogStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+export type OperationLogRetry =
+  | {
+      kind: 'transfer';
+      action: 'copy' | 'move';
+      destination: PathString;
+      sources: PathString[];
+      options?: {
+        pushUndo?: boolean;
+        showSuccess?: boolean;
+        successMessage?: string;
+      };
+    }
+  | {
+      kind: 'delete';
+      paths: PathString[];
+      useTrash: boolean;
+    }
+  | {
+      kind: 'create-archive';
+      archivePath: PathString;
+      format: ArchiveFormat;
+      sourcePaths: PathString[];
+    }
+  | {
+      kind: 'extract-archive';
+      archivePath: PathString;
+      targetDirectory: PathString;
+    }
+  | {
+      kind: 'advanced-rename';
+      requests: Array<{ path: PathString; new_name: string }>;
+    };
+
+export interface OperationLogEntry {
+  id: OperationId;
+  action: string;
+  detail?: string;
+  error?: string;
+  finishedAt?: number;
+  itemCount: number;
+  retry?: OperationLogRetry;
+  startedAt: number;
+  status: OperationLogStatus;
+  target?: PathString;
+  title: string;
 }
 
 export interface FileTag {
@@ -142,6 +193,7 @@ export interface SimpleFileAppState {
   isNavigating: boolean;
   filterQuery: string;
   clipboardHistory: ClipboardHistoryItem[];
+  operationHistory: OperationLogEntry[];
   fileTags: Record<PathString, FileTag>;
   tags: any[];
 }
@@ -160,6 +212,7 @@ export function createDefaultSettings(): AppSettings {
     showFolderSizes: true,
     startLocation: 'home',
     customPath: '',
+    shortcutOverrides: {},
     visibleColumns: ['size', 'date', 'type'],
     columnWidths: {
       name: 240,
@@ -236,6 +289,7 @@ export function createInitialAppState(): SimpleFileAppState {
     isNavigating: false,
     filterQuery: '',
     clipboardHistory: [],
+    operationHistory: [],
     fileTags: {},
     tags: [],
   };
