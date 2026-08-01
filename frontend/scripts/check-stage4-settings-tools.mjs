@@ -38,11 +38,31 @@ function assertNotContains(file, values, label = 'retired value') {
 assertContains('frontend/src/lib/app/core.ts', [
   'function syncSettingsControls',
   'function saveSettingsFromControls',
+  'async function confirmDeleteSelection',
+  'const shouldConfirmDelete = appState.settings?.confirmDelete !== false;',
+  'if (!shouldConfirmDelete) return true;',
+  'async function confirmPermanentDeleteFallback',
+  'const confirmed = await confirmDeleteSelection(paths, useTrash);',
   'async function updateToolStatus',
   'async function showAboutFlow',
   'async function checkForUpdatesFlow',
   'async function installUpdateFlow',
 ], 'Stage 4 settings helper');
+
+const coreSource = read('frontend/src/lib/app/core.ts');
+const deleteFlowStart = coreSource.indexOf('export async function deleteSelectedFlow');
+const deleteFlowEnd = coreSource.indexOf('  export function copySelection', deleteFlowStart);
+if (deleteFlowStart === -1 || deleteFlowEnd === -1) {
+  fail('frontend/src/lib/app/core.ts is missing the active deleteSelectedFlow boundary.');
+} else {
+  const deleteFlow = coreSource.slice(deleteFlowStart, deleteFlowEnd);
+  if (deleteFlow.includes('showDialog(')) {
+    fail('deleteSelectedFlow must route confirmations through the delete confirmation policy helpers.');
+  }
+  if (!deleteFlow.includes('if (useTrash) {')) {
+    fail('deleteSelectedFlow must keep trash and permanent delete execution paths split.');
+  }
+}
 
 assertContains('frontend/src/lib/app/setup.ts', [
   'selectDirectory,',

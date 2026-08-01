@@ -26,6 +26,15 @@ function assertContains(file, values, label = 'value') {
   }
 }
 
+function assertNotContains(file, values, label = 'retired value') {
+  const source = read(file);
+  for (const value of values) {
+    if (source.includes(value)) {
+      fail(`${file} still contains ${label}: ${value}`);
+    }
+  }
+}
+
 assertContains('frontend/src/lib/app/core.ts', [
   'PaneId',
   'watchDirectory',
@@ -45,6 +54,8 @@ assertContains('frontend/src/lib/fileNavigation.ts', [
 
 assertContains('frontend/src/lib/app/setup.ts', [
   'onFileChange',
+  'const toggleDualPane = () => {',
+  "addShortcut('pane.toggleDual', 'F6', toggleDualPane);",
   'const handleSecondaryPaneCommand',
   'const handleFileChange',
   "document.addEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
@@ -94,12 +105,29 @@ assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
   'activeSelection',
   'secondarySelectedEntries',
   'secondaryFilteredEntries',
+  'title="Toggle Dual Pane (F6)"',
 ], 'Stage 11 toolbar active pane state');
 
 assertContains('frontend/src/lib/tauri.ts', [
   "case 'watch_directory':",
   "case 'unwatch_directory':",
 ], 'Stage 11 browser dev watch fallbacks');
+
+assertContains('frontend/src/lib/app/core.ts', [
+  "['pane.toggleDual', 'Toggle dual pane']",
+], 'Stage 11 keyboard help shortcut');
+
+assertContains('frontend/src/lib/components/OverlayShell.svelte', [
+  '<div class="shortcut-row"><kbd>F6</kbd><span>Toggle dual pane</span></div>',
+], 'Stage 11 static keyboard help shortcut');
+
+assertNotContains('frontend/src/lib/index.ts', [
+  "export * from './fileNavigation';",
+  "export * from './localCommandWorkflow';",
+  "export * from './searchWorkflow';",
+  "export * from './transferWorkflow';",
+  "export * from './viewWorkflow';",
+], 'retired public workflow barrel export');
 
 if (process.exitCode) {
   process.exit();

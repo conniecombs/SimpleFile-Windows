@@ -1460,6 +1460,39 @@ const defaultColorLabels = [
 
   export type DeleteSelectedMode = 'settings' | 'trash' | 'permanent';
 
+  function selectedItemCountText(count: number) {
+    return `${count} selected item${count === 1 ? '' : 's'}`;
+  }
+
+  async function confirmDeleteSelection(paths: PathString[], useTrash: boolean) {
+    const shouldConfirmDelete = appState.settings?.confirmDelete !== false;
+    if (!shouldConfirmDelete) return true;
+
+    const selectedItems = selectedItemCountText(paths.length);
+    return Boolean(await showDialog({
+      confirmText: useTrash ? 'Move to Trash' : 'Delete',
+      message: useTrash
+        ? `Move ${selectedItems} to trash?`
+        : `Permanently delete ${selectedItems}?`,
+      title: useTrash ? 'Delete Items' : 'Confirm Permanent Delete',
+    }));
+  }
+
+  async function confirmPermanentDeleteFallback(paths: PathString[]) {
+    const selectedItems = selectedItemCountText(paths.length);
+    return Boolean(await showDialog({
+      confirmText: 'Delete',
+      message: `Trash is unavailable. Permanently delete ${selectedItems} instead?`,
+      title: 'Confirm Permanent Delete',
+    }));
+  }
+
+  async function permanentlyDeletePaths(paths: PathString[]) {
+    for (const path of paths) await getActiveFileSystem().deleteEntry(path);
+    updateProgressFlow(100, `Deleted ${paths.length} items`);
+    hideProgressFlow();
+  }
+
   export async function deleteSelectedFlow({ mode = 'settings' }: { mode?: DeleteSelectedMode } = {}) {
     const activePane = appState.activePane as PaneId;
     const paths = currentSelectionPaths();
@@ -1467,40 +1500,25 @@ const defaultColorLabels = [
 
     const useTrash = mode === 'trash'
       || (mode === 'settings' && appState.settings?.useTrash !== false);
-    const confirmed = await showDialog({
-      confirmText: useTrash ? 'Move to Trash' : 'Delete',
-      message: useTrash
-        ? `Move ${paths.length} selected item${paths.length === 1 ? '' : 's'} to trash?`
-        : `Permanently delete ${paths.length} selected item${paths.length === 1 ? '' : 's'}?`,
-      title: 'Delete Items',
-    });
+    const confirmed = await confirmDeleteSelection(paths, useTrash);
     if (!confirmed) return;
 
     try {
       if (useTrash) {
         await getActiveFileSystem().moveToTrash(paths);
       } else {
-        const label = 'File(s)';
-        const message = `Are you sure you want to permanently delete the selected ${label}?`;
-        const result = await showDialog({ title: 'Confirm Permanent Delete', message, confirmText: 'Delete' });
-        if (!result) return;
-        for (const path of paths) await getActiveFileSystem().deleteEntry(path);
-        updateProgressFlow(100, `Deleted ${paths.length} items`);
-        hideProgressFlow();
+        await permanentlyDeletePaths(paths);
       }
       showSuccess(`Deleted ${paths.length} item${paths.length === 1 ? '' : 's'}`);
       if (activePane === 'secondary') await refreshSecondaryPane();
       else await refreshCurrentDirectory();
     } catch (error) {
-      if (typeof error === 'string' && error.startsWith('TRASH_UNAVAILABLE')) {
+      if (useTrash && typeof error === 'string' && error.startsWith('TRASH_UNAVAILABLE')) {
         try {
-          const label = 'File(s)';
-          const message = `Are you sure you want to permanently delete the selected ${label}?`;
-          const result = await showDialog({ title: 'Confirm Permanent Delete', message, confirmText: 'Delete' });
-          if (!result) return;
-          for (const path of paths) await getActiveFileSystem().deleteEntry(path);
-          updateProgressFlow(100, `Deleted ${paths.length} items`);
-          hideProgressFlow();
+          const confirmedPermanentDelete = await confirmPermanentDeleteFallback(paths);
+          if (!confirmedPermanentDelete) return;
+          await permanentlyDeletePaths(paths);
+          showSuccess(`Deleted ${paths.length} item${paths.length === 1 ? '' : 's'}`);
           if (activePane === 'secondary') await refreshSecondaryPane();
           else await refreshCurrentDirectory();
         } catch (deleteError) {
@@ -2079,6 +2097,7 @@ const defaultColorLabels = [
         ['history.undo', 'Undo last file operation'],
         ['history.redo', 'Redo last file operation'],
         ['history.redo.shift', 'Redo last file operation'],
+        ['pane.toggleDual', 'Toggle dual pane'],
         ['terminal.open', 'Open terminal here'],
         ['help.keyboard', 'Keyboard shortcuts'],
         ['help.keyboard.ctrl', 'Keyboard shortcuts'],

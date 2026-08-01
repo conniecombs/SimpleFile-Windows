@@ -255,10 +255,7 @@ export function initApp() {
         applyTheme();
         saveSettings();
       } else if (command === 'dual-pane') {
-        appState.dualPaneEnabled = !appState.dualPaneEnabled;
-        if (appState.dualPaneEnabled && !appState.secondaryPath) {
-          void loadSecondaryDirectory(appState.currentPath, 'replace-current', false);
-        }
+        toggleDualPane();
       } else if (command === 'terminal') {
         openTerminal(pathForPane()).catch(showError);
       } else if (command.startsWith?.('navigate')) {
@@ -351,6 +348,13 @@ export function initApp() {
     const handleSearchResultsSave = (e: any) => {
       if (e.detail?.handled) return;
       void saveCurrentSearchAsSmartFolderFlow();
+    };
+
+    const toggleDualPane = () => {
+      appState.dualPaneEnabled = !appState.dualPaneEnabled;
+      if (appState.dualPaneEnabled && !appState.secondaryPath) {
+        void loadSecondaryDirectory(appState.currentPath, 'replace-current', false);
+      }
     };
 
     const handleSearchFocus = () => {
@@ -868,6 +872,7 @@ export function initApp() {
       addShortcut('terminal.open', 'F4', () => {
         openTerminal(pathForPane()).catch(showError);
       });
+      addShortcut('pane.toggleDual', 'F6', toggleDualPane);
 
       return () => {
         for (const id of shortcutIds) {
