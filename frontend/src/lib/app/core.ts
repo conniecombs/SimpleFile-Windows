@@ -3,6 +3,12 @@ import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, lo
 import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location';
   import { getActiveFileSystem } from '../vfs';
 import {
+    applyPassiveFolderMetricsToState,
+    cancelPassiveFolderMetricWork,
+    clearThumbnailCache,
+    resetPassiveMetricFailures,
+} from '../fileListLazyData';
+import {
     batchRename,
     calculateFolderSize,
     cancelFolderItemCount,
@@ -214,11 +220,11 @@ const defaultColorLabels = [
 
   function cancelFolderMetricWork() {
     localState.folderMetricsToken += 1;
-    cancelFolderSize().catch((error) => console.warn('Failed to cancel folder size work:', error));
-    cancelFolderItemCount().catch((error) => console.warn('Failed to cancel folder item count work:', error));
+    cancelPassiveFolderMetricWork();
   }
 
   async function stopPreviousFolderMetricWork() {
+    cancelPassiveFolderMetricWork();
     await Promise.all([
       cancelFolderSize().catch((error) => console.warn('Failed to cancel previous folder size work:', error)),
       cancelFolderItemCount().catch((error) => console.warn('Failed to cancel previous folder item count work:', error)),
@@ -244,6 +250,17 @@ const defaultColorLabels = [
     }
     applyEntryFilters();
     if (appState.dualPaneEnabled) applySecondaryEntryFilters();
+  }
+
+  /** Apply lazily-loaded visible-folder size/count results without a full metric dialog. */
+  export function applyPassiveFolderMetrics(
+    sizes: Map<PathString, number>,
+    counts: Map<PathString, number>,
+  ) {
+    applyPassiveFolderMetricsToState(appState, sizes, counts, {
+      primary: applyEntryFilters,
+      secondary: applySecondaryEntryFilters,
+    });
   }
 
   export async function showFolderMetricsFlow() {
@@ -724,6 +741,157 @@ const defaultColorLabels = [
     } else {
       selectPaths(entries.map((entry: FileEntry) => entry.path), entries.length - 1);
     }
+  }
+
+  export function clearActiveSelection() {
+    const activePane = appState.activePane as PaneId;
+    if (activePane === 'secondary') {
+      appState.secondarySelectedEntries = new Set();
+    } else {
+      appState.selectedEntries = new Set();
+    }
+    appState.focusedIndex = -1;
+    appState.lastSelectedIndex = -1;
+    updateStatusBar();
+    void updatePreviewPane();
+  }
+
+  function getActiveGridColumnCount() {
+    if (!appState.isGridView) {
+      return 1;
+    }
+
+    const listId = appState.activePane === 'secondary' ? 'secondary-file-list' : 'file-list';
+    const list = document.getElementById(listId);
+    if (!list) {
+      return 1;
+    }
+
+    const styles = getComputedStyle(list);
+    const itemWidth = Number.parseFloat(styles.getPropertyValue('--file-list-grid-item-width')) || 112;
+    const gap = 12;
+    return Math.max(1, Math.floor((list.clientWidth + gap) / (itemWidth + gap)));
+  }
+
+  function focusDeltaForDirection(direction: 'up' | 'down' | 'left' | 'right') {
+    if (!appState.isGridView) {
+      return direction === 'up' || direction === 'left' ? -1 : 1;
+    }
+
+    const columns = getActiveGridColumnCount();
+    switch (direction) {
+      case 'up':
+        return -columns;
+      case 'down':
+        return columns;
+      case 'left':
+        return -1;
+      case 'right':
+        return 1;
+      default:
+        return 0;
+    }
+  }
+
+  function applyPaneSelection(paths: PathString[], focusedIndex: number, pane: PaneId) {
+    if (pane === 'secondary') {
+      selectSecondaryPaths(paths, focusedIndex);
+      return;
+    }
+    selectPaths(paths, focusedIndex);
+  }
+
+  export function selectRangeInActivePane(fromIndex: number, toIndex: number) {
+    const pane = appState.activePane as PaneId;
+    const entries = filteredEntriesForPane(pane);
+    if (entries.length === 0) {
+      return;
+    }
+
+    const start = Math.max(0, Math.min(fromIndex, toIndex));
+    const end = Math.min(entries.length - 1, Math.max(fromIndex, toIndex));
+    const paths = entries.slice(start, end + 1).map((entry: FileEntry) => entry.path);
+    applyPaneSelection(paths, toIndex, pane);
+    appState.lastSelectedIndex = fromIndex;
+    appState.focusedIndex = toIndex;
+  }
+
+  export function moveActiveListFocus(
+    direction: 'up' | 'down' | 'left' | 'right',
+    extendSelection = false,
+  ) {
+    const pane = appState.activePane as PaneId;
+    const entries = filteredEntriesForPane(pane);
+    if (entries.length === 0) {
+      return;
+    }
+
+    const currentIndex = appState.focusedIndex >= 0 ? appState.focusedIndex : 0;
+    const nextIndex = Math.max(
+      0,
+      Math.min(entries.length - 1, currentIndex + focusDeltaForDirection(direction)),
+    );
+
+    if (extendSelection) {
+      const anchor = appState.lastSelectedIndex >= 0 ? appState.lastSelectedIndex : currentIndex;
+      selectRangeInActivePane(anchor, nextIndex);
+      return;
+    }
+
+    const entry = entries[nextIndex];
+    if (!entry) {
+      return;
+    }
+    applyPaneSelection([entry.path], nextIndex, pane);
+  }
+
+  export function focusActiveListEdge(edge: 'first' | 'last', extendSelection = false) {
+    const pane = appState.activePane as PaneId;
+    const entries = filteredEntriesForPane(pane);
+    if (entries.length === 0) {
+      return;
+    }
+
+    const nextIndex = edge === 'first' ? 0 : entries.length - 1;
+    if (extendSelection) {
+      const anchor = appState.lastSelectedIndex >= 0 ? appState.lastSelectedIndex : Math.max(0, appState.focusedIndex);
+      selectRangeInActivePane(anchor, nextIndex);
+      return;
+    }
+
+    const entry = entries[nextIndex];
+    if (!entry) {
+      return;
+    }
+    applyPaneSelection([entry.path], nextIndex, pane);
+  }
+
+  export function handleActiveTypeAhead(char: string) {
+    if (!char) {
+      return;
+    }
+
+    appState.typeAheadBuffer = `${appState.typeAheadBuffer || ''}${char.toLowerCase()}`;
+    window.clearTimeout(appState.typeAheadTimeout ?? undefined);
+    appState.typeAheadTimeout = window.setTimeout(() => {
+      appState.typeAheadBuffer = '';
+      appState.typeAheadTimeout = null;
+    }, 500);
+
+    const pane = appState.activePane as PaneId;
+    const entries = filteredEntriesForPane(pane);
+    const matchIndex = entries.findIndex((entry: FileEntry) =>
+      entry.name?.toLowerCase().startsWith(appState.typeAheadBuffer),
+    );
+    if (matchIndex < 0) {
+      return;
+    }
+
+    const entry = entries[matchIndex];
+    if (!entry) {
+      return;
+    }
+    applyPaneSelection([entry.path], matchIndex, pane);
   }
 
   export function findEntry(path: PathString) {
@@ -1246,6 +1414,8 @@ const defaultColorLabels = [
     const token = ++localState.navigationToken;
     try {
       cancelFolderMetricWork();
+      clearThumbnailCache();
+      resetPassiveMetricFailures();
       resetSearchStateForNavigation();
       appState.isNavigating = true;
       appState.currentPath = path;
@@ -1281,6 +1451,8 @@ const defaultColorLabels = [
     const token = ++localState.secondaryNavigationToken;
     try {
       cancelFolderMetricWork();
+      clearThumbnailCache();
+      resetPassiveMetricFailures();
       const listing = await getActiveFileSystem().listDirectory(path);
       if (token !== localState.secondaryNavigationToken) return;
 
@@ -2438,12 +2610,20 @@ const defaultColorLabels = [
         ['nav.forward', 'Forward'],
         ['directory.refresh', 'Refresh'],
         ['file.open', 'Open selected item'],
+        ['selection.up', 'Move selection up'],
+        ['selection.down', 'Move selection down'],
+        ['selection.left', 'Move selection left'],
+        ['selection.right', 'Move selection right'],
+        ['selection.first', 'Select first item'],
+        ['selection.last', 'Select last item'],
       ],
       title: 'Navigation',
     },
     {
       rows: [
         ['selection.all', 'Select all'],
+        ['selection.up.extend', 'Extend selection up'],
+        ['selection.down.extend', 'Extend selection down'],
         ['file.copy', 'Copy'],
         ['file.cut', 'Cut'],
         ['file.paste', 'Paste'],
@@ -2471,14 +2651,14 @@ const defaultColorLabels = [
         ['search.focus', 'Focus search'],
         ['commandPalette.open', 'Command palette'],
         ['clipboard.history', 'Clipboard history'],
-        ['history.undo', 'Undo last file operation'],
-        ['history.redo', 'Redo last file operation'],
-        ['history.redo.shift', 'Redo last file operation'],
+        ['history.undo', 'Undo last create/rename/copy/move'],
+        ['history.redo', 'Redo last create/rename/copy/move'],
+        ['history.redo.shift', 'Redo last create/rename/copy/move'],
         ['pane.toggleDual', 'Toggle dual pane'],
         ['terminal.open', 'Open terminal here'],
         ['help.keyboard', 'Keyboard shortcuts'],
         ['help.keyboard.ctrl', 'Keyboard shortcuts'],
-        ['escape', 'Close or cancel current surface'],
+        ['escape', 'Close surface, clear filter, or clear selection'],
       ],
       title: 'View & Tools',
     },

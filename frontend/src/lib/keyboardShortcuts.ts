@@ -118,7 +118,7 @@ export function comboFromKeyboardEvent(event: KeyboardEvent) {
   ].join('+');
 }
 
-function isEditableTarget(target: EventTarget | null) {
+export function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
 
   const editable = target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], [role="textbox"]');
@@ -141,7 +141,7 @@ function isEditableTarget(target: EventTarget | null) {
   return true;
 }
 
-function isControlTarget(target: EventTarget | null) {
+export function isControlTarget(target: EventTarget | null) {
   return target instanceof Element
     && Boolean(target.closest('button, a[href], summary, [role="button"], [role="menuitem"], [role="tab"]'));
 }

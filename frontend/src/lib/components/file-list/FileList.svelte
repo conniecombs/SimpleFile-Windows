@@ -1,8 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
-  import { fileType, formatFileSize, formatModified } from '../../coreFileManager';
-  import type { ColumnId, FileEntry } from '../../types';
+  import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
+  import { localState } from '../../app/localState.svelte';
+  import { fileType, formatFileSize, formatModified, visibleEntries } from '../../coreFileManager';
+  import {
+    applyPassiveFolderMetricsToState,
+    clearThumbnailCache,
+    ensureVisibleFolderMetrics,
+    ensureVisibleThumbnails,
+    getCachedThumbnail,
+    getThumbnailRevision,
+    isImageFileName,
+    subscribeThumbnailCache,
+  } from '../../fileListLazyData';
+  import type { ColumnId, FileEntry, PathString } from '../../types';
   import FileListItems from './FileListItems.svelte';
   import type { FileListViewItem } from './FileListItems.svelte';
 
@@ -20,7 +31,11 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   let viewportHeight = $state(0);
   let viewportWidth = $state(0);
   let previousPath = $state('');
+  let previousIconSize = $state(0);
+  let thumbnailRevision = $state(getThumbnailRevision());
   let measureFrame = 0;
+  let lazyMetricsFrame = 0;
+  let lazyThumbnailsFrame = 0;
 
   let visibleColumns = $derived(appState.settings?.visibleColumns || ['size', 'date', 'type']);
   let sourceEntries = $derived(
@@ -29,7 +44,15 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   let selectedSet = $derived(
     pane === 'primary' ? appState.selectedEntries : (appState.secondarySelectedEntries || new Set()),
   );
+  let cutPathSet = $derived.by(() => {
+    if (appState.clipboardAction !== 'cut' || !appState.clipboard?.length) {
+      return null;
+    }
+    return new Set(appState.clipboard);
+  });
   let iconSize = $derived(Number(appState.iconSize || appState.settings?.defaultIconSize || 64));
+  let showFolderSizes = $derived(appState.settings?.showFolderSizes !== false);
+  let showItemCounts = $derived(visibleColumns.includes('items'));
   let gridItemWidth = $derived(Math.max(96, iconSize + GRID_ITEM_EXTRA_WIDTH));
   let gridItemHeight = $derived(Math.max(96, iconSize + GRID_ITEM_EXTRA_HEIGHT));
   let gridColumnCount = $derived.by(() => {
@@ -148,37 +171,144 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
     }
   }
 
+  function formatDirectorySize(entry: FileEntry) {
+    const folderSize = appState.folderSizes?.get(entry.path);
+    if (typeof folderSize === 'number') {
+      return formatFileSize(folderSize);
+    }
+    if (showFolderSizes) {
+      return '…';
+    }
+    return formatFileSize(entry.size, true);
+  }
+
+  function formatItemCount(entry: FileEntry) {
+    if (entry.itemCount != null && entry.itemCount !== '') {
+      return String(entry.itemCount);
+    }
+    if (entry.is_dir && showItemCounts) {
+      return '…';
+    }
+    return '';
+  }
+
   let displayItems = $derived.by(() => {
+    // Depend on thumbnail revision so cached thumbs re-render into the virtual window.
+    thumbnailRevision;
+
     return sourceEntries
       .slice(visibleRange.start, visibleRange.end)
       .map((entry: FileEntry, offset: number): FileListViewItem => {
         const i = visibleRange.start + offset;
-        const folderSize = appState.folderSizes?.get(entry.path);
-        const sizeText = entry.is_dir && typeof folderSize === 'number'
-          ? formatFileSize(folderSize)
-          : formatFileSize(entry.size, entry.is_dir);
+        const isImage = isImageFileName(entry.name);
+        const thumbnail = appState.isGridView && isImage
+          ? (getCachedThumbnail(entry.path) ?? null)
+          : null;
 
         return {
           icon: entry.is_dir ? '\u{1f4c1}' : '\u{1f4c4}',
           index: i,
-          isCut: false,
+          isCut: cutPathSet?.has(entry.path) === true,
           isDir: entry.is_dir,
           isFocused: i === appState.focusedIndex && appState.activePane === pane,
-          isImage: entry.name.match(/\.(jpg|jpeg|png|gif|webp)$/i) !== null,
+          isImage,
           isPdf: entry.name.toLowerCase().endsWith('.pdf'),
           isSelected: selectedSet.has(entry.path),
           isSymlink: entry.is_symlink,
-          itemCount: entry.itemCount == null ? '' : String(entry.itemCount),
+          itemCount: formatItemCount(entry),
           git_status: entry.git_status || null,
           modified: formatModified(entry.modified),
           name: entry.name,
           path: entry.path,
-          size: sizeText,
+          size: entry.is_dir ? formatDirectorySize(entry) : formatFileSize(entry.size, entry.is_dir),
           tag: tagForPath(entry.path),
+          thumbnail,
           type: fileType(entry),
         };
       });
   });
+
+  function queueVisibleThumbnails(imagePaths: PathString[]) {
+    if (lazyThumbnailsFrame) {
+      cancelAnimationFrame(lazyThumbnailsFrame);
+    }
+
+    lazyThumbnailsFrame = requestAnimationFrame(() => {
+      lazyThumbnailsFrame = 0;
+      if (!appState.isGridView || imagePaths.length === 0) {
+        return;
+      }
+
+      const thumbSize = Math.max(64, Math.round(iconSize * 1.5));
+      void ensureVisibleThumbnails(imagePaths, thumbSize).then((revision) => {
+        if (revision !== thumbnailRevision) {
+          thumbnailRevision = revision;
+        }
+      });
+    });
+  }
+
+  function queueVisibleFolderMetrics(entries: FileEntry[]) {
+    if (lazyMetricsFrame) {
+      cancelAnimationFrame(lazyMetricsFrame);
+    }
+
+    lazyMetricsFrame = requestAnimationFrame(() => {
+      lazyMetricsFrame = 0;
+
+      if (!showFolderSizes && !showItemCounts) {
+        return;
+      }
+
+      // Avoid racing the shared backend size/count cancel flags while an
+      // exclusive progress dialog (explicit folder metrics, transfers, etc.) is open.
+      if (localState.currentProgressCancel) {
+        return;
+      }
+
+      const folders = entries.filter((entry) => entry.is_dir);
+      if (folders.length === 0) {
+        return;
+      }
+
+      const requests = folders.map((folder) => ({
+        path: folder.path,
+        needCount: showItemCounts && (folder.itemCount == null || folder.itemCount === ''),
+        needSize: showFolderSizes && typeof appState.folderSizes?.get(folder.path) !== 'number',
+      }));
+
+      void ensureVisibleFolderMetrics(
+        requests,
+        appState.folderSizes,
+        (path) => {
+          const entry = folders.find((folder) => folder.path === path);
+          return entry != null && entry.itemCount != null && entry.itemCount !== '';
+        },
+      ).then((result) => {
+        if (result.sizes.size === 0 && result.counts.size === 0) {
+          return;
+        }
+        applyPassiveFolderMetricsToState(appState, result.sizes, result.counts, {
+          primary: () => {
+            appState.filteredEntries = visibleEntries(appState.entries, {
+              filterQuery: appState.filterQuery,
+              showHidden: appState.showHiddenFiles,
+              sortAsc: appState.sortAsc,
+              sortBy: appState.sortBy,
+            });
+          },
+          secondary: () => {
+            appState.secondaryFilteredEntries = visibleEntries(appState.secondaryEntries || [], {
+              filterQuery: '',
+              showHidden: appState.showHiddenFiles,
+              sortAsc: appState.sortAsc,
+              sortBy: appState.sortBy,
+            });
+          },
+        });
+      });
+    });
+  }
 
   onMount(() => {
     updateViewportMeasurements();
@@ -187,12 +317,22 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
       resizeObserver.observe(fileListElement);
     }
     window.addEventListener('resize', updateViewportMeasurements);
+    const unsubscribeThumbnails = subscribeThumbnailCache(() => {
+      thumbnailRevision = getThumbnailRevision();
+    });
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateViewportMeasurements);
+      unsubscribeThumbnails();
       if (measureFrame) {
         cancelAnimationFrame(measureFrame);
+      }
+      if (lazyMetricsFrame) {
+        cancelAnimationFrame(lazyMetricsFrame);
+      }
+      if (lazyThumbnailsFrame) {
+        cancelAnimationFrame(lazyThumbnailsFrame);
       }
     };
   });
@@ -218,11 +358,36 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   });
 
   $effect(() => {
+    if (previousIconSize === 0) {
+      previousIconSize = iconSize;
+      return;
+    }
+
+    if (Math.abs(iconSize - previousIconSize) / Math.max(1, previousIconSize) > 0.5) {
+      clearThumbnailCache();
+      thumbnailRevision = getThumbnailRevision();
+    }
+    previousIconSize = iconSize;
+  });
+
+  $effect(() => {
     if (appState.activePane !== pane) {
       return;
     }
 
     scrollIndexIntoView(appState.focusedIndex);
+  });
+
+  $effect(() => {
+    const visibleEntries = sourceEntries.slice(visibleRange.start, visibleRange.end);
+    const imagePaths = appState.isGridView
+      ? visibleEntries
+        .filter((entry) => !entry.is_dir && isImageFileName(entry.name))
+        .map((entry) => entry.path)
+      : [];
+
+    queueVisibleThumbnails(imagePaths);
+    queueVisibleFolderMetrics(visibleEntries);
   });
 </script>
 

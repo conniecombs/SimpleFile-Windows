@@ -437,15 +437,15 @@
                     <div class="shortcut-row"><kbd>Shift+Arrow</kbd><span>Extend selection</span></div>
                     <div class="shortcut-row"><kbd>Ctrl+Click</kbd><span>Toggle selection</span></div>
                     <div class="shortcut-row"><kbd>Shift+Click</kbd><span>Range selection</span></div>
-                    <div class="shortcut-row"><kbd>Escape</kbd><span>Clear selection</span></div>
+                    <div class="shortcut-row"><kbd>Escape</kbd><span>Close surface / clear filter / clear selection</span></div>
                 </div>
                 <div class="shortcuts-section">
                     <h4>File Operations</h4>
                     <div class="shortcut-row"><kbd>Ctrl+C</kbd><span>Copy</span></div>
                     <div class="shortcut-row"><kbd>Ctrl+X</kbd><span>Cut</span></div>
                     <div class="shortcut-row"><kbd>Ctrl+V</kbd><span>Paste</span></div>
-                    <div class="shortcut-row"><kbd>Ctrl+Z</kbd><span>Undo last file operation</span></div>
-                    <div class="shortcut-row"><kbd>Ctrl+Y</kbd><span>Redo last file operation</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl+Z</kbd><span>Undo last create/rename/copy/move</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl+Y</kbd><span>Redo last create/rename/copy/move</span></div>
                     <div class="shortcut-row"><kbd>Delete</kbd><span>Move selected to trash</span></div>
                     <div class="shortcut-row"><kbd>Shift+Delete</kbd><span>Permanently delete selected</span></div>
                     <div class="shortcut-row"><kbd>F2</kbd><span>Rename</span></div>

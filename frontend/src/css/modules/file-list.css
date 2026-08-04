@@ -65,9 +65,17 @@
     overflow: hidden;
 }
 
-.folder-size-loading {
+.folder-size-loading,
+.file-cell.size-col:is(:empty),
+.file-cell.items-col:is(:empty) {
     color: var(--text-muted);
     font-style: italic;
+}
+
+/* Pending lazy size/count placeholders rendered as an ellipsis */
+.file-list.list-view .file-cell.size-col,
+.file-list.list-view .file-cell.items-col {
+    font-variant-numeric: tabular-nums;
 }
 
 .file-item .file-name {

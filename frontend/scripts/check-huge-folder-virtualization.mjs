@@ -74,12 +74,14 @@ assertContains('frontend/src/lib/app/localState.svelte.ts', [
 assertContains('frontend/src/lib/app/core.ts', [
   'cancelFolderMetricWork',
   'stopPreviousFolderMetricWork',
-  'cancelFolderSize',
-  'cancelFolderItemCount',
+  'cancelPassiveFolderMetricWork',
+  'clearThumbnailCache',
+  'resetPassiveMetricFailures',
   'Folder ${index + 1} of ${folders.length}: ${folder.name}',
   '{ onCancel: cancelFolderMetricWork }',
   'type ProgressFlowOptions',
   'token !== localState.secondaryNavigationToken',
+  'applyPassiveFolderMetrics',
 ], 'lazy metric cancellation and freshness');
 
 assertContains('frontend/src/lib/app/setup.ts', [
@@ -104,6 +106,32 @@ assertNotContains('frontend/src/lib/fileNavigationPrimary.ts', [
 assertNotContains('frontend/src/lib/fileNavigationDualPane.ts', [
   'await host.getGitFileStatuses',
 ], 'eager secondary git status load');
+
+assertContains('frontend/src/lib/fileListLazyData.ts', [
+  'export function clearThumbnailCache',
+  'export async function ensureVisibleThumbnails',
+  'export async function ensureVisibleFolderMetrics',
+  'export function cancelPassiveFolderMetricWork',
+  'export function applyPassiveFolderMetricsToState',
+  'METRIC_CONCURRENCY',
+  'THUMBNAIL_BATCH_SIZE',
+], 'visible-window lazy thumbnail and metric helpers');
+
+assertContains('frontend/src/lib/components/file-list/FileList.svelte', [
+  'ensureVisibleThumbnails',
+  'ensureVisibleFolderMetrics',
+  'applyPassiveFolderMetricsToState',
+  'queueVisibleThumbnails',
+  'queueVisibleFolderMetrics',
+  'getCachedThumbnail(entry.path)',
+  'showFolderSizes',
+  'showItemCounts',
+], 'visible-window lazy data wiring');
+
+assertContains('frontend/src/lib/tauri.ts', [
+  "case 'generate_thumbnail':",
+  "case 'generate_thumbnails':",
+], 'browser-dev thumbnail command mocks');
 
 if (process.exitCode) {
   process.exit();

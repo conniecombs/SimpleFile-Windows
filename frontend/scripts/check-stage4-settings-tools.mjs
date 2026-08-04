@@ -99,7 +99,22 @@ assertContains('frontend/src/lib/keyboardShortcuts.ts', [
   'function resetShortcutCombo',
   'function findShortcutConflict',
   'function getShortcutDefinitions',
+  'export function isEditableTarget',
 ], 'Stage 4 customizable shortcut registry');
+
+assertContains('frontend/src/lib/app/setup.ts', [
+  'registerShortcut(id, defaultCombo, handler, options)',
+  'updateShortcutCombo(id, normalizedOverride)',
+  "addShortcut('selection.up', 'Up'",
+  "addShortcut('selection.down', 'Down'",
+  "addShortcut('selection.first', 'Home'",
+  "addShortcut('selection.last', 'End'",
+  'handleActiveTypeAhead',
+  'moveActiveListFocus',
+  'focusActiveListEdge',
+  'clearActiveSelection',
+  'handleDocumentKeyDown',
+], 'Stage 4 shortcut defaults + list keyboard navigation');
 
 assertContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', [
   'class="settings-layout"',

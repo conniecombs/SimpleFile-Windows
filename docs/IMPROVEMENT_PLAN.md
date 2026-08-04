@@ -193,6 +193,8 @@ npm run check
 
 ## 4. Improve Huge-Folder Responsiveness
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
 Large folders are a core file-manager stress case. The current UI already has
@@ -212,21 +214,25 @@ responsive under heavy local folders and network drives.
 - Roadmap and review docs already call out large-folder progress, cancellation,
   and expensive metadata work as areas to improve.
 
-### Recommended Change
+### Completed Change
 
-- Implement true list virtualization:
-  - Calculate visible row range from scroll position.
-  - Render only visible rows plus overscan.
-  - Preserve stable selection indexes.
-  - Ensure keyboard navigation scrolls focused items into view.
-- Make expensive secondary data lazy:
-  - Folder item counts.
-  - Folder sizes.
-  - Image thumbnails.
-  - Git file statuses if a repo has many files.
-- Add cancellation and freshness tokens to expensive per-directory work so old
-  results do not update the UI after navigation.
-- Add clearer progress text for long operations.
+- `FileList.svelte` virtualizes both list and grid modes: visible range from
+  scroll position, overscan rows, spacer height, and `translateY` windowing so
+  only the on-screen slice is mapped into DOM items.
+- Keyboard focus changes call `scrollIndexIntoView` so arrow / type-ahead
+  navigation keeps the focused row in the viewport.
+- `fileListLazyData.ts` loads image thumbnails only for the current visible
+  grid window (batched, cached, cancelled on navigation / large icon-size
+  changes).
+- Visible folders passively calculate size (when **Calculate Folder Sizes** is
+  enabled) and item counts (when the Items column is visible), with concurrency
+  limits, in-flight dedupe, and cancel tokens shared with explicit metric work.
+- Navigation bumps freshness tokens, cancels in-flight size/count work, and
+  clears the thumbnail cache so stale results cannot paint after a path change.
+- Git status enrichment remains non-blocking after `list_directory` with
+  navigation-token guards on primary and secondary panes.
+- Explicit folder-metrics progress text still reports
+  `Folder N of M: name` with cancel support.
 
 ### Files To Inspect
 

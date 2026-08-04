@@ -68,6 +68,8 @@ assertContains('frontend/src/lib/app/setup.ts', [
   "document.addEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
   "document.removeEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
   'onFileChange(handleFileChange)',
+  "window.addEventListener('pagehide', handlePageHideFlush)",
+  "window.addEventListener('beforeunload', handlePageHideFlush)",
 ], 'Stage 11 navigation and watcher setup events');
 
 assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [

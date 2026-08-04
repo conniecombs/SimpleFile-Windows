@@ -97,10 +97,10 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
 import type { TransferAction } from "../transferPathUtils.js";
-import { handleKeyDown, normalizeShortcutCombo, registerShortcut, unregisterShortcut, type ShortcutOptions } from "../keyboardShortcuts.js";
+import { handleKeyDown, isEditableTarget, normalizeShortcutCombo, registerShortcut, unregisterShortcut, updateShortcutCombo, type ShortcutOptions } from "../keyboardShortcuts.js";
 import { showAdvancedRenameFlow, closeAdvancedRenameFlow, applyAdvancedRenameFlow, updateAdvancedRenameOperationClasses, refreshAdvancedRenamePreview } from "./advanced_rename.js";
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow } from "./archive.js";
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput } from "./core.js";
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
 
 
@@ -897,7 +897,12 @@ export function initApp() {
         return;
       }
       if (closePathBarEditor()) return;
-      clearQuickFilter();
+      if (clearQuickFilter()) return;
+
+      // Last step: clear the active-pane selection (matches help text).
+      if (selectedSetForPane().size > 0 || appState.focusedIndex >= 0) {
+        clearActiveSelection();
+      }
     };
 
     const registerAppShortcuts = () => {
@@ -905,30 +910,33 @@ export function initApp() {
       const usedShortcutCombos = new Set<string>();
       const addShortcut = (
         id: string,
-        combo: string,
+        defaultCombo: string,
         handler: (event: KeyboardEvent) => void | Promise<void>,
         options: ShortcutOptions = {},
       ) => {
-        const override = appState.settings?.shortcutOverrides?.[id];
-        let comboToRegister = combo;
+        // Always register the true default first so Reset / settings labels stay correct.
+        registerShortcut(id, defaultCombo, handler, options);
+        shortcutIds.push(id);
 
+        const override = appState.settings?.shortcutOverrides?.[id];
+        let liveCombo = defaultCombo;
         try {
           if (override) {
             const normalizedOverride = normalizeShortcutCombo(override);
             if (options.when || !usedShortcutCombos.has(normalizedOverride)) {
-              comboToRegister = normalizedOverride;
+              updateShortcutCombo(id, normalizedOverride);
+              liveCombo = normalizedOverride;
             }
+          } else {
+            liveCombo = normalizeShortcutCombo(defaultCombo);
           }
         } catch {
-          comboToRegister = combo;
+          liveCombo = normalizeShortcutCombo(defaultCombo);
         }
 
-        const normalizedCombo = normalizeShortcutCombo(comboToRegister);
         if (!options.when) {
-          usedShortcutCombos.add(normalizedCombo);
+          usedShortcutCombos.add(normalizeShortcutCombo(liveCombo));
         }
-        registerShortcut(id, comboToRegister, handler, options);
-        shortcutIds.push(id);
       };
 
       addShortcut('path.submit', 'Enter', (event) => {
@@ -947,6 +955,19 @@ export function initApp() {
       addShortcut('nav.back', 'Alt+Left', () => navigateActiveHistory(-1));
       addShortcut('nav.forward', 'Alt+Right', () => navigateActiveHistory(1));
       addShortcut('directory.refresh', 'F5', refreshActivePane);
+
+      addShortcut('selection.up', 'Up', () => moveActiveListFocus('up'));
+      addShortcut('selection.down', 'Down', () => moveActiveListFocus('down'));
+      addShortcut('selection.left', 'Left', () => moveActiveListFocus('left'));
+      addShortcut('selection.right', 'Right', () => moveActiveListFocus('right'));
+      addShortcut('selection.up.extend', 'Shift+Up', () => moveActiveListFocus('up', true));
+      addShortcut('selection.down.extend', 'Shift+Down', () => moveActiveListFocus('down', true));
+      addShortcut('selection.left.extend', 'Shift+Left', () => moveActiveListFocus('left', true));
+      addShortcut('selection.right.extend', 'Shift+Right', () => moveActiveListFocus('right', true));
+      addShortcut('selection.first', 'Home', () => focusActiveListEdge('first'));
+      addShortcut('selection.last', 'End', () => focusActiveListEdge('last'));
+      addShortcut('selection.first.extend', 'Shift+Home', () => focusActiveListEdge('first', true));
+      addShortcut('selection.last.extend', 'Shift+End', () => focusActiveListEdge('last', true));
 
       addShortcut('file.open', 'Enter', () => void openSelected());
       addShortcut('file.rename', 'F2', () => void renameSelectedFlow());
@@ -969,6 +990,7 @@ export function initApp() {
       addShortcut('search.focus', 'Ctrl+F', handleSearchFocus, { allowInControls: true, allowInEditable: true });
       addShortcut('help.keyboard', 'F1', showKeyboardHelpFlow, { allowInControls: true, allowInEditable: true });
       addShortcut('help.keyboard.ctrl', 'Ctrl+?', showKeyboardHelpFlow, { allowInControls: true, allowInEditable: true });
+      // Keep legacy id for settings/help tables; behavior is the layered escape stack above.
       addShortcut('escape', 'Escape', handleEscapeShortcut, { allowInControls: true, allowInEditable: true });
 
       addShortcut('commandPalette.open', 'Ctrl+Shift+P', () => {
@@ -991,6 +1013,40 @@ export function initApp() {
     };
 
     const cleanupShortcuts = registerAppShortcuts();
+
+    const handleTypeAheadKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.altKey || event.metaKey) {
+        return;
+      }
+      if (event.key.length !== 1 || event.key === ' ') {
+        return;
+      }
+      if (isEditableTarget(event.target)) {
+        return;
+      }
+      // Avoid type-ahead while modal/overlay surfaces own the keyboard.
+      if (
+        overlayById('progress-overlay')?.classList.contains('visible')
+        || overlayById('quicklook-overlay')?.classList.contains('visible')
+        || overlayById('keyboard-help-overlay')?.classList.contains('visible')
+        || document.getElementById('modal-overlay')?.classList.contains('visible')
+        || appState.commandPaletteVisible
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      handleActiveTypeAhead(event.key);
+    };
+
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      handleKeyDown(event);
+      handleTypeAheadKey(event);
+    };
+
+    const handlePageHideFlush = () => {
+      flushWorkspaceLayoutSave();
+    };
 
     const handleOperationProgress = (event: { payload: ProgressUpdate }) => {
       const update = event.payload;
@@ -1120,7 +1176,9 @@ export function initApp() {
     document.addEventListener('input', handleAdvancedRenameControlInput);
     document.addEventListener('mousedown', handleDocumentPointerDown);
     document.addEventListener('mousedown', handleModalPointerDown);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    window.addEventListener('pagehide', handlePageHideFlush);
+    window.addEventListener('beforeunload', handlePageHideFlush);
     document.addEventListener('dragstart', handleDragStart);
     document.addEventListener('dragover', handleDragOver);
     document.addEventListener('drop', handleDrop);
@@ -1184,7 +1242,9 @@ export function initApp() {
       document.removeEventListener('input', handleAdvancedRenameControlInput);
       document.removeEventListener('mousedown', handleDocumentPointerDown);
       document.removeEventListener('mousedown', handleModalPointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleDocumentKeyDown);
+      window.removeEventListener('pagehide', handlePageHideFlush);
+      window.removeEventListener('beforeunload', handlePageHideFlush);
       cleanupShortcuts();
       document.removeEventListener('dragstart', handleDragStart);
       document.removeEventListener('dragover', handleDragOver);
