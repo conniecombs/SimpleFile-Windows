@@ -642,9 +642,19 @@ fn transfer_with_progress_blocking(
 
     progress.emit_with_total(0, 0, String::new(), "running", None);
 
-    let result = (|| -> Result<Vec<TransferResult>, String> {
+    // Outcome separates user cancel (with any completed items) from hard errors so
+    // the frontend can mark history as cancelled without losing partial results.
+    enum TransferOutcome {
+        Completed(Vec<TransferResult>),
+        Cancelled(Vec<TransferResult>),
+        Failed(String),
+    }
+
+    let outcome = (|| -> TransferOutcome {
         for mut plan in plans {
-            check_cancelled(&state, &operation_id)?;
+            if is_operation_cancelled(&state, &operation_id) {
+                return TransferOutcome::Cancelled(transferred);
+            }
             let source = plan.source_path.to_string_lossy().to_string();
             let mut completed_plan = false;
 
@@ -656,13 +666,18 @@ fn transfer_with_progress_blocking(
                             completed_plan = true;
                             break;
                         }
+                        Err(e) if e == "Operation cancelled" => {
+                            return TransferOutcome::Cancelled(transferred);
+                        }
                         Err(e) if keep_both && e.starts_with("CONFLICT:") => {
-                            choose_next_keep_both_destination(
+                            if let Err(resolve_err) = choose_next_keep_both_destination(
                                 &mut plan,
                                 &mut reserved_destinations,
-                            )?;
+                            ) {
+                                return TransferOutcome::Failed(resolve_err);
+                            }
                         }
-                        Err(e) => return Err(e),
+                        Err(e) => return TransferOutcome::Failed(e),
                     },
                     "move" => match move_plan_with_progress(&plan, &progress, &mut completed_bytes)
                     {
@@ -670,20 +685,29 @@ fn transfer_with_progress_blocking(
                             completed_plan = true;
                             break;
                         }
+                        Err(e) if e == "Operation cancelled" => {
+                            return TransferOutcome::Cancelled(transferred);
+                        }
                         Err(e) if keep_both && e.starts_with("CONFLICT:") => {
-                            choose_next_keep_both_destination(
+                            if let Err(resolve_err) = choose_next_keep_both_destination(
                                 &mut plan,
                                 &mut reserved_destinations,
-                            )?;
+                            ) {
+                                return TransferOutcome::Failed(resolve_err);
+                            }
                         }
-                        Err(e) => return Err(e),
+                        Err(e) => return TransferOutcome::Failed(e),
                     },
-                    _ => return Err(format!("Unsupported operation: {operation_type}")),
+                    _ => {
+                        return TransferOutcome::Failed(format!(
+                            "Unsupported operation: {operation_type}"
+                        ));
+                    }
                 }
             }
 
             if !completed_plan {
-                return Err(
+                return TransferOutcome::Failed(
                     "Could not choose a unique destination after repeated conflicts".to_string(),
                 );
             }
@@ -693,18 +717,30 @@ fn transfer_with_progress_blocking(
                 destination: plan.final_dest.to_string_lossy().to_string(),
             });
         }
-        Ok(transferred)
+        TransferOutcome::Completed(transferred)
     })();
 
     clear_cancelled_operation(&state, &operation_id);
     let final_total = total_bytes.load(Ordering::Relaxed);
 
-    match result {
-        Ok(transferred) => {
+    match outcome {
+        TransferOutcome::Completed(transferred) => {
             progress.emit_with_total(final_total, final_total, String::new(), "completed", None);
             Ok(transferred)
         }
-        Err(e) => {
+        TransferOutcome::Cancelled(transferred) => {
+            // Return Ok(partial) so the UI can record undo for completed items
+            // while still treating the operation as cancelled via progress status.
+            progress.emit_with_total(
+                completed_bytes,
+                final_total,
+                String::new(),
+                "cancelled",
+                Some("Operation cancelled".to_string()),
+            );
+            Ok(transferred)
+        }
+        TransferOutcome::Failed(e) => {
             progress.emit_with_total(
                 completed_bytes,
                 final_total,

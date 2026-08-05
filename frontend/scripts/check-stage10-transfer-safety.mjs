@@ -51,6 +51,11 @@ assertContains('frontend/src/lib/app/core.ts', [
   'name="transfer-conflict-action"',
   'name="clipboard-history-entry"',
   'name="operation-history-entry"',
+  'let cancelRequested = false',
+  'finalizeCancelledTransfer',
+  'wasCancelled',
+  'lastCancelledOperationId',
+  'backendCancelled',
 ], 'Stage 10 transfer safety flow wiring');
 
 assertContains('frontend/src/lib/app/setup.ts', [

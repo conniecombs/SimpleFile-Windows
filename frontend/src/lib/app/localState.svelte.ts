@@ -26,6 +26,8 @@ interface LocalState {
   currentArchivePath: PathString | null;
   currentProgressCancel: (() => unknown) | null;
   currentProgressOperationId: OperationId | null;
+  /** Last transfer/progress operation the backend reported as cancelled. */
+  lastCancelledOperationId: OperationId | null;
   watchedDirectoryPath: PathString | null;
   fileChangeRefreshTimer: number | null;
   isSettingColorLabel: boolean;
@@ -44,6 +46,7 @@ export const localState = $state<LocalState>({
   currentArchivePath: null,
   currentProgressCancel: null,
   currentProgressOperationId: null,
+  lastCancelledOperationId: null,
   watchedDirectoryPath: null,
   fileChangeRefreshTimer: null,
   isSettingColorLabel: false,

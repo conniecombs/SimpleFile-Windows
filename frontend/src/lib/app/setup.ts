@@ -761,10 +761,12 @@ export function initApp() {
       if (target.closest('#progress-cancel')) {
         event.preventDefault();
         if (localState.currentProgressOperationId) {
-          cancelOperation(localState.currentProgressOperationId).catch(showError);
+          // Cancel is user-initiated; ignore "operation not found" races when
+          // the backend finishes in the same window as the click.
+          cancelOperation(localState.currentProgressOperationId).catch(() => {});
         }
         if (localState.currentProgressCancel) {
-          Promise.resolve(localState.currentProgressCancel()).catch(showError);
+          Promise.resolve(localState.currentProgressCancel()).catch(() => {});
         }
         hideProgressFlow();
       }
@@ -1052,12 +1054,16 @@ export function initApp() {
       const update = event.payload;
       if (!update?.operation_id) return;
 
+      // Backend cancel returns Ok(partial results) with status "cancelled".
+      // Persist the id so transfer finalization cannot race into "completed".
+      if (update.status === 'cancelled') {
+        localState.lastCancelledOperationId = update.operation_id;
+      }
+
       const percent = update.total > 0 ? (update.current / update.total) * 100 : 0;
       if (localState.currentProgressOperationId === update.operation_id) {
         updateProgressFlow(percent, update.current_item || '');
       }
-
-
     };
 
     const handleNativeDropHover = (event: { payload: NativeFileDropEventPayload }) => {

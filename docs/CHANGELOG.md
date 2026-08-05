@@ -8,7 +8,14 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
-No unreleased changes.
+### Fixed
+- Cancelling a copy/move no longer races operation history into "Completed".
+  History stays cancelled, partial results can be undone, and success toasts are
+  suppressed. The backend returns any completed items with a `cancelled`
+  progress status instead of treating cancel as a hard error.
+- Archive extraction now re-checks that final output paths stay under the chosen
+  destination after join/rename (ZIP/TAR/RAR), and TAR skips symlink/special
+  entries so unpack cannot plant out-of-tree links.
 
 ---
 

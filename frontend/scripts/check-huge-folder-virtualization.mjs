@@ -86,7 +86,9 @@ assertContains('frontend/src/lib/app/core.ts', [
 
 assertContains('frontend/src/lib/app/setup.ts', [
   'localState.currentProgressCancel',
-  'Promise.resolve(localState.currentProgressCancel()).catch(showError)',
+  'Promise.resolve(localState.currentProgressCancel())',
+  'lastCancelledOperationId',
+  "update.status === 'cancelled'",
 ], 'progress cancel callback wiring');
 
 assertContains('frontend/src/lib/fileNavigationPrimary.ts', [

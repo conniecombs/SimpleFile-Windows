@@ -440,6 +440,7 @@ fn extract_zip(path: &str, dest: &Path) -> Result<(), String> {
     for (i, relative_path) in planned_paths.iter().enumerate() {
         let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
         let outpath = output_path_for_entry(&dest_canonical, relative_path, root_remap.as_ref());
+        ensure_extract_path_within_destination(&dest_canonical, &outpath)?;
         if file.is_dir() {
             create_dir_all(&outpath)?;
         } else {
@@ -447,6 +448,7 @@ fn extract_zip(path: &str, dest: &Path) -> Result<(), String> {
                 create_dir_all(parent)?;
             }
             let final_outpath = unique_file_path_if_needed(&outpath);
+            ensure_extract_path_within_destination(&dest_canonical, &final_outpath)?;
             let mut outfile = create_file(&final_outpath)?;
             copy_entry_data(&mut file, &mut outfile, &final_outpath)?;
         }
@@ -471,8 +473,12 @@ fn extract_tar(path: &str, dest: &Path, compression: Option<&str>) -> Result<(),
 
             let relative_path = archive_entry_relative_path(&entry_path, "Tar")?;
             let outpath = dest_canonical.join(&relative_path);
+            ensure_extract_path_within_destination(dest_canonical, &outpath)?;
             let entry_type = entry.header().entry_type();
 
+            // Only extract regular files and directories. Symlinks, hard links,
+            // and special device nodes are skipped so archives cannot plant
+            // out-of-tree link targets during extraction.
             if entry_type.is_dir() {
                 create_dir_all(&outpath)?;
             } else if entry_type.is_file() {
@@ -480,6 +486,7 @@ fn extract_tar(path: &str, dest: &Path, compression: Option<&str>) -> Result<(),
                     create_dir_all(parent)?;
                 }
                 let final_outpath = unique_file_path_if_needed(&outpath);
+                ensure_extract_path_within_destination(dest_canonical, &final_outpath)?;
                 entry.unpack(&final_outpath).map_err(|e| {
                     format!(
                         "Failed to extract tar entry to {}: {}",
@@ -520,6 +527,7 @@ fn extract_rar(path: &str, dest: &Path) -> Result<(), String> {
     {
         let entry_path = header.entry().filename.clone();
         let outpath = dest_canonical.join(archive_entry_relative_path(&entry_path, "RAR")?);
+        ensure_extract_path_within_destination(&dest_canonical, &outpath)?;
         if header.entry().is_directory() {
             create_dir_all(&outpath)?;
             archive = header
@@ -530,6 +538,7 @@ fn extract_rar(path: &str, dest: &Path) -> Result<(), String> {
                 create_dir_all(parent)?;
             }
             let final_outpath = unique_file_path_if_needed(&outpath);
+            ensure_extract_path_within_destination(&dest_canonical, &final_outpath)?;
             archive = header
                 .extract_to(&final_outpath)
                 .map_err(|e| format!("Failed to extract RAR entry: {e}"))?;
@@ -586,6 +595,44 @@ fn archive_entry_relative_path_from_name(
     }
 
     Ok(relative_path)
+}
+
+/// Belt-and-suspenders check: after joining a validated relative entry onto the
+/// canonical destination, refuse any output path that escapes the extract root.
+///
+/// Uses a case-insensitive prefix compare on Windows so mixed-case dest paths
+/// cannot bypass the guard, and requires a path-separator boundary so
+/// `C:\dest-evil` is not treated as inside `C:\dest`.
+fn ensure_extract_path_within_destination(dest: &Path, candidate: &Path) -> Result<(), String> {
+    let dest_key = path_prefix_key(dest);
+    let candidate_key = path_prefix_key(candidate);
+
+    if candidate_key == dest_key {
+        return Ok(());
+    }
+
+    let dest_with_sep = if dest_key.ends_with(['\\', '/']) {
+        dest_key.clone()
+    } else {
+        format!("{dest_key}\\")
+    };
+
+    // Compare with both separators normalized so mixed slash styles still match.
+    let dest_norm = dest_with_sep.replace('/', "\\");
+    let candidate_norm = candidate_key.replace('/', "\\");
+
+    if candidate_norm.starts_with(&dest_norm) {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Archive entry escapes destination: {}",
+        candidate.display()
+    ))
+}
+
+fn path_prefix_key(path: &Path) -> String {
+    path.to_string_lossy().to_lowercase()
 }
 
 fn is_windows_special_component(part: &str) -> bool {
@@ -1599,6 +1646,28 @@ mod tests {
         assert!(zip_entry_relative_path("folder/CON.txt").is_err());
         assert!(zip_entry_relative_path("folder/bad?.txt").is_err());
         assert!(zip_entry_relative_path("folder\0evil.txt").is_err());
+    }
+
+    #[test]
+    fn extract_path_must_remain_within_destination() {
+        let dest = PathBuf::from(r"C:\Users\demo\extract-root");
+        ensure_extract_path_within_destination(&dest, &dest.join("safe.txt"))
+            .expect("nested safe path");
+        ensure_extract_path_within_destination(&dest, &dest.join("folder").join("nested.bin"))
+            .expect("deep nested safe path");
+        ensure_extract_path_within_destination(&dest, &dest).expect("destination itself");
+
+        let sibling_escape = PathBuf::from(r"C:\Users\demo\extract-root-evil\file.txt");
+        assert!(
+            ensure_extract_path_within_destination(&dest, &sibling_escape).is_err(),
+            "prefix sibling must not count as inside dest"
+        );
+
+        let parent_escape = PathBuf::from(r"C:\Users\demo\outside.txt");
+        assert!(
+            ensure_extract_path_within_destination(&dest, &parent_escape).is_err(),
+            "parent path must be rejected"
+        );
     }
 
     #[test]

@@ -15,6 +15,8 @@ npm run check:rust
 
 ## 1. Tighten Archive Extraction Safety For TAR And RAR
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
 SimpleFile is a file manager, so archive extraction is one of the highest-risk
@@ -26,27 +28,21 @@ ZIP handling already has stronger Windows-specific validation. TAR and RAR
 entry handling should match it so every supported archive format follows the
 same safety contract.
 
-### Current Evidence
+### Completed Change
 
-- `src-tauri/src/archive.rs` has ZIP-specific validation in
-  `zip_entry_relative_path`.
-- ZIP entries reject Windows drive-relative names such as `C:evil.txt`.
-- TAR and RAR use `archive_entry_relative_path`, which rejects parent/root/prefix
-  components but does not apply the same colon and ADS-like component checks.
-- `is_windows_special_component` already exists and can be reused or generalized.
-
-### Recommended Change
-
-- Extract a shared archive component validator that rejects:
-  - Parent traversal such as `..`.
-  - Absolute/rooted entries.
-  - Windows drive-relative names such as `C:evil.txt`.
-  - Windows ADS-like names such as `file.txt:stream`.
-  - Empty final paths.
-  - NUL bytes where raw archive names are strings.
-- Route ZIP, TAR, and RAR entry normalization through the same validator.
-- Keep archive listing tolerant enough to report readable safe entries, but make
-  extraction fail loudly when an unsafe path is encountered.
+- ZIP, TAR, and RAR entry normalization share
+  `archive_entry_relative_path_from_name`.
+- Shared validation rejects parent traversal, absolute/rooted entries, Windows
+  drive-relative names (`C:evil.txt`), ADS-like components (`file.txt:stream`),
+  reserved device names, invalid Windows filename characters, empty paths, and
+  NUL bytes.
+- Listing skips unsafe entries and reports them in `unsafe_entries`; extraction
+  fails loudly on unsafe paths.
+- Extraction also runs `ensure_extract_path_within_destination` after path join
+  (and after collision rename) so zip-slip style escapes cannot write outside
+  the chosen destination even if relative validation is bypassed.
+- TAR extraction only unpacks regular files and directories (symlinks / special
+  nodes are skipped).
 
 ### Files To Inspect
 

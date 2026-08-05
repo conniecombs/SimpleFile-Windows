@@ -1790,12 +1790,53 @@ const defaultColorLabels = [
       title: transferProgressTitle(action),
     });
     const label = sources.length === 1 ? basename(sources[0]) : `${sources.length} items`;
+    // Track cancel separately from history status so a late Ok result cannot
+    // complete/undo-race against an explicit user cancel.
+    let cancelRequested = false;
+    if (localState.lastCancelledOperationId === operationId) {
+      localState.lastCancelledOperationId = null;
+    }
     showProgressFlow(transferProgressTitle(action), label, 0, operationId, {
-      onCancel: () => cancelOperationLog(historyId),
+      onCancel: () => {
+        cancelRequested = true;
+        cancelOperationLog(historyId);
+      },
     });
+
+    const finalizeCancelledTransfer = async (transferred: TransferResult[]) => {
+      const detail = transferred.length > 0
+        ? `Cancelled after ${transferred.length} item${transferred.length === 1 ? '' : 's'}`
+        : 'Cancelled';
+      // force=true so a first cancel ("Cancelling…") can be refined with the final count
+      updateOperationLogEntry(historyId, {
+        detail,
+        finishedAt: Date.now(),
+        status: 'cancelled',
+      }, true);
+
+      if (options.pushUndo !== false && transferred.length > 0) {
+        const description = `Cancelled ${action === 'move' ? 'move' : 'copy'} (${transferred.length} item${transferred.length === 1 ? '' : 's'})`;
+        if (action === 'copy') addCopyUndo(transferred, destination, description);
+        else addMoveUndo(transferred, destination, description);
+      }
+
+      await refreshTransferSurfaces();
+      return transferred;
+    };
 
     try {
       const transferred = await runTransferCommand(sources, destination, action, conflictAction, operationId);
+      const historyStatus = operationLogEntry(historyId)?.status;
+      const backendCancelled = localState.lastCancelledOperationId === operationId;
+      const wasCancelled = cancelRequested || historyStatus === 'cancelled' || backendCancelled;
+
+      if (wasCancelled) {
+        if (localState.lastCancelledOperationId === operationId) {
+          localState.lastCancelledOperationId = null;
+        }
+        return finalizeCancelledTransfer(transferred);
+      }
+
       updateProgressFlow(100, label);
       completeOperationLog(
         historyId,
@@ -1814,8 +1855,12 @@ const defaultColorLabels = [
       }
       return transferred;
     } catch (error) {
-      if (isCancellationError(error)) cancelOperationLog(historyId);
-      else failOperationLog(historyId, error);
+      if (cancelRequested || isCancellationError(error)) {
+        // Do not rethrow cancellations: callers treat thrown errors as failures
+        // and would surface a spurious "Operation cancelled" toast.
+        return finalizeCancelledTransfer([]);
+      }
+      failOperationLog(historyId, error);
       throw error;
     } finally {
       window.setTimeout(() => {
@@ -2165,7 +2210,9 @@ const defaultColorLabels = [
       const activePane = appState.activePane as PaneId;
       const action: TransferAction = appState.clipboardAction === 'copy' ? 'copy' : 'move';
       const pasted = await transferEntriesWithSafety(paths, pathForPane(activePane), action);
-      if (appState.clipboardAction === 'cut') {
+      // Only clear a cut clipboard after a full successful move. Cancelled or
+      // partial transfers leave the remaining sources on the clipboard.
+      if (appState.clipboardAction === 'cut' && pasted.length === paths.length) {
         appState.clipboard = null;
         appState.clipboardAction = null;
       }
@@ -2180,7 +2227,7 @@ const defaultColorLabels = [
         );
       }
     } catch (error) {
-      showError(error);
+      if (!isCancellationError(error)) showError(error);
     }
   }
 
@@ -2498,7 +2545,7 @@ const defaultColorLabels = [
         { successMessage: action === 'copy' ? 'Copied to other pane' : 'Moved to other pane' },
       );
     } catch (error) {
-      showError(error);
+      if (!isCancellationError(error)) showError(error);
     }
   }
 
@@ -2553,7 +2600,7 @@ const defaultColorLabels = [
       if (activePane === 'secondary') await refreshSecondaryPane();
       else await refreshCurrentDirectory();
     } catch (error) {
-      showError(error);
+      if (!isCancellationError(error)) showError(error);
     }
   }
 
@@ -2594,7 +2641,7 @@ const defaultColorLabels = [
       if (activePane === 'secondary') await refreshSecondaryPane();
       else await refreshCurrentDirectory();
     } catch (error) {
-      showError(error);
+      if (!isCancellationError(error)) showError(error);
     }
   }
 
