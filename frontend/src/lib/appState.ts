@@ -173,6 +173,13 @@ export interface SimpleFileAppState {
   secondarySelectedEntries: Set<PathString>;
   secondaryHistory: PathString[];
   secondaryHistoryIndex: number;
+  /** Primary pane path is UNC / mapped network (defers heavy lazy work). */
+  primaryPathIsNetwork: boolean;
+  /** Secondary pane path is UNC / mapped network. */
+  secondaryPathIsNetwork: boolean;
+  /** Listing still streaming chunks for the primary pane. */
+  primaryListingInProgress: boolean;
+  secondaryListingInProgress: boolean;
   currentArchive: ArchiveInfo | null;
   searchQuery: string;
   searchResults: Array<SearchResult | FileEntry>;
@@ -269,6 +276,10 @@ export function createInitialAppState(): SimpleFileAppState {
     secondarySelectedEntries: new Set(),
     secondaryHistory: [],
     secondaryHistoryIndex: -1,
+    primaryPathIsNetwork: false,
+    secondaryPathIsNetwork: false,
+    primaryListingInProgress: false,
+    secondaryListingInProgress: false,
     currentArchive: null,
     searchQuery: '',
     searchResults: [],

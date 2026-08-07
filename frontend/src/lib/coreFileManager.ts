@@ -88,6 +88,30 @@ export function createFallbackDriveForPath(path: PathString): DriveInfo | null {
   };
 }
 
+/** UNC or mapped network drive letter (uses drive list when available). */
+export function isNetworkFsPath(path: PathString, drives: DriveInfo[] = []): boolean {
+  const trimmed = (path || '').trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed.startsWith('\\\\') || trimmed.startsWith('//')) {
+    return true;
+  }
+
+  const match = /^([a-zA-Z]):/.exec(trimmed);
+  if (!match) {
+    return false;
+  }
+
+  const root = `${match[1].toUpperCase()}:\\`;
+  const drive = drives.find((candidate) => {
+    const candidateRoot = String(candidate.path || '').replace(/\//g, '\\').toUpperCase();
+    return candidateRoot === root || candidateRoot === root.slice(0, 2);
+  });
+
+  return String(drive?.drive_type || '').toLowerCase() === 'network';
+}
+
 export function isValidFileName(name: string) {
   const trimmed = name.trim();
   const baseName = name.split('.')[0]?.replace(/ +$/, '').toUpperCase() || '';

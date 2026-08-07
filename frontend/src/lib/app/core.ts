@@ -74,6 +74,7 @@ import {
     formatModified,
     formatFileSize,
     getParentPath,
+    isNetworkFsPath,
     isValidFileName,
     joinPath,
     visibleEntries,
@@ -1503,18 +1504,44 @@ const defaultColorLabels = [
       resetPassiveMetricFailures();
       resetSearchStateForNavigation();
       appState.isNavigating = true;
+      appState.primaryListingInProgress = true;
       appState.currentPath = path;
       appState.entries = [];
       appState.filteredEntries = [];
-      const listing = await getActiveFileSystem().listDirectory(path);
-      if (token !== localState.navigationToken) return;
-
-      appState.currentPath = listing.path;
-      appState.entries = listing.entries;
       appState.selectedEntries = new Set();
       appState.focusedIndex = -1;
       appState.lastSelectedIndex = -1;
       appState.filterQuery = '';
+      appState.primaryPathIsNetwork = isNetworkFsPath(path, appState.drives || []);
+
+      let progressive: FileEntry[] = [];
+      let firstChunkPainted = false;
+
+      const listing = await getActiveFileSystem().listDirectory(path, {
+        onChunk: (chunk) => {
+          if (token !== localState.navigationToken) return;
+          if (typeof chunk.is_network === 'boolean') {
+            appState.primaryPathIsNetwork = chunk.is_network;
+          }
+          if (chunk.path) {
+            appState.currentPath = chunk.path;
+          }
+          // Append streamed pages so the first viewport paints before enumeration finishes.
+          progressive = progressive.concat(chunk.entries || []);
+          appState.entries = progressive;
+          applyEntryFilters();
+          if (!firstChunkPainted && progressive.length > 0) {
+            firstChunkPainted = true;
+            appState.isNavigating = false;
+          }
+        },
+      });
+      if (token !== localState.navigationToken) return;
+
+      appState.currentPath = listing.path;
+      appState.entries = listing.entries;
+      appState.primaryPathIsNetwork = listing.is_network
+        ?? isNetworkFsPath(listing.path, appState.drives || []);
       recordHistory(listing.path, historyMode);
       applyEntryFilters();
       startDirectoryWatch(listing.path);
@@ -1535,6 +1562,7 @@ const defaultColorLabels = [
     } finally {
       if (token === localState.navigationToken) {
         appState.isNavigating = false;
+        appState.primaryListingInProgress = false;
       }
     }
   }
@@ -1546,12 +1574,34 @@ const defaultColorLabels = [
       cancelFolderMetricWork();
       clearThumbnailCache();
       resetPassiveMetricFailures();
-      const listing = await getActiveFileSystem().listDirectory(path);
+      appState.secondaryListingInProgress = true;
+      appState.secondaryPath = path;
+      appState.secondaryEntries = [];
+      appState.secondaryFilteredEntries = [];
+      appState.secondarySelectedEntries = new Set();
+      appState.secondaryPathIsNetwork = isNetworkFsPath(path, appState.drives || []);
+
+      let progressive: FileEntry[] = [];
+      const listing = await getActiveFileSystem().listDirectory(path, {
+        onChunk: (chunk) => {
+          if (token !== localState.secondaryNavigationToken) return;
+          if (typeof chunk.is_network === 'boolean') {
+            appState.secondaryPathIsNetwork = chunk.is_network;
+          }
+          if (chunk.path) {
+            appState.secondaryPath = chunk.path;
+          }
+          progressive = progressive.concat(chunk.entries || []);
+          appState.secondaryEntries = progressive;
+          applySecondaryEntryFilters();
+        },
+      });
       if (token !== localState.secondaryNavigationToken) return;
 
       appState.secondaryPath = listing.path;
       appState.secondaryEntries = listing.entries;
-      appState.secondarySelectedEntries = new Set();
+      appState.secondaryPathIsNetwork = listing.is_network
+        ?? isNetworkFsPath(listing.path, appState.drives || []);
       if (activate) appState.activePane = 'secondary';
       recordSecondaryHistory(listing.path, historyMode);
       applySecondaryEntryFilters();
@@ -1562,6 +1612,10 @@ const defaultColorLabels = [
         void refreshDrives({ quiet: true });
       } else {
         showError(error);
+      }
+    } finally {
+      if (token === localState.secondaryNavigationToken) {
+        appState.secondaryListingInProgress = false;
       }
     }
   }

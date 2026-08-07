@@ -162,3 +162,4 @@ if (process.exitCode) {
 }
 
 console.log('check-marquee-selection: ok');
+

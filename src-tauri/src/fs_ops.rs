@@ -50,41 +50,18 @@ pub async fn select_directory(
 }
 
 #[tauri::command]
-pub async fn list_directory(path: String) -> Result<DirectoryListing, String> {
-    if let Some(listing) = crate::archive::list_archive_directory(&path)? {
-        return Ok(listing);
-    }
-
-    let path_buf = validate_existing_path_no_resolve(&path)?;
-    if !path_buf.is_dir() {
-        return Err(format!("Path is not a directory: {path}"));
-    }
-
-    let current_path = path_buf.to_string_lossy().to_string();
-    let parent = path_buf.parent().map(|p| p.to_string_lossy().to_string());
-    let entries = tokio::task::spawn_blocking(move || -> Result<Vec<FileEntry>, String> {
-        let mut entries: Vec<FileEntry> = Vec::new();
-        let read_dir =
-            fs::read_dir(&path_buf).map_err(|e| format!("Failed to read directory: {e}"))?;
-
-        for entry in read_dir.flatten() {
-            if let Some(file_entry) = get_file_entry(&entry.path()) {
-                entries.push(file_entry);
-            }
-        }
-
-        entries.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
-
-        Ok(entries)
+pub async fn list_directory(
+    path: String,
+    on_chunk: tauri::ipc::Channel<crate::models::DirectoryListingChunk>,
+) -> Result<DirectoryListing, String> {
+    // Enumerate on a blocking worker so progressive chunks can stream while
+    // the async command stays responsive. Metadata comes from FindFirstFile /
+    // DirEntry data — no per-file re-stat for normal entries.
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::dir_list::list_directory_blocking(path, on_chunk)
     })
     .await
-    .map_err(|e| format!("Directory listing task panicked: {e}"))??;
-
-    Ok(DirectoryListing {
-        path: current_path,
-        parent,
-        entries,
-    })
+    .map_err(|e| format!("Directory listing task panicked: {e}"))?
 }
 
 #[tauri::command]

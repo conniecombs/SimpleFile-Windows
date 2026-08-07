@@ -53,6 +53,8 @@
   let measureFrame = 0;
   let lazyMetricsFrame = 0;
   let lazyThumbnailsFrame = 0;
+  /** Network paths defer folder metrics / thumbs until idle after listing settles. */
+  let networkHeavyWorkReady = $state(false);
   let marqueeFrame = 0;
   let marqueeAutoScrollFrame = 0;
   let marqueeRectElement: HTMLDivElement | null = null;
@@ -88,6 +90,14 @@
   let iconSize = $derived(Number(appState.iconSize || appState.settings?.defaultIconSize || 64));
   let showFolderSizes = $derived(appState.settings?.showFolderSizes !== false);
   let showItemCounts = $derived(visibleColumns.includes('items'));
+  let paneIsNetwork = $derived(
+    pane === 'primary' ? appState.primaryPathIsNetwork : appState.secondaryPathIsNetwork,
+  );
+  let paneListingInProgress = $derived(
+    pane === 'primary' ? appState.primaryListingInProgress : appState.secondaryListingInProgress,
+  );
+  /** Skip expensive Intl re-format while network listing is still streaming. */
+  let lightDateFormat = $derived(paneIsNetwork && (paneListingInProgress || !networkHeavyWorkReady));
   let gridItemWidth = $derived(Math.max(96, iconSize + GRID_ITEM_EXTRA_WIDTH));
   let gridItemHeight = $derived(Math.max(96, iconSize + GRID_ITEM_EXTRA_HEIGHT));
   let gridColumnCount = $derived.by(() => {
@@ -252,7 +262,9 @@
           isSymlink: entry.is_symlink,
           itemCount: formatItemCount(entry),
           git_status: entry.git_status || null,
-          modified: formatModified(entry.modified),
+          // On network paths, keep the backend's compact timestamp until idle so
+          // we avoid Intl.DateTimeFormat work across large remote listings.
+          modified: lightDateFormat ? (entry.modified || '') : formatModified(entry.modified),
           name: entry.name,
           path: entry.path,
           size: entry.is_dir ? formatDirectorySize(entry) : formatFileSize(entry.size, entry.is_dir),
@@ -271,6 +283,10 @@
     lazyThumbnailsFrame = requestAnimationFrame(() => {
       lazyThumbnailsFrame = 0;
       if (!appState.isGridView || imagePaths.length === 0) {
+        return;
+      }
+      // Network: wait until listing settles and the browser is idle.
+      if (paneIsNetwork && !networkHeavyWorkReady) {
         return;
       }
 
@@ -649,6 +665,12 @@
         return;
       }
 
+      // Network folder size/count walks are extremely expensive over SMB — wait
+      // until listing is done and the UI is idle.
+      if (paneIsNetwork && !networkHeavyWorkReady) {
+        return;
+      }
+
       // Avoid racing the shared backend size/count cancel flags while an
       // exclusive progress dialog (explicit folder metrics, transfers, etc.) is open.
       // Avoid racing shared backend size/count cancel flags while exclusive progress is open.
@@ -786,6 +808,55 @@
 
     queueVisibleThumbnails(imagePaths);
     queueVisibleFolderMetrics(visibleEntries);
+  });
+
+  // Gate heavy network work: only after listing completes, then on idle.
+  $effect(() => {
+    const isNetwork = paneIsNetwork;
+    const listingBusy = paneListingInProgress;
+    const path = pane === 'primary' ? appState.currentPath : appState.secondaryPath;
+
+    if (!isNetwork) {
+      networkHeavyWorkReady = true;
+      return;
+    }
+
+    networkHeavyWorkReady = false;
+    if (listingBusy) {
+      return;
+    }
+
+    let cancelled = false;
+    const enable = () => {
+      if (!cancelled) {
+        networkHeavyWorkReady = true;
+      }
+    };
+
+    let idleHandle: number | null = null;
+    let timeoutHandle: number | null = null;
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+
+    if (typeof win.requestIdleCallback === 'function') {
+      idleHandle = win.requestIdleCallback(enable, { timeout: 1800 });
+    } else {
+      timeoutHandle = window.setTimeout(enable, 450);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle != null && typeof win.cancelIdleCallback === 'function') {
+        win.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutHandle != null) {
+        window.clearTimeout(timeoutHandle);
+      }
+      // Re-run when path changes.
+      void path;
+    };
   });
 </script>
 

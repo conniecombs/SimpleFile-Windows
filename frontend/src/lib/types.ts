@@ -41,6 +41,18 @@ export interface DirectoryListing {
   path: PathString;
   parent: Nullable<PathString>;
   entries: FileEntry[];
+  /** True when the listed path is a UNC share or mapped network drive. */
+  is_network?: boolean;
+}
+
+/** Progressive chunk streamed while `list_directory` enumerates. */
+export interface DirectoryListingChunk {
+  path: PathString;
+  parent: Nullable<PathString>;
+  entries: FileEntry[];
+  chunk_index: number;
+  done: boolean;
+  is_network: boolean;
 }
 
 export interface ProgressUpdate {
@@ -275,7 +287,7 @@ export interface TauriCommandMap {
   get_home_dir: CommandContract<NoArgs, string>;
   select_directory: CommandContract<{ defaultPath: Nullable<PathString> }, Nullable<PathString>>;
   list_drives: CommandContract<NoArgs, DriveInfo[]>;
-  list_directory: CommandContract<{ path: PathString }, DirectoryListing>;
+  list_directory: CommandContract<{ path: PathString; onChunk: unknown }, DirectoryListing>;
   list_subdirectories: CommandContract<{ path: PathString }, TreeNode[]>;
   create_directory: CommandContract<{ path: PathString; name: string }, string>;
   create_file: CommandContract<{ path: PathString; name: string }, string>;

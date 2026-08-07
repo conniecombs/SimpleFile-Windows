@@ -18,27 +18,27 @@ pub(crate) fn dirs_home() -> Result<String, String> {
         .map_err(|_| "Could not determine home directory".to_string())
 }
 
-pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
-    // Use symlink_metadata (lstat) to detect symlinks without following them.
-    let symlink_meta = fs::symlink_metadata(path).ok()?;
-    let is_symlink = symlink_meta.file_type().is_symlink();
+pub(crate) fn format_system_time(time: std::time::SystemTime) -> String {
+    let datetime: DateTime<Local> = time.into();
+    datetime.format("%Y-%m-%d %H:%M").to_string()
+}
 
-    // For size/modified/is_dir we still use follow-the-symlink metadata so
-    // directories and files reported by symlinks behave as users expect.
-    let metadata = fs::metadata(path).unwrap_or(symlink_meta);
+fn format_modified(meta: &fs::Metadata) -> String {
+    meta.modified()
+        .map(format_system_time)
+        .unwrap_or_else(|_| String::from("-"))
+}
 
+fn build_file_entry(
+    path: &Path,
+    is_dir: bool,
+    is_symlink: bool,
+    size: u64,
+    modified: String,
+    symlink_target: Option<String>,
+) -> Option<FileEntry> {
     let name = path.file_name()?.to_string_lossy().to_string();
     let file_path = path.to_string_lossy().to_string();
-
-    let modified = metadata.modified().map_or_else(
-        |_| String::from("-"),
-        |t| {
-            let datetime: DateTime<Local> = t.into();
-            datetime.format("%Y-%m-%d %H:%M").to_string()
-        },
-    );
-
-    let is_dir = metadata.is_dir();
     let extension = if is_dir {
         String::new()
     } else {
@@ -47,7 +47,45 @@ pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
             .unwrap_or_default()
     };
 
-    // Read the symlink target if applicable
+    Some(FileEntry {
+        name,
+        path: file_path,
+        is_dir,
+        is_symlink,
+        size,
+        modified,
+        extension,
+        permissions: None,
+        symlink_target,
+        git_status: None,
+    })
+}
+
+/// Build a `FileEntry` from a path. Uses a single `symlink_metadata` call for
+/// normal files/dirs. Only follows / `read_link`s when the node is a symlink.
+pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
+    let symlink_meta = fs::symlink_metadata(path).ok()?;
+    let is_symlink = symlink_meta.file_type().is_symlink();
+
+    // Properties / single-item info: follow symlink targets so size/type match
+    // what users open. Listing uses DirEntry / FindFirstFile and never follows.
+    let (is_dir, size, modified) = if is_symlink {
+        match fs::metadata(path) {
+            Ok(followed) => (followed.is_dir(), followed.len(), format_modified(&followed)),
+            Err(_) => (
+                symlink_meta.is_dir(),
+                symlink_meta.len(),
+                format_modified(&symlink_meta),
+            ),
+        }
+    } else {
+        (
+            symlink_meta.is_dir(),
+            symlink_meta.len(),
+            format_modified(&symlink_meta),
+        )
+    };
+
     let symlink_target = if is_symlink {
         fs::read_link(path)
             .ok()
@@ -56,20 +94,76 @@ pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
         None
     };
 
-    let permissions: Option<String> = None;
+    build_file_entry(path, is_dir, is_symlink, size, modified, symlink_target)
+}
 
-    Some(FileEntry {
-        name,
-        path: file_path,
+/// Build a `FileEntry` from a `DirEntry` without re-opening the path for normal
+/// files. `DirEntry::metadata()` reuses find-data on Windows; we only
+/// `read_link` (never full follow-stat) when the entry is a symlink/reparse.
+pub(crate) fn get_file_entry_from_dir_entry(entry: &fs::DirEntry) -> Option<FileEntry> {
+    let path = entry.path();
+    let file_type = entry.file_type().ok()?;
+    let is_symlink = file_type.is_symlink();
+
+    // Prefer DirEntry metadata (cheap / cached from enumeration).
+    let meta = entry.metadata().ok()?;
+    let is_dir = if is_symlink {
+        // Symlink file_type is not a dir; directory symlinks still carry the
+        // directory attribute on the reparse metadata on Windows.
+        meta.is_dir() || file_type.is_dir()
+    } else {
+        file_type.is_dir() || meta.is_dir()
+    };
+
+    let symlink_target = if is_symlink {
+        fs::read_link(&path)
+            .ok()
+            .map(|t| t.to_string_lossy().to_string())
+    } else {
+        None
+    };
+
+    build_file_entry(
+        &path,
         is_dir,
         is_symlink,
-        size: metadata.len(),
-        modified,
-        extension,
-        permissions,
+        meta.len(),
+        format_modified(&meta),
         symlink_target,
-        git_status: None,
-    })
+    )
+}
+
+/// True for UNC paths (`\\server\share`) and mapped network drive letters.
+pub(crate) fn is_network_path(path: &Path) -> bool {
+    let raw = path.to_string_lossy();
+    let trimmed = raw.trim();
+    if trimmed.starts_with("\\\\") || trimmed.starts_with("//") {
+        return true;
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use winapi::um::fileapi::GetDriveTypeW;
+        use winapi::um::winbase::DRIVE_REMOTE;
+
+        let bytes = trimmed.as_bytes();
+        if bytes.len() >= 2 && bytes[1] == b':' {
+            let letter = bytes[0].to_ascii_uppercase() as char;
+            if letter.is_ascii_alphabetic() {
+                let root = format!("{letter}:\\");
+                let wide: Vec<u16> = std::ffi::OsStr::new(&root)
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect();
+                let drive_type = unsafe { GetDriveTypeW(wide.as_ptr()) };
+                return drive_type == DRIVE_REMOTE;
+            }
+        }
+    }
+
+    let _ = path;
+    false
 }
 
 pub(crate) fn generate_operation_id() -> String {

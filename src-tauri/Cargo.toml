@@ -54,7 +54,7 @@ tauri-plugin-dialog = "2"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["accctrl", "aclapi", "fileapi", "minwindef", "winbase", "winerror", "winnetwk", "winnt"] }
+winapi = { version = "0.3", features = ["accctrl", "aclapi", "errhandlingapi", "fileapi", "handleapi", "minwinbase", "minwindef", "winbase", "winerror", "winnetwk", "winnt"] }
 
 [features]
 default = ["custom-protocol"]

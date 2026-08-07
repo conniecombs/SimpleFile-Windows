@@ -355,6 +355,7 @@ pub(crate) fn list_archive_directory(path: &str) -> Result<Option<DirectoryListi
         path: build_virtual_archive_path(&parsed.archive_path, &parsed.inner_path),
         parent,
         entries,
+        is_network: false,
     }))
 }
 

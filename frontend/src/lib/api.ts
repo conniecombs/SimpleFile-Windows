@@ -1,3 +1,4 @@
+import { Channel } from '@tauri-apps/api/core';
 import { invokeCommand, listenToEvent } from './tauri';
 import type { EventCallback, UnlistenFn } from './tauri';
 import type {
@@ -9,6 +10,7 @@ import type {
   ColorLabelTag,
   ConflictAction,
   DirectoryListing,
+  DirectoryListingChunk,
   DriveInfo,
   DuplicateGroup,
   FileChangeEvent,
@@ -49,8 +51,20 @@ export function listDrives(): Promise<DriveInfo[]> {
   return invokeCommand('list_drives');
 }
 
-export function listDirectory(path: PathString): Promise<DirectoryListing> {
-  return invokeCommand('list_directory', { path });
+export type ListDirectoryOptions = {
+  /** Called as soon as each enumeration chunk is ready (first page first). */
+  onChunk?: (chunk: DirectoryListingChunk) => void;
+};
+
+export function listDirectory(
+  path: PathString,
+  options?: ListDirectoryOptions,
+): Promise<DirectoryListing> {
+  const onChunk = new Channel<DirectoryListingChunk>();
+  onChunk.onmessage = (chunk) => {
+    options?.onChunk?.(chunk);
+  };
+  return invokeCommand('list_directory', { path, onChunk });
 }
 
 export function listSubdirectories(path: PathString): Promise<TreeNode[]> {

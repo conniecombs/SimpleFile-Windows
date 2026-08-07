@@ -31,6 +31,20 @@ pub struct DirectoryListing {
     pub path: String,
     pub parent: Option<String>,
     pub entries: Vec<FileEntry>,
+    /// True when the listed path is a UNC share or a mapped network drive.
+    #[serde(default)]
+    pub is_network: bool,
+}
+
+/// Progressive listing chunk streamed to the frontend while enumeration runs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirectoryListingChunk {
+    pub path: String,
+    pub parent: Option<String>,
+    pub entries: Vec<FileEntry>,
+    pub chunk_index: u32,
+    pub done: bool,
+    pub is_network: bool,
 }
 
 /// Progress update for long-running operations
