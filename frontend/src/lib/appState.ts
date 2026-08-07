@@ -116,13 +116,8 @@ export interface OperationLogEntry {
   title: string;
 }
 
-export interface FileTag {
-  color: string;
-  emoji?: string;
-  id?: number;
-  label?: string;
-  name?: string;
-}
+/** @deprecated Prefer ColorLabelTag from types.ts */
+export type FileTag = import('./types').ColorLabelTag;
 
 export interface FolderStackItem {
   id: string | number;
@@ -195,7 +190,7 @@ export interface SimpleFileAppState {
   clipboardHistory: ClipboardHistoryItem[];
   operationHistory: OperationLogEntry[];
   fileTags: Record<PathString, FileTag>;
-  tags: any[];
+  tags: FileTag[];
 }
 
 export function createDefaultSettings(): AppSettings {

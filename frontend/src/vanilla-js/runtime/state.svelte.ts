@@ -217,23 +217,51 @@ export function loadSettings() {
   }
 }
 
+const LEGACY_TABS_KEY = 'simplefile-tabs';
+const LEGACY_ACTIVE_TAB_KEY = 'simplefile-active-tab';
+
+function clearLegacyTabKeys() {
+  try {
+    localStorage.removeItem(LEGACY_TABS_KEY);
+    localStorage.removeItem(LEGACY_ACTIVE_TAB_KEY);
+  } catch {
+    // Ignore storage failures while cleaning legacy keys.
+  }
+}
+
+/**
+ * Persist tabs through the workspace layout snapshot only.
+ * Legacy simplefile-tabs keys are cleared after a successful write so there is
+ * a single source of truth.
+ */
 export function saveTabs() {
   try {
-    localStorage.setItem('simplefile-tabs', JSON.stringify(state.tabs));
-    localStorage.setItem('simplefile-active-tab', state.activeTabId ?? '');
+    saveWorkspaceLayout();
+    clearLegacyTabKeys();
   } catch (error) {
     console.warn('Could not save tabs:', error);
   }
 }
 
+/**
+ * Load tabs when workspace layout did not already populate them.
+ * Falls back to legacy simplefile-tabs once, then migrates into workspace layout.
+ */
 export function loadTabs() {
+  if (Array.isArray(state.tabs) && state.tabs.length > 0) {
+    return true;
+  }
+
   try {
-    const saved = localStorage.getItem('simplefile-tabs');
-    const activeId = localStorage.getItem('simplefile-active-tab');
+    const saved = localStorage.getItem(LEGACY_TABS_KEY);
+    const activeId = localStorage.getItem(LEGACY_ACTIVE_TAB_KEY);
     if (saved) {
-      state.tabs = JSON.parse(saved) as FileTab[];
-      state.activeTabId = activeId || null;
-      return true;
+      state.tabs = sanitizeTabs(JSON.parse(saved));
+      state.activeTabId = activeId || state.tabs[0]?.id || null;
+      // Migrate immediately into workspace layout.
+      saveWorkspaceLayout();
+      clearLegacyTabKeys();
+      return state.tabs.length > 0;
     }
   } catch (error) {
     console.warn('Could not load tabs:', error);
@@ -367,6 +395,7 @@ export function currentWorkspaceLayout(): WorkspaceLayoutState {
 export function saveWorkspaceLayout() {
   try {
     localStorage.setItem(WORKSPACE_LAYOUT_KEY, JSON.stringify(currentWorkspaceLayout()));
+    clearLegacyTabKeys();
   } catch (error) {
     console.warn('Could not save workspace layout:', error);
   }
@@ -399,6 +428,8 @@ export function loadWorkspaceLayout() {
       state.currentPath = layout.primaryPath;
     }
 
+    // Workspace layout owns tabs going forward.
+    clearLegacyTabKeys();
     return true;
   } catch (error) {
     console.warn('Could not load workspace layout:', error);

@@ -14,6 +14,15 @@ export type ProgressStatus = 'running' | 'completed' | 'error' | 'cancelled' | (
 
 export type ColumnId = 'size' | 'items' | 'date' | 'type';
 
+/** Color label / tag returned by the tags Tauri commands. */
+export interface ColorLabelTag {
+  color: string;
+  emoji?: string;
+  id: number;
+  label?: string;
+  name: string;
+}
+
 export interface FileEntry {
   name: string;
   path: PathString;
@@ -329,13 +338,13 @@ export interface TauriCommandMap {
   install_update: CommandContract<NoArgs, void>;
   show_main_window: CommandContract<NoArgs, void>;
   get_git_file_statuses: CommandContract<{ path: PathString }, Record<string, string>>;
-  get_all_tags: CommandContract<NoArgs, any[]>;
-  create_tag: CommandContract<{ name: string; color: string }, any>;
+  get_all_tags: CommandContract<NoArgs, ColorLabelTag[]>;
+  create_tag: CommandContract<{ name: string; color: string }, ColorLabelTag>;
   update_tag: CommandContract<{ id: number; name: string; color: string }, void>;
   delete_tag: CommandContract<{ id: number }, void>;
   set_tags_for_path: CommandContract<{ path: string; tagIds: number[] }, void>;
-  get_tags_for_path: CommandContract<{ path: string }, any[]>;
-  get_all_file_tags: CommandContract<NoArgs, Record<string, any>>;
+  get_tags_for_path: CommandContract<{ path: string }, ColorLabelTag[]>;
+  get_all_file_tags: CommandContract<NoArgs, Record<string, ColorLabelTag>>;
   get_files_with_tag: CommandContract<{ tagId: number }, string[]>;
 }
 

@@ -67,7 +67,8 @@ assertContains('frontend/src/lib/components/archive-surfaces/ArchiveInfo.svelte'
 ], 'Stage 5 archive unsafe-entry warning');
 
 assertContains('frontend/src/lib/app/advanced_rename.ts', [
-  'renderAdvancedRenamePreview',
+  'setAdvancedRenamePreview',
+  'openAdvancedRenameUi',
   'async function showAdvancedRenameFlow',
   'async function applyAdvancedRenameFlow',
   'preflight-rename-row',
@@ -75,12 +76,18 @@ assertContains('frontend/src/lib/app/advanced_rename.ts', [
 ], 'Stage 5 advanced rename wiring');
 
 assertContains('frontend/src/lib/app/core.ts', [
-  'renderQuickLook',
+  'openQuickLookUi',
+  'closeQuickLookUi',
   'async function showQuickLookFlow',
   'showOperationHistoryFlow',
   'function showKeyboardHelpFlow',
+  'openKeyboardHelpUi',
+  'closeKeyboardHelpUi',
+  'openAboutUi',
+  'setAboutInfo',
   'function showProgressFlow',
   'showProgressUi',
+  'Calculating Folder Metrics',
 ], 'Stage 5 core overlay wiring');
 
 assertContains('frontend/src/lib/app/progressUi.svelte.ts', [
@@ -92,11 +99,34 @@ assertContains('frontend/src/lib/app/progressUi.svelte.ts', [
 assertContains('frontend/src/lib/app/setup.ts', [
   'const handleStage5OverlayClick',
   "document.addEventListener('simplefile:create-archive', handleCreateArchive);",
+  "document.addEventListener('simplefile:archive-extract', handleArchiveExtract);",
+  "document.addEventListener('simplefile:create-archive-confirm', handleCreateArchiveConfirm);",
   "document.addEventListener('simplefile:advanced-rename', handleAdvancedRename);",
+  "document.addEventListener('simplefile:advanced-rename-confirm', handleAdvancedRenameConfirm);",
+  "document.addEventListener('simplefile:quick-look-open', handleQuickLookOpen);",
   "document.addEventListener('simplefile:keyboard-help', handleKeyboardHelp);",
   "document.addEventListener('simplefile:operation-history', handleOperationHistory);",
   "document.addEventListener('click', handleStage5OverlayClick);",
 ], 'Stage 5 setup event wiring');
+
+assertContains('frontend/src/lib/app/archive.ts', [
+  'showArchiveViewer',
+  'openCreateArchiveUi',
+  'confirmCreateArchiveFlow',
+], 'Stage 5 archive component-owned flows');
+
+assertContains('frontend/src/lib/app/advanced_rename.ts', [
+  'openAdvancedRenameUi',
+  'closeAdvancedRenameUi',
+  'setAdvancedRenamePreview',
+  'formChecked',
+  'formString',
+], 'Stage 5 advanced rename component-owned flow');
+
+assertContains('frontend/src/lib/app/core.ts', [
+  'openQuickLookUi',
+  'closeQuickLookUi',
+], 'Stage 5 quick look component-owned flow');
 
 assertContains('frontend/src/lib/app/core.ts', [
   "commandId === 'ctx-open-with'",

@@ -21,8 +21,8 @@ Several older plan items are already done; the focus is on remaining work.
 | Renderer hardening | withGlobalTauri: false, modal HTML sanitization, guards |
 | Windows-only packaging | NSIS/MSI only; android/ios/icns removed |
 
-Note: ToDo.txt and parts of docs/IMPROVEMENT_PLAN.md are stale (they still
-describe shortcuts/layouts/filename validation as open work).
+Note: `ToDo.txt` is retired (points here). `docs/IMPROVEMENT_PLAN.md` primary
+sections are marked completed.
 
 ---
 
@@ -47,24 +47,25 @@ Docs:
 
 ---
 
-### 2. Replace DOM-ID workflow glue with component state — PARTIAL (2026-08-07)
+### 2. Replace DOM-ID workflow glue with component state — DONE (2026-08-07)
 
-Completed slices 1–2 (highest-impact overlay controllers):
+Completed migration slices:
 
-1. **Progress modal** — component-owned via `progressUi.svelte.ts` +
-   `ProgressModal.svelte`. Core `showProgressFlow` / `updateProgressFlow` /
-   `hideProgressFlow` write state, not DOM. Cancel is owned by the component.
-2. **Generic modal** — `modalUi.svelte.ts` + `GenericModal.svelte` for
-   confirm/prompt/html dialogs and Settings. HTML bodies still go through
-   `ModalBody` + `sanitizeModalHtml`. No more `innerHTML` / button wiring in
-   `core.ts` or settings open path in `setup.ts`.
-
-Still DOM-ID driven (follow-up slices):
-3. Search + smart-folder control chrome (inputs / results header)
-4. Archive create/list overlays (and advanced-rename, quicklook IDs)
+1. **Progress modal** — `progressUi.svelte.ts` + `ProgressModal.svelte`
+2. **Generic modal / Settings** — `modalUi.svelte.ts` + `GenericModal.svelte`
+3. **Search + smart-folder chrome** — `searchUi.svelte.ts`, ToolbarShell bind
+   for query/clear/cancel, ContentShell `SearchResultsHeader`, smart folder
+   save via prompt dialog (no `#smart-folder-name` DOM read)
+4. **Archive create/list** — `archiveUi.svelte.ts`, `ArchiveViewerModal.svelte`,
+   `CreateArchiveModal.svelte` (static OverlayShell archive markup removed)
+5. **About / keyboard-help** — `aboutUi.svelte.ts` + `AboutModal.svelte`,
+   `keyboardHelpUi.svelte.ts` + `KeyboardHelpModal.svelte` (static OverlayShell
+   markup removed; About no longer uses HTML dialog path)
+6. **Advanced rename form fields** — `advancedRenameUi.form` with bind:checked /
+   bind:value; plan generation via `formChecked` / `formString` (no DOM reads)
 
 Why (historical):
-- Controllers drove progress/modals via getElementById on OverlayShell markup.
+- Controllers drove overlays via getElementById on OverlayShell markup.
 
 ---
 
@@ -156,10 +157,10 @@ Key files:
 
 | Improvement | Notes |
 |---|---|
-| Tighten TypeScript `any` | Heavy in setup.ts event handlers and tag APIs (api.ts / appState.ts) |
-| Unify tab persistence | Both simplefile-tabs and workspace layout store tabs — risk of drift; one source of truth |
-| Refresh stale planning docs | Update IMPROVEMENT_PLAN.md / delete or rewrite ToDo.txt so they match reality |
-| Folder-metrics progress | Roadmap still wants clearer cancel/visibility for bulk size/count on huge trees |
+| Tighten TypeScript `any` | **Done:** typed setup event details; ColorLabelTag on tag APIs/appState |
+| Unify tab persistence | **Done:** workspace layout only; legacy simplefile-tabs migrates then clears |
+| Refresh stale planning docs | **Done:** ToDo.txt retired; IMPROVEMENT_PLAN primary items marked complete |
+| Folder-metrics progress | **Done:** per-folder progress line, cumulative size, cancel keeps partial results |
 
 ---
 
@@ -180,19 +181,20 @@ Out of scope (intentionally):
 
 1. ~~Installer smoke workflow~~ — done
 2. ~~Transfer progress (bytes / speed / ETA)~~ — done
-3. ~~Progress + generic modal off DOM IDs~~ — done (item 2 slices 1–2)
+3. ~~Progress + generic modal + search/archive off DOM IDs~~ — done (item 2)
 4. ~~Dual-pane keyboard focus~~ — done
 5. ~~Metadata expansion~~ — done (properties panel)
 6. ~~Mapped network drive error UX~~ — done
-7. Search/archive DOM-ID migration (item 2 slices 3–4)
-8. Type cleanup + doc sync — maintainability
+7. ~~Type cleanup + doc sync~~ — done
+8. ~~Advanced rename / Quick Look component ownership~~ — done
+9. ~~Folder-metrics progress polish~~ — done
 
 ---
 
 ## Candidate next implementations
 
-D) Search/archive off getElementById
-F) Type cleanup + doc sync
+(I) About / keyboard-help component ownership (low value)
+(J) Advanced-rename form fields fully reactive (large refactor)
 
 Pick one of the above (or another item from this file) as the next implementation slice.
 

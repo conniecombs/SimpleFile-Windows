@@ -6,6 +6,8 @@ export type ProgressPhase = 'idle' | 'running' | 'cancelling';
 export type ProgressTransferDetails = {
   /** Bytes completed so far (transfer ops). */
   currentBytes?: number | null;
+  /** Free-form secondary line (e.g. folder metrics) instead of byte totals. */
+  detailLine?: string | null;
   /** Known total bytes (may grow as the backend discovers files). */
   totalBytes?: number | null;
 };
@@ -13,6 +15,8 @@ export type ProgressTransferDetails = {
 export type ProgressUiState = {
   bytesPerSecond: number | null;
   currentBytes: number | null;
+  /** Non-byte progress detail (folder metrics, etc.). */
+  detailLine: string;
   etaSeconds: number | null;
   item: string;
   onCancel: (() => unknown) | null;
@@ -28,6 +32,7 @@ export type ProgressUiState = {
 export const progressUi = $state<ProgressUiState>({
   bytesPerSecond: null,
   currentBytes: null,
+  detailLine: '',
   etaSeconds: null,
   item: '',
   onCancel: null,
@@ -131,6 +136,7 @@ export function showProgressUi(
   progressUi.statusMessage = '';
   progressUi.currentBytes = details.currentBytes ?? null;
   progressUi.totalBytes = details.totalBytes ?? null;
+  progressUi.detailLine = details.detailLine ?? '';
   progressUi.bytesPerSecond = null;
   progressUi.etaSeconds = null;
   progressUi.visible = true;
@@ -156,8 +162,11 @@ export function updateProgressUi(
   if (details.totalBytes !== undefined) {
     progressUi.totalBytes = details.totalBytes;
   }
+  if (details.detailLine !== undefined) {
+    progressUi.detailLine = details.detailLine || '';
+  }
 
-  if (typeof progressUi.currentBytes === 'number') {
+  if (typeof progressUi.currentBytes === 'number' && !progressUi.detailLine) {
     noteByteSample(progressUi.currentBytes);
     recomputeEta(progressUi.currentBytes, progressUi.totalBytes);
   }
@@ -180,6 +189,7 @@ export function hideProgressUi() {
   progressUi.statusMessage = '';
   progressUi.currentBytes = null;
   progressUi.totalBytes = null;
+  progressUi.detailLine = '';
   progressUi.bytesPerSecond = null;
   progressUi.etaSeconds = null;
 }

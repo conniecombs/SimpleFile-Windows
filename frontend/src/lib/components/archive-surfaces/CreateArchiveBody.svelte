@@ -1,11 +1,13 @@
 <script lang="ts">
   let {
     defaultName = 'archive.zip',
-    format = 'zip',
+    format = $bindable('zip'),
+    name = $bindable(defaultName),
     selectedNames = [],
   }: {
     defaultName?: string;
     format?: string;
+    name?: string;
     selectedNames?: string[];
   } = $props();
 
@@ -19,11 +21,17 @@
 
 <div class="form-group">
   <label class="form-label" for="archive-name">Archive Name:</label>
-  <input type="text" class="form-input" id="archive-name" placeholder="archive.zip" value={defaultName} />
+  <input
+    type="text"
+    class="form-input"
+    id="archive-name"
+    placeholder="archive.zip"
+    bind:value={name}
+  />
 </div>
 <div class="form-group">
   <label class="form-label" for="archive-format">Format:</label>
-  <select class="form-input" id="archive-format" value={format}>
+  <select class="form-input" id="archive-format" bind:value={format}>
     {#each formats as option (option.value)}
       <option value={option.value}>{option.label}</option>
     {/each}
@@ -38,10 +46,10 @@
         <span>No files selected</span>
       </div>
     {:else}
-      {#each selectedNames as name, index (`${name}-${index}`)}
+      {#each selectedNames as fileName, index (`${fileName}-${index}`)}
         <div class="archive-file-item">
           <span class="icon" aria-hidden="true">📄</span>
-          <span>{name}</span>
+          <span>{fileName}</span>
         </div>
       {/each}
     {/if}

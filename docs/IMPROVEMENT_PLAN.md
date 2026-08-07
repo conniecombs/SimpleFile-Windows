@@ -70,6 +70,8 @@ npm run check
 
 ## 2. Make Backend Filename Validation Fully Windows-Aware
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
 The frontend rejects Windows-invalid filename characters, but the backend is the
@@ -77,36 +79,12 @@ real security and correctness boundary. If any future command path bypasses the
 frontend helper, the backend should still reject invalid names before calling
 filesystem operations.
 
-This also improves error consistency between dialogs, shortcuts, archive virtual
-paths, batch rename, and direct Tauri command calls.
+### Completed Change
 
-### Current Evidence
-
-- `frontend/src/lib/coreFileManager.ts` rejects Windows-invalid characters with
-  `isValidFileName`.
-- `src-tauri/src/utils.rs` currently rejects empty names, separators, `..`, and
-  `.`.
-- Backend validation does not currently mirror all Windows filename restrictions.
-
-### Recommended Change
-
-Update `validate_name` in `src-tauri/src/utils.rs` to reject:
-
-- Empty or whitespace-only names.
-- `.` and `..`.
-- Path separators.
-- Characters invalid on Windows: `< > : " / \ | ? *`.
-- ASCII control characters.
-- Reserved device names, with or without extension:
-  - `CON`
-  - `PRN`
-  - `AUX`
-  - `NUL`
-  - `COM1` through `COM9`
-  - `LPT1` through `LPT9`
-- Trailing spaces or trailing periods.
-- Names containing `..` only if that rule remains intentional. If kept, document
-  that this is stricter than Windows and is a SimpleFile policy choice.
+`validate_name` in `src-tauri/src/utils.rs` rejects empty/whitespace names,
+`.` / `..`, separators, Windows-invalid characters, control characters,
+reserved device names (with or without extension), and trailing spaces/periods.
+Focused Rust unit tests cover the policy.
 
 ### Files To Inspect
 
@@ -135,57 +113,20 @@ npm run check
 
 ## 3. Consolidate Symlink Copy Handling
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
 Symlink handling is easy to get subtly wrong on Windows. The app has already
 been hardened to operate on symlinks themselves for delete, rename, and move
 paths. Copy behavior should be just as consistent.
 
-There are multiple implementations that read a symlink target and choose
-`symlink_dir` or `symlink_file` based on `link_target.is_dir()`. For relative
-symlink targets, that check can be evaluated relative to the process current
-directory instead of the symlink's parent directory.
+### Completed Change
 
-### Current Evidence
-
-Similar symlink recreation logic appears in:
-
-- `src-tauri/src/fs_ops.rs` inside recursive directory copy.
-- `src-tauri/src/fs_ops.rs` inside resolved copy behavior.
-- `src-tauri/src/progress.rs` inside progress-aware transfers.
-
-### Recommended Change
-
-- Create one shared helper for recreating a symlink at a destination.
-- Resolve relative link targets against the symlink source parent only for the
-  purpose of classifying file vs directory.
-- Preserve the original symlink target text when creating the new link, so a
-  relative link remains relative after copy if that is the intended behavior.
-- Return consistent conflict errors if the destination already exists.
-- Use the helper from both normal and progress-aware transfer paths.
-
-### Files To Inspect
-
-- `src-tauri/src/fs_ops.rs`
-- `src-tauri/src/progress.rs`
-- `src-tauri/src/utils.rs`
-
-### Verification
-
-Add Windows Rust tests for:
-
-- Copying a symlink to a file recreates a symlink, not target bytes.
-- Copying a symlink to a directory recreates a directory symlink.
-- Relative symlink targets are classified relative to the symlink parent.
-- Existing destination conflicts are preserved.
-- Progress and non-progress copy paths behave the same way.
-
-Run:
-
-```powershell
-npm run check:rust
-npm run check
-```
+Shared `recreate_symlink` in `src-tauri/src/utils.rs` classifies targets
+relative to the symlink parent, preserves relative link text, reports
+destination conflicts, and is used from both `fs_ops` and `progress` copy
+paths. Unit tests cover relative file/dir links and conflicts.
 
 ## 4. Improve Huge-Folder Responsiveness
 
@@ -293,13 +234,10 @@ work easier.
 
 ### Remaining Follow-Up
 
-Progress and the generic modal/settings surface are component-owned via
-`progressUi.svelte.ts` / `ProgressModal.svelte` and `modalUi.svelte.ts` /
-`GenericModal.svelte`. Other overlay hosts still intentionally preserve DOM IDs
-because archive, advanced rename, Quick Look, and some search chrome still
-address those elements directly. A later UI slice can move one workflow at a
-time to component-owned state and events, then delete the corresponding DOM ID
-dependency.
+Progress, generic modal/settings, search chrome, and archive create/list are
+component-owned (`progressUi`, `modalUi`, `searchUi`, `archiveUi` + matching
+Svelte modals). Advanced rename and Quick Look still preserve DOM IDs for
+workflow controllers; a later slice can migrate those the same way.
 
 ### Files To Inspect
 
@@ -381,85 +319,36 @@ The workflow should prove:
 
 ## 7. Add Persisted Layouts And Shortcut Customization
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
-Once the core safety and responsiveness work is solid, the best user-facing
-quality-of-life improvement is remembering how people work. A file manager gets
-used repeatedly, so tabs, panes, columns, preview visibility, icon size, and
-keyboard shortcuts should feel personal and durable.
+A file manager is used repeatedly, so tabs, panes, columns, preview visibility,
+icon size, and keyboard shortcuts should feel personal and durable.
 
-The app already has a shortcut registry and settings persistence, so this can be
-added without changing the product scope.
+### Completed Change
 
-### Current Evidence
+- Workspace layout persistence via `simplefile-workspace-layout` (tabs, active
+  pane, dual-pane, paths, columns, preview, icon size, view mode).
+- Tabs no longer dual-write to legacy `simplefile-tabs`; workspace layout is
+  the single source of truth (legacy keys migrate once then clear).
+- Shortcut registry + Settings → Shortcuts customization with overrides,
+  conflict detection, and reset-to-default.
 
-- `frontend/src/lib/keyboardShortcuts.ts` exposes shortcut registration,
-  dispatching, cleanup, and `getShortcutMap`.
-- `frontend/src/lib/app/setup.ts` registers default shortcuts.
-- `src-tauri/src/db.rs` exposes `get_db_setting` and `set_db_setting`.
-- Settings already persist some view preferences.
-- `ToDo.txt` points to shortcut customization as a later step.
+### Remaining Optional Follow-Ups
 
-### Recommended Change
-
-Add two related but separate features:
-
-1. Persisted layouts:
-   - Tabs.
-   - Active pane.
-   - Dual-pane enabled state.
-   - Pane paths.
-   - Column visibility.
-   - Column widths.
-   - Preview pane visibility.
-   - Icon size and view mode.
-
-2. Shortcut customization:
-   - Store overrides by shortcut ID.
-   - Keep default shortcuts as fallback.
-   - Detect duplicate key combinations before saving.
-   - Provide reset-to-default per shortcut and reset-all.
-   - Keep developer tools shortcuts available in dev mode.
-   - Continue ignoring file-operation shortcuts while typing in text fields.
-
-### Files To Inspect
-
-- `frontend/src/lib/keyboardShortcuts.ts`
-- `frontend/src/lib/app/setup.ts`
-- `frontend/src/lib/app/core.ts`
-- `frontend/src/lib/appState.ts`
-- `frontend/src/vanilla-js/runtime/state.svelte.ts`
-- `frontend/src/lib/components/settings-body/SettingsBody.svelte`
-- `src-tauri/src/db.rs`
-
-### Verification
-
-Add tests or smoke checks for:
-
-- Default shortcuts still work with no saved settings.
-- Overrides load on startup.
-- Duplicate shortcuts are rejected.
-- Reset restores defaults.
-- File-operation shortcuts do not fire inside inputs/textareas.
-- `F12` and devtools shortcuts remain available during development.
-- Layout settings survive restart.
-
-Run:
-
-```powershell
-npm run check
-npm run check:rust
-```
+- Advanced rename / Quick Look off remaining DOM IDs (see `fixit.txt`).
+- Folder-metrics progress polish for huge trees.
 
 ## Suggested Implementation Order
 
-1. Archive extraction safety.
-2. Backend Windows filename validation.
-3. Shared symlink-copy helper and tests.
-4. Huge-folder virtualization and lazy metadata.
-5. Migration-glue retirement.
-6. Installer smoke workflow.
-7. Persisted layouts and shortcut customization.
+Historical order (all primary items complete; see `fixit.txt` for remaining
+medium-priority work):
 
-The first two items are the best initial patch because they are narrow,
-security-adjacent, and easy to verify with focused Rust tests.
+1. Archive extraction safety — done.
+2. Backend Windows filename validation — done.
+3. Shared symlink-copy helper and tests — done.
+4. Huge-folder virtualization and lazy metadata — done.
+5. Migration-glue retirement — done (search/archive included).
+6. Installer smoke workflow — done.
+7. Persisted layouts and shortcut customization — done.

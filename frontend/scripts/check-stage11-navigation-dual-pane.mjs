@@ -87,6 +87,10 @@ assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [
   'export function currentWorkspaceLayout',
   'export function saveWorkspaceLayout',
   'export function loadWorkspaceLayout',
+  'export function saveTabs',
+  'export function loadTabs',
+  'clearLegacyTabKeys',
+  'LEGACY_TABS_KEY',
   'dualPaneEnabled',
   'secondaryPath',
   'previewVisible',
@@ -155,11 +159,16 @@ assertContains('frontend/src/lib/app/core.ts', [
   'export async function copyOrMoveToOtherPane',
 ], 'Stage 11 keyboard help shortcut');
 
-assertContains('frontend/src/lib/components/OverlayShell.svelte', [
-  '<div class="shortcut-row"><kbd>F6</kbd><span>Toggle dual pane</span></div>',
-  '<div class="shortcut-row"><kbd>Tab</kbd><span>Switch active pane</span></div>',
-  '<div class="shortcut-row"><kbd>Ctrl+Alt+C</kbd><span>Copy selection to other pane</span></div>',
-], 'Stage 11 static keyboard help shortcut');
+assertContains('frontend/src/lib/components/KeyboardHelpModal.svelte', [
+  'id="keyboard-help-overlay"',
+  'keyboardHelpUi',
+  'keyboardHelpUi.sections',
+], 'Stage 11 component-owned keyboard help');
+
+assertContains('frontend/src/lib/app/core.ts', [
+  'openKeyboardHelpUi(buildKeyboardHelpSections())',
+  "title: 'Dual Pane'",
+], 'Stage 11 keyboard help dual-pane sections');
 
 assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
   "class:active={appState.dualPaneEnabled && appState.activePane === 'primary'}",

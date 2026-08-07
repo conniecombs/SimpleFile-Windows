@@ -87,7 +87,7 @@ assertNotContains('frontend/src/lib/components/context-menus/ContextMenu.svelte'
 ], 'dead or debug context menu item');
 
 assertContains('frontend/src/lib/components/search-chrome/SearchResultsHeader.svelte', [
-  '{#if onSave}',
+  '{#if showSave}',
 ], 'conditional save-search action');
 
 assertContains('frontend/src/lib/tauri.ts', [

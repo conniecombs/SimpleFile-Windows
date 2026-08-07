@@ -6,6 +6,7 @@ import type {
   ArchiveInfo,
   Checksums,
   CleanupResult,
+  ColorLabelTag,
   ConflictAction,
   DirectoryListing,
   DriveInfo,
@@ -186,11 +187,11 @@ export function getGitFileStatuses(path: string): Promise<Record<string, string>
   return invokeCommand('get_git_file_statuses', { path });
 }
 
-export function getAllTags(): Promise<any[]> {
+export function getAllTags(): Promise<ColorLabelTag[]> {
   return invokeCommand('get_all_tags');
 }
 
-export function createTag(name: string, color: string): Promise<any> {
+export function createTag(name: string, color: string): Promise<ColorLabelTag> {
   return invokeCommand('create_tag', { name, color });
 }
 
@@ -206,11 +207,11 @@ export function setTagsForPath(path: string, tagIds: number[]): Promise<void> {
   return invokeCommand('set_tags_for_path', { path, tagIds });
 }
 
-export function getTagsForPath(path: string): Promise<any[]> {
+export function getTagsForPath(path: string): Promise<ColorLabelTag[]> {
   return invokeCommand('get_tags_for_path', { path });
 }
 
-export function getAllFileTags(): Promise<Record<string, any>> {
+export function getAllFileTags(): Promise<Record<string, ColorLabelTag>> {
   return invokeCommand('get_all_file_tags');
 }
 
