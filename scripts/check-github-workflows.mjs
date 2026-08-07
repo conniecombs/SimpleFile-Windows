@@ -36,10 +36,12 @@ function requireOccurrenceCount(source, file, snippet, expectedCount) {
 
 const ciPath = '.github/workflows/ci.yml';
 const releasePath = '.github/workflows/release.yml';
+const installerSmokePath = '.github/workflows/installer-smoke.yml';
 const dependabotPath = '.github/dependabot.yml';
 
 const ciWorkflow = readText(ciPath);
 const releaseWorkflow = readText(releasePath);
+const installerSmokeWorkflow = readText(installerSmokePath);
 const dependabot = readText(dependabotPath);
 
 const ciSnippets = [
@@ -99,6 +101,32 @@ for (const snippet of releaseSnippets) {
     requireSnippet(releaseWorkflow, releasePath, snippet);
 }
 
+const installerSmokeSnippets = [
+    'workflow_dispatch:',
+    'schedule:',
+    "cron: '0 6 * * *'",
+    'permissions:',
+    'contents: read',
+    'runs-on: windows-latest',
+    'uses: actions/checkout@v6',
+    'uses: dtolnay/rust-toolchain@stable',
+    'uses: actions/setup-node@v6',
+    'node-version: 24',
+    'npm ci --prefix frontend',
+    'npm run build:tauri:local',
+    'npm run smoke:release',
+    'npm run smoke:msi',
+    'npm run smoke:installer',
+    'tauri.local.conf.json',
+    'Install WiX Toolset (MSI)',
+    'tool: tauri-cli',
+    'uses: actions/upload-artifact@v4',
+];
+
+for (const snippet of installerSmokeSnippets) {
+    requireSnippet(installerSmokeWorkflow, installerSmokePath, snippet);
+}
+
 requireRegex(
     releaseWorkflow,
     releasePath,
@@ -133,6 +161,9 @@ for (const snippet of retiredWorkflowSnippets) {
     if (releaseWorkflow.includes(snippet)) {
         fail(`${releasePath} should not include retired workflow snippet: ${snippet}.`);
     }
+    if (installerSmokeWorkflow.includes(snippet)) {
+        fail(`${installerSmokePath} should not include retired workflow snippet: ${snippet}.`);
+    }
 }
 
 const retiredArtifactTargets = [
@@ -147,6 +178,9 @@ for (const target of retiredArtifactTargets) {
     }
     if (releaseWorkflow.includes(target)) {
         fail(`${releasePath} should not build ${target} on the Windows-focused branch.`);
+    }
+    if (installerSmokeWorkflow.includes(target)) {
+        fail(`${installerSmokePath} should not build ${target} on the Windows-focused branch.`);
     }
 }
 

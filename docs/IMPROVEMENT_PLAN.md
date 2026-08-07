@@ -329,6 +329,8 @@ For overlay replacement, manually verify:
 
 ## 6. Add Installer Smoke Coverage To CI Or A Scheduled Workflow
 
+Status: Completed in the current worktree.
+
 ### Why This Matters
 
 The normal CI builds the Rust backend, but packaging failures can still appear
@@ -338,26 +340,19 @@ desktop app, installer health is part of product health.
 The repo already has good smoke scripts. The improvement is to run them earlier
 and more consistently.
 
-### Current Evidence
+### Completed Change
 
-- `.github/workflows/ci.yml` runs frontend checks, Rust checks, security checks,
-  and a Windows backend release build.
-- `.github/workflows/release.yml` creates Windows x64 installer artifacts.
-- Local scripts already exist for:
-  - Release executable startup smoke.
-  - MSI artifact extraction and launch smoke.
-  - NSIS install, launch, and uninstall smoke.
+- Added `.github/workflows/installer-smoke.yml` with:
+  - Manual `workflow_dispatch`
+  - Nightly schedule (`0 6 * * *` UTC)
+  - Windows x64 local Tauri package build via `npm run build:tauri:local`
+    (`tauri.local.conf.json`, no updater signing)
+  - `npm run smoke:release`, `smoke:msi`, and `smoke:installer`
+  - Artifact upload of NSIS/MSI outputs for debugging
+- `scripts/check-github-workflows.mjs` asserts the smoke workflow stays wired.
 
-### Recommended Change
-
-Add one of these workflows:
-
-- A manual `workflow_dispatch` installer smoke workflow.
-- A scheduled nightly Windows installer smoke workflow.
-- A PR-gated packaging smoke for changes under `src-tauri/`, `.github/`,
-  `frontend/`, or installer scripts.
-
-Start with manual or nightly if runtime is too expensive for every PR.
+Full packaging is intentionally not on every PR (cost). Run the workflow
+manually before a release, or rely on the nightly run.
 
 ### Files To Inspect
 

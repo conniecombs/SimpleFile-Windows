@@ -86,6 +86,8 @@ npm run smoke:installer
 
 `npm run check` includes provider-surface, Tauri renderer-surface, modal HTML safety, and Windows-asset guards. The provider guard fails if retired provider UI, command contracts, docs, or setup text reappear outside historical changelog notes and generated syntax-highlighter data. The Tauri renderer guard keeps the global `__TAURI__` API disabled and requires active frontend Tauri imports to stay behind `frontend/src/lib/tauri.ts`. The modal HTML guard requires shared modal renderers to sanitize HTML before insertion and blocks unreviewed raw HTML sinks. The Windows-asset guard fails if non-Windows packaging assets or bundle targets return.
 
+Installer package smoke (full NSIS/MSI build plus `smoke:release` / `smoke:msi` / `smoke:installer`) is not on every PR. Run the **Installer smoke** GitHub Actions workflow manually, or rely on its nightly schedule, before cutting a release.
+
 ## Project Layout
 
 - `frontend/src/main.ts` starts the Svelte app.
