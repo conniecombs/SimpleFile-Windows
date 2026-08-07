@@ -21,6 +21,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
     getAllFileTags,
     getAllTags,
     getEntryInfo,
+    getFileMetadata,
     getImageMetadata,
     getHomeDir,
     listDirectory,
@@ -404,8 +405,16 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
     try {
       const info = await getEntryInfo(selectedPath).catch(() => fallbackEntry);
       const extension = String(info.extension || info.name.split('.').pop() || '').toLowerCase();
-      const imageExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp']);
+      const imageExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff']);
       const isImage = !info.is_dir && imageExts.has(extension);
+      const richMetadataExts = new Set([
+        ...imageExts,
+        'pdf',
+        'mp3', 'flac', 'ogg', 'oga', 'opus', 'wav', 'm4a', 'aac', 'aiff', 'aif', 'wma', 'wv', 'ape',
+        'mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv',
+        'docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp',
+      ]);
+      const wantsRichMetadata = !info.is_dir && richMetadataExts.has(extension);
       const documentKind = !info.is_dir ? documentKindForExtension(extension) : '';
       const gitStatus = info.git_status || fallbackEntry.git_status || '';
       const documentKindRow = documentKind
@@ -432,6 +441,10 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
           <span class="prop-label">Dimensions</span><span class="prop-value" id="prop-dimensions">Computing...</span>
           <span class="prop-label">EXIF</span><span class="prop-value" id="prop-exif">Computing...</span>
         ` : '';
+      const richMetadataRows = wantsRichMetadata && !isImage ? `
+          <span class="prop-label">Details</span><span class="prop-value" id="prop-summary">Computing...</span>
+          <span class="prop-label">Metadata</span><span class="prop-value" id="prop-file-metadata">Computing...</span>
+        ` : '';
 
       const dialogPromise = showHtmlDialog({
         bodyHtml: `
@@ -447,6 +460,7 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
             ${permissionsRow}
             ${symlinkRow}
             ${imageRows}
+            ${richMetadataRows}
             ${checksumRows}
           </div>
         `,
@@ -508,6 +522,34 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
         }).catch(() => {
           setElementText('prop-dimensions', 'Unavailable');
           setElementText('prop-exif', 'Unavailable');
+        });
+      } else if (wantsRichMetadata) {
+        getFileMetadata(info.path).then((meta) => {
+          setElementText('prop-summary', meta.summary || meta.kind || 'None');
+          const host = document.getElementById('prop-file-metadata');
+          if (!host) return;
+
+          if (!Array.isArray(meta.fields) || meta.fields.length === 0) {
+            host.textContent = 'None';
+            return;
+          }
+
+          const grid = document.createElement('div');
+          grid.className = 'exif-grid';
+          for (const [label, value] of meta.fields) {
+            const labelElement = document.createElement('span');
+            labelElement.className = 'exif-tag';
+            labelElement.textContent = label;
+            const valueElement = document.createElement('span');
+            valueElement.className = 'exif-value';
+            valueElement.textContent = value;
+            grid.append(labelElement, valueElement);
+          }
+          host.replaceChildren(grid);
+        }).catch((error) => {
+          const message = error instanceof Error ? error.message : 'Unavailable';
+          setElementText('prop-summary', message);
+          setElementText('prop-file-metadata', 'Unavailable');
         });
       }
 

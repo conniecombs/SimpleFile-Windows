@@ -1,0 +1,219 @@
+# SimpleFile-Windows — Improvement Scan (fixit)
+
+Date: 2026-08-07
+Source: docs/, build_notes/, and current code review.
+
+This file captures improvement opportunities for SimpleFile-Windows.
+Several older plan items are already done; the focus is on remaining work.
+
+---
+
+## Already solid (do not re-implement)
+
+| Area | Evidence |
+|---|---|
+| Archive path safety (ZIP/TAR/RAR) | Marked complete in docs/IMPROVEMENT_PLAN.md |
+| Windows filename validation | validate_name rejects reserved chars/devices, trailing `.` / space |
+| Shared symlink copy | recreate_symlink used from fs_ops + progress |
+| Huge-folder virtualization | List/grid windowing + lazy thumbnails/metrics |
+| Shortcut registry + customization | keyboardShortcuts.ts, Settings → Shortcuts, overrides persist |
+| Workspace layout restore | Tabs, dual-pane, paths, columns, preview, icon size |
+| Renderer hardening | withGlobalTauri: false, modal HTML sanitization, guards |
+| Windows-only packaging | NSIS/MSI only; android/ios/icns removed |
+
+Note: ToDo.txt and parts of docs/IMPROVEMENT_PLAN.md are stale (they still
+describe shortcuts/layouts/filename validation as open work).
+
+---
+
+## Highest-value remaining improvements
+
+### 1. Installer smoke in CI (release reliability) — DONE (2026-08-07)
+
+Implemented `.github/workflows/installer-smoke.yml`:
+- Manual `workflow_dispatch` + nightly schedule (06:00 UTC)
+- Builds unsigned Windows NSIS/MSI via `npm run build:tauri:local`
+- Runs `smoke:release`, `smoke:msi`, `smoke:installer`
+- Uploads installer artifacts; workflow guard in `check-github-workflows.mjs`
+
+Why (historical):
+- Local scripts existed, but no CI packaging smoke job.
+- Packaging breaks could ship undetected.
+
+Docs:
+- docs/IMPROVEMENT_PLAN.md §6
+- docs/FEATURE_OPPORTUNITIES.md
+- docs/ROADMAP.md
+
+---
+
+### 2. Replace DOM-ID workflow glue with component state
+
+Why:
+- Migration overlays are gone, but controllers still drive UI via IDs
+  (~110+ getElementById hits).
+
+| File | Approx. uses |
+|---|---|
+| frontend/src/lib/app/core.ts | ~62 |
+| frontend/src/lib/app/setup.ts | ~22 |
+| frontend/src/lib/app/search.ts | ~13 |
+| archive / advanced rename / properties | smaller |
+
+Progress, modals, search, and archives still look like: find node by id →
+set text/HTML/visibility.
+
+Suggested order (one workflow at a time):
+1. Progress modal (title / % / item / cancel)
+2. Generic modal confirm flow
+3. Search + smart-folder controls
+4. Archive create/list UI
+
+This matches the “remaining follow-up” in the migration section of the
+improvement plan.
+
+---
+
+### 3. Richer transfer progress messaging
+
+Why:
+- Backend tracks bytes (progress.rs); UI shows percent + current item only
+  (OverlayShell progress modal / updateProgressFlow).
+- Roadmap and feature docs still call this out.
+
+Suggested UX:
+- Bytes copied / total
+- Rate (MB/s)
+- Optional ETA
+- Clear cancel feedback when a large tree is mid-scan
+
+Low risk, high daily usability for a file manager.
+
+---
+
+### 4. Dual-pane keyboard workflow polish
+
+Why:
+- Navigation shortcuts exist (arrows, Alt+arrows, F6 dual-pane toggle, tabs).
+- Feature docs still want stronger dual-pane keyboard behavior.
+
+Gaps to consider:
+- Explicit focus primary / secondary (e.g. Tab / Ctrl+Shift+←/→ / Alt+1 / Alt+2)
+- Cross-pane copy/move shortcuts (active → other pane)
+- Status/chrome that always shows which pane is active
+
+---
+
+### 5. Metadata depth (preview / properties) — DONE (2026-08-07)
+
+Implemented unified `get_file_metadata` for PDF / audio / video (MP4 family) /
+Office packages, with size caps. Properties panel shows Details + Metadata
+grids; image EXIF path retained.
+
+Why (historical):
+- metadata.rs was mainly image EXIF.
+- Opportunities doc listed richer media/document panels.
+
+Incremental path completed:
+- PDF page count / title
+- Audio tags
+- Video dimensions/duration (MP4/M4V/MOV)
+- Office basic props
+- Size/time limits so large files stay safe
+
+---
+
+### 6. Mapped network drive error UX
+
+Why:
+- Drive listing already surfaces mapped names and some unavailability text
+  in drives.rs.
+
+Opportunity:
+- Clearer UI for disconnected maps, permission failures, slow UNC paths
+  (timeouts, retry, “offline” badge).
+
+---
+
+## Medium priority (code health)
+
+| Improvement | Notes |
+|---|---|
+| Tighten TypeScript `any` | Heavy in setup.ts event handlers and tag APIs (api.ts / appState.ts) |
+| Unify tab persistence | Both simplefile-tabs and workspace layout store tabs — risk of drift; one source of truth |
+| Refresh stale planning docs | Update IMPROVEMENT_PLAN.md / delete or rewrite ToDo.txt so they match reality |
+| Folder-metrics progress | Roadmap still wants clearer cancel/visibility for bulk size/count on huge trees |
+
+---
+
+## Product / release (from roadmap)
+
+- Broader smoke: settings startup, updater metadata, MSI, NSIS install/uninstall
+- Targeted tests for mapped-drive display names
+- Keep archive validation tight as formats grow
+- Expand metadata carefully with preview limits
+
+Out of scope (intentionally):
+- Cloud providers
+- Linux/macOS packaging
+
+---
+
+## Suggested next work order
+
+1. ~~Installer smoke workflow~~ — done
+2. Transfer progress (bytes / speed / ETA) — user-visible, contained
+3. Progress + modal off DOM IDs — first migration-glue slice
+4. Dual-pane keyboard focus — file-manager feel
+5. ~~Metadata expansion~~ — done (properties panel)
+6. Type cleanup + doc sync — maintainability
+
+---
+
+## Candidate next implementations
+
+B) Richer transfer progress
+C) Progress modal off getElementById
+
+Pick one of the above (or another item from this file) as the next implementation slice.
+
+---
+
+## Key paths reference
+
+Frontend:
+- frontend/src/main.ts — app entry
+- frontend/src/App.svelte — shell
+- frontend/src/lib/components/ — Svelte UI
+- frontend/src/lib/app/ — workflow orchestration
+- frontend/src/lib/api.ts, frontend/src/lib/tauri.ts — Tauri boundary
+- frontend/src/lib/keyboardShortcuts.ts — shortcut registry
+- frontend/src/vanilla-js/runtime/state.svelte.ts — layout/tabs persistence
+- frontend/src/lib/components/OverlayShell.svelte — progress/modal host
+
+Backend:
+- src-tauri/src/fs_ops.rs — filesystem ops
+- src-tauri/src/progress.rs — progress-aware transfers
+- src-tauri/src/drives.rs — Windows drives / mapped shares
+- src-tauri/src/archive.rs — archives
+- src-tauri/src/metadata.rs — image/EXIF metadata
+- src-tauri/src/preview.rs — previews / open / reveal
+- src-tauri/src/utils.rs — validate_name, recreate_symlink
+
+Docs / notes:
+- docs/IMPROVEMENT_PLAN.md
+- docs/FEATURE_OPPORTUNITIES.md
+- docs/ROADMAP.md
+- docs/BUGS.md
+- docs/UI_BACKEND_REVIEW.md
+- build_notes/
+
+Commands:
+- npm run check
+- npm run check:rust
+- npm run check:security
+- npm run build:tauri:local
+- npm run smoke:settings
+- npm run smoke:release
+- npm run smoke:msi
+- npm run smoke:installer

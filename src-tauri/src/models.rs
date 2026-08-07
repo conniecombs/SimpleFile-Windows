@@ -218,6 +218,17 @@ pub struct ImageMetadata {
     pub exif: Vec<(String, String)>,
 }
 
+/// Unified file metadata for the properties panel. `kind` is one of
+/// `image`, `pdf`, `audio`, `video`, `office`, or `unsupported`.
+/// `summary` is a short one-line description suitable for headers.
+/// `fields` is an ordered list of `(label, value)` pairs for display.
+#[derive(Debug, Serialize, Clone)]
+pub struct FileMetadata {
+    pub kind: String,
+    pub summary: Option<String>,
+    pub fields: Vec<(String, String)>,
+}
+
 // ============================================================================
 
 #[derive(Debug, Serialize)]

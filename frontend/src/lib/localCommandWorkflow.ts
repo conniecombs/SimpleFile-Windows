@@ -23,6 +23,7 @@ import type {
   DirectoryListing,
   FileComparison,
   FileEntry,
+  FileMetadata,
   FilePreview,
   ImageMetadata,
   PathString,
@@ -51,6 +52,7 @@ type LocalCommandApi = {
   getEntryInfo: (path: PathString) => Promise<FileEntry>;
   computeChecksum: (path: PathString) => Promise<Checksums>;
   getImageMetadata: (path: PathString) => Promise<ImageMetadata>;
+  getFileMetadata: (path: PathString) => Promise<FileMetadata>;
   setTagsForPath: (path: PathString, tagIds: number[]) => Promise<unknown>;
 };
 

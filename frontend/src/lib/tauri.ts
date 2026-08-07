@@ -11,6 +11,7 @@ import type {
   DriveInfo,
   FileEntry,
   FilePreview,
+  FileMetadata,
   ImageMetadata,
   SearchOptions,
   SearchResult,
@@ -569,6 +570,65 @@ function devImageMetadata(path: string): ImageMetadata {
   };
 }
 
+function devFileMetadata(path: string): FileMetadata {
+  const entry = findDevEntry(path);
+  if (!entry) throw new Error(`Path does not exist: ${normalizeDevPath(path)}`);
+  if (entry.is_dir) {
+    return { fields: [], kind: 'unsupported', summary: null };
+  }
+
+  const extension = String(entry.extension || entry.name.split('.').pop() || '').toLowerCase();
+  if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff'].includes(extension)) {
+    return {
+      fields: [['Dimensions', '0 × 0']],
+      kind: 'image',
+      summary: '0 × 0',
+    };
+  }
+  if (extension === 'pdf') {
+    return {
+      fields: [
+        ['Pages', '1'],
+        ['Title', devBasename(path)],
+      ],
+      kind: 'pdf',
+      summary: `1 pages · ${devBasename(path)}`,
+    };
+  }
+  if (['mp3', 'flac', 'ogg', 'wav', 'm4a', 'aac'].includes(extension)) {
+    return {
+      fields: [
+        ['Duration', '3:00'],
+        ['Title', devBasename(path)],
+      ],
+      kind: 'audio',
+      summary: `${devBasename(path)} (3:00)`,
+    };
+  }
+  if (['mp4', 'm4v', 'mov', 'webm', 'mkv'].includes(extension)) {
+    return {
+      fields: [
+        ['Duration', '1:00'],
+        ['Dimensions', '1280 × 720'],
+      ],
+      kind: 'video',
+      summary: '1280 × 720 · 1:00',
+    };
+  }
+  if (['docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp'].includes(extension)) {
+    return {
+      fields: [
+        ['Format', extension.toUpperCase()],
+        ['Title', devBasename(path)],
+      ],
+      kind: 'office',
+      summary: devBasename(path),
+    };
+  }
+
+  return { fields: [], kind: 'unsupported', summary: null };
+}
+
 function collectDevFiles(directory: string) {
   const rootPath = normalizeDevPath(directory);
   if (!getDevDirectory(rootPath)) throw new Error(`Path is not a directory: ${rootPath}`);
@@ -924,6 +984,10 @@ async function invokeDevCommand<Name extends TauriCommandName>(
     case 'get_image_metadata': {
       const { path } = args as { path: string };
       return devImageMetadata(path) as CommandResult<Name>;
+    }
+    case 'get_file_metadata': {
+      const { path } = args as { path: string };
+      return devFileMetadata(path) as CommandResult<Name>;
     }
     case 'generate_thumbnail': {
       // Minimal JPEG payload for browser-dev grid virtualization.

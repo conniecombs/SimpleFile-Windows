@@ -13,6 +13,7 @@ import type {
   FileChangeEvent,
   FileComparison,
   FileEntry,
+  FileMetadata,
   FilePreview,
   GitStatus,
   ImageMetadata,
@@ -386,6 +387,10 @@ export function computeChecksum(path: PathString): Promise<Checksums> {
 
 export function getImageMetadata(path: PathString): Promise<ImageMetadata> {
   return invokeCommand('get_image_metadata', { path });
+}
+
+export function getFileMetadata(path: PathString): Promise<FileMetadata> {
+  return invokeCommand('get_file_metadata', { path });
 }
 
 export function onFileChange(callback: EventCallback<FileChangeEvent>): Promise<UnlistenFn> {

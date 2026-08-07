@@ -140,6 +140,13 @@ export interface ImageMetadata {
   exif: Array<[string, string]>;
 }
 
+/** Unified metadata for the properties panel (image/pdf/audio/video/office). */
+export interface FileMetadata {
+  kind: 'image' | 'pdf' | 'audio' | 'video' | 'office' | 'unsupported' | string;
+  summary: string | null;
+  fields: Array<[string, string]>;
+}
+
 export interface ArchiveEntry {
   name: string;
   path: PathString;
@@ -315,6 +322,7 @@ export interface TauriCommandMap {
   get_git_status: CommandContract<{ path: PathString }, GitStatus>;
   compute_checksum: CommandContract<{ path: PathString }, Checksums>;
   get_image_metadata: CommandContract<{ path: PathString }, ImageMetadata>;
+  get_file_metadata: CommandContract<{ path: PathString }, FileMetadata>;
   get_app_version: CommandContract<NoArgs, string>;
   get_app_about_info: CommandContract<NoArgs, AppAboutInfo>;
   check_for_update: CommandContract<NoArgs, Nullable<UpdateInfo>>;

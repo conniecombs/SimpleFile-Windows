@@ -30,11 +30,13 @@ assertContains('frontend/src/lib/app/search.ts', [
   'computeChecksum',
   'getEntryInfo',
   'getImageMetadata',
+  'getFileMetadata',
   'function documentKindForExtension',
   'function copyablePropertyValue',
   "copyablePropertyValue('prop-md5'",
   "copyablePropertyValue('prop-sha256'",
   'id="prop-dimensions"',
+  'id="prop-file-metadata"',
   'Git State',
   'Document',
   'prop-copy-btn',
@@ -71,10 +73,12 @@ assertContains('frontend/src/lib/tauri.ts', [
   "devTextFileEntry('notes.txt'",
   'function devChecksums',
   'function devImageMetadata',
+  'function devFileMetadata',
   'function devCompareFiles',
   "case 'get_entry_info':",
   "case 'compute_checksum':",
   "case 'get_image_metadata':",
+  "case 'get_file_metadata':",
 ], 'Stage 8 browser dev inspection fallbacks');
 
 assertContains('frontend/src/css/modules/modal.css', [

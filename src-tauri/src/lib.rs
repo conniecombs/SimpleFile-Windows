@@ -113,6 +113,7 @@ pub fn run() {
             cleanup::disk_cleanup,
             cleanup::cancel_disk_cleanup,
             metadata::get_image_metadata,
+            metadata::get_file_metadata,
             show_main_window,
             smart_folders::load_smart_folders,
             smart_folders::save_smart_folder,

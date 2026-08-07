@@ -8,6 +8,44 @@ function setText(documentRef: Document, id: string, text: string) {
   }
 }
 
+function fillMetadataGrid(
+  documentRef: Document,
+  hostId: string,
+  fields: Array<[string, string]> | undefined,
+) {
+  const host = documentRef.getElementById(hostId);
+  if (!host) return;
+
+  if (!Array.isArray(fields) || fields.length === 0) {
+    host.textContent = 'None';
+    return;
+  }
+
+  const container = documentRef.createElement('div');
+  container.className = 'exif-grid';
+  for (const [label, value] of fields) {
+    const tagDiv = documentRef.createElement('div');
+    tagDiv.className = 'exif-tag';
+    tagDiv.textContent = label;
+    const valDiv = documentRef.createElement('div');
+    valDiv.className = 'exif-value';
+    valDiv.textContent = value;
+    container.appendChild(tagDiv);
+    container.appendChild(valDiv);
+  }
+  host.textContent = '';
+  host.appendChild(container);
+}
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'tif', 'tiff']);
+const RICH_METADATA_EXTS = new Set([
+  ...IMAGE_EXTS,
+  'pdf',
+  'mp3', 'flac', 'ogg', 'oga', 'opus', 'wav', 'm4a', 'aac', 'aiff', 'aif', 'wma', 'wv', 'ape',
+  'mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', 'wmv',
+  'docx', 'xlsx', 'pptx', 'odt', 'ods', 'odp',
+]);
+
 export async function showProperties(host: LocalCommandWorkflowHost, documentRef: Document) {
   const { state, api, ui, t } = host;
 
@@ -18,17 +56,22 @@ export async function showProperties(host: LocalCommandWorkflowHost, documentRef
 
   try {
     const info = await api.getEntryInfo(path);
+    const extension = String(info.extension || '').toLowerCase();
     const symlinkRow = info.is_symlink
       ? `<div class="prop-label">Symlink target</div><div class="prop-value">${host.escapeHtml(info.symlink_target || '(unknown)')}</div>`
       : '';
     const permissionsRow = info.permissions
       ? `<div class="prop-label">Permissions</div><div class="prop-value prop-permissions">${host.escapeHtml(info.permissions)}</div>`
       : '';
-    const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'];
-    const isImage = !info.is_dir && imageExts.includes(info.extension.toLowerCase());
+    const isImage = !info.is_dir && IMAGE_EXTS.has(extension);
+    const wantsRichMetadata = !info.is_dir && RICH_METADATA_EXTS.has(extension);
     const imageMetadataPlaceholder = isImage ? `
                 <div class="prop-label">Dimensions</div><div class="prop-value" id="prop-dimensions">Computing\u2026</div>
                 <div class="prop-label">EXIF</div><div class="prop-value" id="prop-exif">Computing\u2026</div>
+            ` : '';
+    const richMetadataPlaceholder = wantsRichMetadata && !isImage ? `
+                <div class="prop-label">Details</div><div class="prop-value" id="prop-summary">Computing\u2026</div>
+                <div class="prop-label">Metadata</div><div class="prop-value" id="prop-file-metadata">Computing\u2026</div>
             ` : '';
     const checksumPlaceholder = info.is_dir ? '' : `
                 <div class="prop-label">MD5</div><div class="prop-value" id="prop-md5">Computing\u2026</div>
@@ -51,6 +94,7 @@ export async function showProperties(host: LocalCommandWorkflowHost, documentRef
                     ${permissionsRow}
                     ${symlinkRow}
                     ${imageMetadataPlaceholder}
+                    ${richMetadataPlaceholder}
                     ${checksumPlaceholder}
                 </div>
             `;
@@ -69,30 +113,19 @@ export async function showProperties(host: LocalCommandWorkflowHost, documentRef
     if (isImage) {
       api.getImageMetadata(path).then((meta) => {
         setText(documentRef, 'prop-dimensions', `${meta.width} \u00d7 ${meta.height}`);
-        const exifEl = documentRef.getElementById('prop-exif');
-        if (!exifEl) return;
-
-        if (Array.isArray(meta.exif) && meta.exif.length > 0) {
-          const container = documentRef.createElement('div');
-          container.className = 'exif-grid';
-          meta.exif.forEach(([tag, value]) => {
-            const tagDiv = documentRef.createElement('div');
-            tagDiv.className = 'exif-tag';
-            tagDiv.textContent = tag;
-            const valDiv = documentRef.createElement('div');
-            valDiv.className = 'exif-value';
-            valDiv.textContent = value;
-            container.appendChild(tagDiv);
-            container.appendChild(valDiv);
-          });
-          exifEl.textContent = '';
-          exifEl.appendChild(container);
-        } else {
-          exifEl.textContent = 'None';
-        }
+        fillMetadataGrid(documentRef, 'prop-exif', meta.exif);
       }).catch(() => {
         setText(documentRef, 'prop-dimensions', 'Unavailable');
         setText(documentRef, 'prop-exif', 'Unavailable');
+      });
+    } else if (wantsRichMetadata) {
+      api.getFileMetadata(path).then((meta) => {
+        setText(documentRef, 'prop-summary', meta.summary || meta.kind || 'None');
+        fillMetadataGrid(documentRef, 'prop-file-metadata', meta.fields);
+      }).catch((error) => {
+        const message = error instanceof Error ? error.message : 'Unavailable';
+        setText(documentRef, 'prop-summary', message);
+        setText(documentRef, 'prop-file-metadata', 'Unavailable');
       });
     }
   } catch (error) {
