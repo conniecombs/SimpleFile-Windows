@@ -66,11 +66,25 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
     return ['available', 'offline', 'stale', 'unknown'].includes(status) ? status : 'unknown';
   }
 
+  function driveBadge(drive: DriveInfo) {
+    const status = driveStatus(drive);
+    if (status === 'offline') return 'Offline';
+    if (status === 'stale') return 'Stale';
+    if (status === 'unknown') return 'Unknown';
+    return '';
+  }
+
   function driveDescription(drive: DriveInfo) {
     const status = driveStatus(drive);
     const type = String(drive.drive_type || '').toLowerCase();
-    if (status === 'offline') return 'Offline';
-    if (status === 'stale') return 'Stale mapping';
+    if (status === 'offline') {
+      const detail = String(drive.status_detail || '').trim();
+      if (detail.toLowerCase().includes('timed out')) return 'Timed out · Retry to reconnect';
+      if (detail.toLowerCase().includes('access was denied')) return 'Access denied · Check credentials';
+      if (detail.toLowerCase().includes('not ready')) return 'Not ready · Open to reconnect';
+      return drive.remote_path ? `Offline · ${drive.remote_path}` : 'Offline · Retry to reconnect';
+    }
+    if (status === 'stale') return 'Stale mapping · Remap or remove';
     if (type === 'network') return drive.remote_path || drive.status_detail || 'Network share';
     return '';
   }
@@ -78,8 +92,9 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   function driveTitle(drive: DriveInfo) {
     return [
       drive.name || drive.path,
-      drive.remote_path,
+      drive.remote_path ? `Share: ${drive.remote_path}` : '',
       drive.status_detail,
+      driveStatus(drive) !== 'available' ? 'Click to retry reconnecting this drive.' : '',
     ].filter(Boolean).join('\n');
   }
 
@@ -102,11 +117,12 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
 
   let treeRoots = $derived.by(() => {
     return (appState.drives || []).map((drive: DriveInfo) => ({
+      badge: driveBadge(drive),
       children: (appState.treeData?.get(drive.path) || []).map(toTreeNode),
       description: driveDescription(drive),
-      hasChildren: true,
+      hasChildren: driveStatus(drive) === 'available',
       icon: driveIcon(drive),
-      isActive: appState.currentPath === drive.path,
+      isActive: appState.currentPath === drive.path || appState.currentPath?.startsWith(drive.path),
       isExpanded: appState.treeExpanded?.has(drive.path) || false,
       isLoaded: appState.treeData?.has(drive.path) || false,
       name: drive.name || drive.path,
@@ -183,19 +199,33 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
       <div class="quick-access-group" id="my-pc-section">
         <div class="quick-access-group-header quick-access-group-header--collapsible">
           <span>My PC</span>
-          <button
-            type="button"
-            class="sidebar-collapse-btn"
-            aria-label={myPcCollapsed ? 'Expand My PC' : 'Collapse My PC'}
-            aria-controls="my-pc-tree-container"
-            aria-expanded={!myPcCollapsed}
-            title={myPcCollapsed ? 'Expand My PC' : 'Collapse My PC'}
-            onclick={() => {
-              myPcCollapsed = !myPcCollapsed;
-            }}
-          >
-            <span class:collapsed={myPcCollapsed} class="sidebar-collapse-icon" aria-hidden="true">▾</span>
-          </button>
+          <div class="quick-access-group-actions">
+            <button
+              type="button"
+              class="sidebar-collapse-btn"
+              id="btn-refresh-drives"
+              aria-label="Refresh drives"
+              title="Refresh drives and mapped network status"
+              onclick={() => {
+                document.dispatchEvent(new CustomEvent('simplefile:refresh-drives', { bubbles: true }));
+              }}
+            >
+              <span class="sidebar-action-icon" aria-hidden="true">↻</span>
+            </button>
+            <button
+              type="button"
+              class="sidebar-collapse-btn"
+              aria-label={myPcCollapsed ? 'Expand My PC' : 'Collapse My PC'}
+              aria-controls="my-pc-tree-container"
+              aria-expanded={!myPcCollapsed}
+              title={myPcCollapsed ? 'Expand My PC' : 'Collapse My PC'}
+              onclick={() => {
+                myPcCollapsed = !myPcCollapsed;
+              }}
+            >
+              <span class:collapsed={myPcCollapsed} class="sidebar-collapse-icon" aria-hidden="true">▾</span>
+            </button>
+          </div>
         </div>
         <div class="tree-view-container" id="my-pc-tree-container" hidden={myPcCollapsed}>
           <TreeView roots={treeRoots} />

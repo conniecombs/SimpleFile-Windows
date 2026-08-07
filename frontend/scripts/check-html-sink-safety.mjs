@@ -54,12 +54,6 @@ function assertMissing(source, file, value, label) {
 
 const allowedHtmlSinks = new Map([
   [
-    'frontend/src/lib/app/core.ts',
-    new Set([
-      'body.innerHTML = sanitizeModalHtml(bodyHtml);',
-    ]),
-  ],
-  [
     'frontend/src/lib/components/modal-body/ModalBody.svelte',
     new Set([
       '{@html sanitizedBodyHtml}',
@@ -114,13 +108,30 @@ for (const [file, source] of [
 }
 
 for (const [file, source] of [
-  ['frontend/src/lib/app/core.ts', modalCore],
   ['frontend/src/lib/components/modal-body/ModalBody.svelte', modalBody],
   ['frontend/src/lib/components/modal-body.ts', modalBodyWrapper],
 ]) {
   if (!source.includes('sanitizeModalHtml')) {
     fail(`${file} must route modal HTML through sanitizeModalHtml.`);
   }
+}
+
+const genericModal = read('frontend/src/lib/components/GenericModal.svelte');
+if (!genericModal.includes('ModalBody') || !genericModal.includes('bodyHtml={modalUi.bodyHtml}')) {
+  fail('frontend/src/lib/components/GenericModal.svelte must render sanitized ModalBody for HTML dialogs.');
+}
+
+const modalUiSource = read('frontend/src/lib/app/modalUi.svelte.ts');
+if (!modalUiSource.includes('openHtmlDialog') || !modalUiSource.includes('bodyHtml')) {
+  fail('frontend/src/lib/app/modalUi.svelte.ts must own HTML dialog state.');
+}
+
+// core no longer injects modal HTML; it must route through modalUi/openHtmlDialog.
+if (modalCore.includes('innerHTML')) {
+  fail('frontend/src/lib/app/core.ts must not write modal HTML via innerHTML.');
+}
+if (!modalCore.includes('openHtmlDialog') && !modalCore.includes('showHtmlDialog')) {
+  fail('frontend/src/lib/app/core.ts must expose showHtmlDialog/openHtmlDialog.');
 }
 
 const sanitized = sanitizeModalHtml(`

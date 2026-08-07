@@ -146,6 +146,11 @@
     box-shadow: inset 0 0 0 2px var(--accent-primary);
 }
 
+.content-area.dual-pane .pane.active .pane-header,
+.content-area.dual-pane .pane.active .file-list-header {
+    background: color-mix(in srgb, var(--accent-primary) 12%, var(--bg-tertiary));
+}
+
 .pane .file-container {
     flex: 1;
     display: flex;

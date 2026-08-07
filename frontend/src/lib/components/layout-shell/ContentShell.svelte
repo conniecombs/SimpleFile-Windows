@@ -173,7 +173,25 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
 </script>
 
 <div bind:this={contentArea} class:dual-pane={appState.dualPaneEnabled} class="content-area" id="content-area">
-  <div bind:this={panePrimary} class="pane primary-pane" id="pane-primary" data-pane="primary" role="region" aria-label="File list">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions: pane click activates dual-pane focus side -->
+  <div
+    bind:this={panePrimary}
+    class="pane primary-pane"
+    class:active={appState.dualPaneEnabled && appState.activePane === 'primary'}
+    id="pane-primary"
+    data-pane="primary"
+    role="region"
+    aria-label="Left file pane"
+    aria-current={appState.dualPaneEnabled && appState.activePane === 'primary' ? 'true' : undefined}
+    onmousedown={() => {
+      if (appState.dualPaneEnabled && appState.activePane !== 'primary') {
+        document.dispatchEvent(new CustomEvent('simplefile:activate-pane', {
+          bubbles: true,
+          detail: { pane: 'primary' },
+        }));
+      }
+    }}
+  >
     <div class="file-container">
       <FileListHeader pane="primary" />
       <div class="quick-filter-bar" id="quick-filter-bar" style="display:none;" role="search" aria-label="Quick filter">
@@ -203,7 +221,25 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
     onkeydown={handlePaneKeydown}
   ></button>
 
-  <div bind:this={paneSecondary} class="pane secondary-pane" id="pane-secondary" data-pane="secondary">
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions: pane click activates dual-pane focus side -->
+  <div
+    bind:this={paneSecondary}
+    class="pane secondary-pane"
+    class:active={appState.dualPaneEnabled && appState.activePane === 'secondary'}
+    id="pane-secondary"
+    data-pane="secondary"
+    role="region"
+    aria-label="Right file pane"
+    aria-current={appState.dualPaneEnabled && appState.activePane === 'secondary' ? 'true' : undefined}
+    onmousedown={() => {
+      if (appState.dualPaneEnabled && appState.activePane !== 'secondary') {
+        document.dispatchEvent(new CustomEvent('simplefile:activate-pane', {
+          bubbles: true,
+          detail: { pane: 'secondary' },
+        }));
+      }
+    }}
+  >
     <div class="pane-header">
       <div class="pane-nav-buttons">
         <button class="toolbar-btn pane-nav-btn" id="btn-secondary-back" title="Go Back" aria-label="Go back in secondary pane" disabled={appState.secondaryHistoryIndex <= 0} onclick={(event) => emitSecondaryCommand(event, 'back')}>

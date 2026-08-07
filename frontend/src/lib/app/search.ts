@@ -78,7 +78,6 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import { renderContextMenu } from '../components/context-menus';
   import { clearQuickLook, renderQuickLook } from '../components/quick-look';
   import { renderStatusBar } from '../components/status-bar';
-  import { clearSettingsBody, renderSettingsBody } from '../components/settings-body';
   import { showError, showSuccess } from '../components/toasts';
   import type {
     ArchiveFormat,

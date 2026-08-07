@@ -80,7 +80,14 @@ assertContains('frontend/src/lib/app/core.ts', [
   'showOperationHistoryFlow',
   'function showKeyboardHelpFlow',
   'function showProgressFlow',
+  'showProgressUi',
 ], 'Stage 5 core overlay wiring');
+
+assertContains('frontend/src/lib/app/progressUi.svelte.ts', [
+  'export function showProgressUi',
+  'export function updateProgressUi',
+  'export function hideProgressUi',
+], 'Stage 5 progress UI state module');
 
 assertContains('frontend/src/lib/app/setup.ts', [
   'const handleStage5OverlayClick',

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   import { localState } from '../../app/localState.svelte';
+  import { isProgressVisible, progressUi } from '../../app/progressUi.svelte';
   import { fileType, formatFileSize, formatModified, visibleEntries } from '../../coreFileManager';
   import {
     applyPassiveFolderMetricsToState,
@@ -262,7 +263,8 @@
 
       // Avoid racing the shared backend size/count cancel flags while an
       // exclusive progress dialog (explicit folder metrics, transfers, etc.) is open.
-      if (localState.currentProgressCancel) {
+      // Avoid racing shared backend size/count cancel flags while exclusive progress is open.
+      if (isProgressVisible() || progressUi.onCancel) {
         return;
       }
 

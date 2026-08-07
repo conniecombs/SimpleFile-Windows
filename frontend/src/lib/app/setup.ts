@@ -4,7 +4,6 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import {
     batchRename,
     calculateFolderSize,
-    cancelOperation,
     compareFiles,
     computeChecksum,
     countFolderItems,
@@ -24,7 +23,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
     getImageMetadata,
     getHomeDir,
     listDirectory,
-    listDrives,
+
     listSubdirectories,
     listArchive,
     loadSmartFolders,
@@ -76,8 +75,8 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import { renderContextMenu } from '../components/context-menus';
   import { clearQuickLook, renderQuickLook } from '../components/quick-look';
   import { renderStatusBar } from '../components/status-bar';
-  import { clearSettingsBody, renderSettingsBody } from '../components/settings-body';
   import { showError, showSuccess } from '../components/toasts';
+  import { tick } from 'svelte';
   import { renderLayoutShell } from '../components/layout-shell';
   import type {
     ArchiveFormat,
@@ -100,7 +99,9 @@ import type { TransferAction } from "../transferPathUtils.js";
 import { handleKeyDown, isEditableTarget, normalizeShortcutCombo, registerShortcut, unregisterShortcut, updateShortcutCombo, type ShortcutOptions } from "../keyboardShortcuts.js";
 import { showAdvancedRenameFlow, closeAdvancedRenameFlow, applyAdvancedRenameFlow, updateAdvancedRenameOperationClasses, refreshAdvancedRenamePreview } from "./advanced_rename.js";
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow } from "./archive.js";
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives } from "./core.js";
+import { cancelModalUi, isSettingsModalOpen } from './modalUi.svelte';
+import { dismissProgressUi, progressUi } from './progressUi.svelte';
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
 
 
@@ -205,23 +206,37 @@ export function initApp() {
       saveWorkspaceLayout();
     }).catch(console.error);
 
-    listDrives().then((drives) => {
-      if (drives.length > 0) {
-        appState.drives = drives;
-        return;
-      }
-
-      const fallbackDrive = createFallbackDriveForPath(appState.homePath || appState.currentPath);
-      if (fallbackDrive) {
-        appState.drives = [fallbackDrive];
-      }
-    }).catch((error) => {
-      console.error('Failed to load drives:', error);
+    void refreshDrives({ quiet: true }).then((drives) => {
+      if (drives.length > 0) return;
       const fallbackDrive = createFallbackDriveForPath(appState.homePath || appState.currentPath);
       if (fallbackDrive) {
         appState.drives = [fallbackDrive];
       }
     });
+
+    let drivesRefreshing = false;
+    const handleRefreshDrives = () => {
+      if (drivesRefreshing) return;
+      drivesRefreshing = true;
+      const refreshBtn = document.getElementById('btn-refresh-drives') as HTMLButtonElement | null;
+      if (refreshBtn) refreshBtn.disabled = true;
+      void refreshDrives()
+        .then((drives) => {
+          const offlineCount = drives.filter((drive) => {
+            const status = String(drive.drive_status || 'available').toLowerCase();
+            return status === 'offline' || status === 'stale';
+          }).length;
+          if (offlineCount > 0) {
+            showSuccess(`Drives refreshed · ${offlineCount} network mapping${offlineCount === 1 ? '' : 's'} need attention`);
+          } else {
+            showSuccess('Drives refreshed');
+          }
+        })
+        .finally(() => {
+          drivesRefreshing = false;
+          if (refreshBtn) refreshBtn.disabled = false;
+        });
+    };
 
     const handleOpenEntry = (e: any) => {
       const path = e.detail?.path || e.detail?.segment?.path;
@@ -421,8 +436,21 @@ export function initApp() {
 
     const toggleDualPane = () => {
       appState.dualPaneEnabled = !appState.dualPaneEnabled;
-      if (appState.dualPaneEnabled && !appState.secondaryPath) {
-        void loadSecondaryDirectory(appState.currentPath, 'replace-current', false);
+      if (appState.dualPaneEnabled) {
+        if (!appState.secondaryPath) {
+          void loadSecondaryDirectory(appState.currentPath, 'replace-current', false);
+        }
+        activatePane('primary');
+      } else {
+        activatePane('primary');
+      }
+      updateStatusBar();
+    };
+
+    const handleActivatePane = (e: Event) => {
+      const pane = (e as CustomEvent<{ pane?: string }>).detail?.pane;
+      if (pane === 'secondary' || pane === 'primary') {
+        activatePane(pane);
       }
     };
 
@@ -546,38 +574,11 @@ export function initApp() {
 
     const handleSettingsOpen = () => {
       try {
-        const overlay = document.getElementById('modal-overlay');
-        const modal = document.getElementById('modal');
-        const title = document.getElementById('modal-title');
-        const body = document.getElementById('modal-body');
-        const cancelBtn = document.getElementById('modal-cancel');
-        const confirmBtn = document.getElementById('modal-confirm');
-        const closeBtn = document.getElementById('modal-close');
-
-        if (!overlay || !body) {
-          showError('Settings modal elements not found in DOM');
-          console.error("Settings modal elements not found in DOM");
-          return;
-        }
-
-        if (title) title.textContent = 'Settings';
-        modal?.classList.add('settings-modal');
-        body.classList.add('settings-body');
-        if (cancelBtn) cancelBtn.style.display = 'none';
-        if (confirmBtn) {
-          confirmBtn.textContent = 'Close';
-          confirmBtn.onclick = closeSettingsModal;
-        }
-        if (closeBtn) {
-          closeBtn.onclick = closeSettingsModal;
-        }
-
-        renderSettingsBody(body);
-        window.setTimeout(() => {
+        openSettingsModal();
+        void tick().then(() => {
           syncSettingsControls();
           void updateToolStatus();
-        }, 0);
-        overlay.classList.add('visible');
+        });
       } catch (err: any) {
         showError(`Failed to open settings: ${err?.message || err}`);
         console.error("Failed to open settings:", err);
@@ -758,18 +759,7 @@ export function initApp() {
         return;
       }
 
-      if (target.closest('#progress-cancel')) {
-        event.preventDefault();
-        if (localState.currentProgressOperationId) {
-          // Cancel is user-initiated; ignore "operation not found" races when
-          // the backend finishes in the same window as the click.
-          cancelOperation(localState.currentProgressOperationId).catch(() => {});
-        }
-        if (localState.currentProgressCancel) {
-          Promise.resolve(localState.currentProgressCancel()).catch(() => {});
-        }
-        hideProgressFlow();
-      }
+      // Progress cancel is owned by ProgressModal (progressUi).
     };
 
     const handleAdvancedRenameControlInput = (event: Event) => {
@@ -779,13 +769,8 @@ export function initApp() {
       void refreshAdvancedRenamePreview();
     };
 
-    const handleModalPointerDown = (event: MouseEvent) => {
-      if (
-        event.target === document.getElementById('modal-overlay')
-        && document.getElementById('modal')?.classList.contains('settings-modal')
-      ) {
-        closeSettingsModal();
-      }
+    const handleModalPointerDown = (_event: MouseEvent) => {
+      // Backdrop dismiss for the generic/settings modal is owned by GenericModal.
     };
 
     const closePathBarEditor = () => {
@@ -869,8 +854,9 @@ export function initApp() {
         closeKeyboardHelpFlow();
         return true;
       }
-      if (overlayById('progress-overlay')?.classList.contains('visible')) {
-        hideProgressFlow();
+      if (isProgressDialogVisible()) {
+        // Match prior Escape behavior: dismiss UI without backend cancel.
+        dismissProgressUi();
         return true;
       }
 
@@ -880,11 +866,12 @@ export function initApp() {
     const handleEscapeShortcut = () => {
       if (closeVisibleOverlay()) return;
 
-      const modalOverlay = document.getElementById('modal-overlay');
-      const modal = document.getElementById('modal');
-      if (modalOverlay?.classList.contains('visible')) {
-        if (modal?.classList.contains('settings-modal')) {
+      if (isGenericModalVisible()) {
+        // Escape always dismisses the component-owned modal surface.
+        if (isSettingsModalOpen()) {
           closeSettingsModal();
+        } else {
+          cancelModalUi();
         }
         return;
       }
@@ -1006,6 +993,32 @@ export function initApp() {
         openTerminal(pathForPane()).catch(showError);
       });
       addShortcut('pane.toggleDual', 'F6', toggleDualPane);
+      addShortcut('pane.switch', 'Tab', () => {
+        if (!appState.dualPaneEnabled) return;
+        switchActivePane();
+      }, {
+        when: () => Boolean(appState.dualPaneEnabled),
+      });
+      addShortcut('pane.focusPrimary', 'Alt+1', () => activatePane('primary'));
+      addShortcut('pane.focusSecondary', 'Alt+2', () => {
+        if (!appState.dualPaneEnabled) {
+          toggleDualPane();
+        }
+        activatePane('secondary');
+      });
+      addShortcut('pane.focusLeft', 'Ctrl+Shift+Left', () => activatePane('primary'));
+      addShortcut('pane.focusRight', 'Ctrl+Shift+Right', () => {
+        if (!appState.dualPaneEnabled) {
+          toggleDualPane();
+        }
+        activatePane('secondary');
+      });
+      addShortcut('pane.copyToOther', 'Ctrl+Alt+C', () => {
+        void copyOrMoveToOtherPane('copy');
+      });
+      addShortcut('pane.moveToOther', 'Ctrl+Alt+M', () => {
+        void copyOrMoveToOtherPane('move');
+      });
 
       return () => {
         for (const id of shortcutIds) {
@@ -1028,10 +1041,10 @@ export function initApp() {
       }
       // Avoid type-ahead while modal/overlay surfaces own the keyboard.
       if (
-        overlayById('progress-overlay')?.classList.contains('visible')
+        isProgressDialogVisible()
         || overlayById('quicklook-overlay')?.classList.contains('visible')
         || overlayById('keyboard-help-overlay')?.classList.contains('visible')
-        || document.getElementById('modal-overlay')?.classList.contains('visible')
+        || isGenericModalVisible()
         || appState.commandPaletteVisible
       ) {
         return;
@@ -1060,10 +1073,35 @@ export function initApp() {
         localState.lastCancelledOperationId = update.operation_id;
       }
 
-      const percent = update.total > 0 ? (update.current / update.total) * 100 : 0;
-      if (localState.currentProgressOperationId === update.operation_id) {
-        updateProgressFlow(percent, update.current_item || '');
+      if (progressUi.operationId !== update.operation_id) return;
+
+      const currentBytes = Number(update.current) || 0;
+      const totalBytes = Number(update.total) || 0;
+      const percent = totalBytes > 0 ? (currentBytes / totalBytes) * 100 : progressUi.percent;
+      const item = update.current_item || progressUi.item;
+
+      if (update.status === 'cancelled') {
+        progressUi.phase = 'cancelling';
+        progressUi.statusMessage = update.error || 'Cancelling…';
+        updateProgressFlow(percent, item || 'Cancelled', {
+          currentBytes,
+          totalBytes: totalBytes > 0 ? totalBytes : progressUi.totalBytes,
+        });
+        return;
       }
+
+      if (update.status === 'error') {
+        progressUi.statusMessage = update.error || 'Transfer failed';
+      } else if (progressUi.phase !== 'cancelling') {
+        progressUi.statusMessage = totalBytes <= 0 && !item
+          ? 'Preparing…'
+          : '';
+      }
+
+      updateProgressFlow(percent, item, {
+        currentBytes,
+        totalBytes: totalBytes > 0 ? totalBytes : progressUi.totalBytes,
+      });
     };
 
     const handleNativeDropHover = (event: { payload: NativeFileDropEventPayload }) => {
@@ -1143,6 +1181,8 @@ export function initApp() {
     document.addEventListener('simplefile:file-list-sort', handleSort);
     document.addEventListener('simplefile:toolbar-command', handleToolbarCommand);
     document.addEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);
+    document.addEventListener('simplefile:activate-pane', handleActivatePane);
+    document.addEventListener('simplefile:refresh-drives', handleRefreshDrives);
     document.addEventListener('simplefile:toolbar-icon-size', handleIconSize);
     document.addEventListener('simplefile:toast', handleToast);
     document.addEventListener('simplefile:open-settings', handleSettingsOpen);
@@ -1209,6 +1249,8 @@ export function initApp() {
       document.removeEventListener('simplefile:file-list-sort', handleSort);
       document.removeEventListener('simplefile:toolbar-command', handleToolbarCommand);
       document.removeEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);
+      document.removeEventListener('simplefile:activate-pane', handleActivatePane);
+      document.removeEventListener('simplefile:refresh-drives', handleRefreshDrives);
       document.removeEventListener('simplefile:toolbar-icon-size', handleIconSize);
       document.removeEventListener('simplefile:toast', handleToast);
       document.removeEventListener('simplefile:open-settings', handleSettingsOpen);

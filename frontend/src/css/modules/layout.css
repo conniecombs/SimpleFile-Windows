@@ -105,6 +105,12 @@
     overflow: hidden;
 }
 
+.status-active-pane {
+    font-weight: 600;
+    color: var(--accent-primary);
+    flex-shrink: 0;
+}
+
 .status-bar-section {
     flex: 0 0 auto;
     white-space: nowrap;

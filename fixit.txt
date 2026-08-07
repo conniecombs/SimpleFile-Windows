@@ -47,60 +47,64 @@ Docs:
 
 ---
 
-### 2. Replace DOM-ID workflow glue with component state
+### 2. Replace DOM-ID workflow glue with component state — PARTIAL (2026-08-07)
 
-Why:
-- Migration overlays are gone, but controllers still drive UI via IDs
-  (~110+ getElementById hits).
+Completed slices 1–2 (highest-impact overlay controllers):
 
-| File | Approx. uses |
+1. **Progress modal** — component-owned via `progressUi.svelte.ts` +
+   `ProgressModal.svelte`. Core `showProgressFlow` / `updateProgressFlow` /
+   `hideProgressFlow` write state, not DOM. Cancel is owned by the component.
+2. **Generic modal** — `modalUi.svelte.ts` + `GenericModal.svelte` for
+   confirm/prompt/html dialogs and Settings. HTML bodies still go through
+   `ModalBody` + `sanitizeModalHtml`. No more `innerHTML` / button wiring in
+   `core.ts` or settings open path in `setup.ts`.
+
+Still DOM-ID driven (follow-up slices):
+3. Search + smart-folder control chrome (inputs / results header)
+4. Archive create/list overlays (and advanced-rename, quicklook IDs)
+
+Why (historical):
+- Controllers drove progress/modals via getElementById on OverlayShell markup.
+
+---
+
+### 3. Richer transfer progress messaging — DONE (2026-08-07)
+
+Implemented richer transfer progress in the component-owned progress UI:
+
+- Size preflight ("Calculating size…") so totals are known early
+- Bytes copied / total, smoothed rate (B/s–TB/s), and ETA
+- Indeterminate bar while preparing (total still unknown)
+- Cancel keeps the dialog open with **Cancelling…** until the backend
+  acknowledges or a safety timeout fires
+- Current item shows basename (full path in tooltip)
+
+Key files:
+- `frontend/src/lib/app/progressUi.svelte.ts`
+- `frontend/src/lib/components/ProgressModal.svelte`
+- `frontend/src/css/modules/modal.css`
+- `src-tauri/src/progress.rs` (estimate + cancel-friendly walk)
+
+---
+
+### 4. Dual-pane keyboard workflow polish — DONE (2026-08-07)
+
+Implemented dual-pane keyboard and chrome polish:
+
+| Shortcut | Action |
 |---|---|
-| frontend/src/lib/app/core.ts | ~62 |
-| frontend/src/lib/app/setup.ts | ~22 |
-| frontend/src/lib/app/search.ts | ~13 |
-| archive / advanced rename / properties | smaller |
+| F6 | Toggle dual pane |
+| Tab | Switch active pane (when dual pane on) |
+| Alt+1 / Ctrl+Shift+Left | Focus left pane |
+| Alt+2 / Ctrl+Shift+Right | Focus right pane (enables dual pane if needed) |
+| Ctrl+Alt+C | Copy selection to other pane |
+| Ctrl+Alt+M | Move selection to other pane |
 
-Progress, modals, search, and archives still look like: find node by id →
-set text/HTML/visibility.
-
-Suggested order (one workflow at a time):
-1. Progress modal (title / % / item / cancel)
-2. Generic modal confirm flow
-3. Search + smart-folder controls
-4. Archive create/list UI
-
-This matches the “remaining follow-up” in the migration section of the
-improvement plan.
-
----
-
-### 3. Richer transfer progress messaging
-
-Why:
-- Backend tracks bytes (progress.rs); UI shows percent + current item only
-  (OverlayShell progress modal / updateProgressFlow).
-- Roadmap and feature docs still call this out.
-
-Suggested UX:
-- Bytes copied / total
-- Rate (MB/s)
-- Optional ETA
-- Clear cancel feedback when a large tree is mid-scan
-
-Low risk, high daily usability for a file manager.
-
----
-
-### 4. Dual-pane keyboard workflow polish
-
-Why:
-- Navigation shortcuts exist (arrows, Alt+arrows, F6 dual-pane toggle, tabs).
-- Feature docs still want stronger dual-pane keyboard behavior.
-
-Gaps to consider:
-- Explicit focus primary / secondary (e.g. Tab / Ctrl+Shift+←/→ / Alt+1 / Alt+2)
-- Cross-pane copy/move shortcuts (active → other pane)
-- Status/chrome that always shows which pane is active
+Also:
+- Active pane inset accent + header tint in dual-pane mode
+- Click pane chrome to activate
+- Status bar shows **Left pane** / **Right pane** + active path
+- Help modal + Settings shortcut list include Dual Pane section
 
 ---
 
@@ -123,15 +127,28 @@ Incremental path completed:
 
 ---
 
-### 6. Mapped network drive error UX
+### 6. Mapped network drive error UX — DONE (2026-08-07)
 
-Why:
-- Drive listing already surfaces mapped names and some unavailability text
-  in drives.rs.
+Implemented clearer mapped-network UX:
 
-Opportunity:
-- Clearer UI for disconnected maps, permission failures, slow UNC paths
-  (timeouts, retry, “offline” badge).
+**Backend (`drives.rs`)**
+- 3s timeout on network probe so dead maps no longer hang drive listing
+- Timeout → `offline` with explicit “timed out / check VPN / retry” detail
+- Existing Windows errors still map to offline/stale with actionable copy
+
+**Frontend**
+- Offline / Stale badges on My PC tree roots
+- Richer descriptions (access denied, not ready, timed out, share path)
+- My PC **refresh drives** control (↻) re-probes mappings
+- Opening an offline mapped drive shows reconnect dialog with Retry
+- Failed open refreshes drive status so badges stay current
+
+Key files:
+- `src-tauri/src/drives.rs`
+- `frontend/src/lib/components/layout-shell/SidebarShell.svelte`
+- `frontend/src/lib/components/tree-view/TreeView.svelte`
+- `frontend/src/lib/app/core.ts` (`refreshDrives`, reconnect dialog)
+- tree/sidebar/modal CSS
 
 ---
 
@@ -162,18 +179,20 @@ Out of scope (intentionally):
 ## Suggested next work order
 
 1. ~~Installer smoke workflow~~ — done
-2. Transfer progress (bytes / speed / ETA) — user-visible, contained
-3. Progress + modal off DOM IDs — first migration-glue slice
-4. Dual-pane keyboard focus — file-manager feel
+2. ~~Transfer progress (bytes / speed / ETA)~~ — done
+3. ~~Progress + generic modal off DOM IDs~~ — done (item 2 slices 1–2)
+4. ~~Dual-pane keyboard focus~~ — done
 5. ~~Metadata expansion~~ — done (properties panel)
-6. Type cleanup + doc sync — maintainability
+6. ~~Mapped network drive error UX~~ — done
+7. Search/archive DOM-ID migration (item 2 slices 3–4)
+8. Type cleanup + doc sync — maintainability
 
 ---
 
 ## Candidate next implementations
 
-B) Richer transfer progress
-C) Progress modal off getElementById
+D) Search/archive off getElementById
+F) Type cleanup + doc sync
 
 Pick one of the above (or another item from this file) as the next implementation slice.
 

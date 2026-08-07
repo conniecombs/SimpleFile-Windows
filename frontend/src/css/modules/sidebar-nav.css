@@ -171,6 +171,22 @@
     font-style: italic;
 }
 
+.quick-access-group-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sidebar-action-icon {
+    font-size: 13px;
+    line-height: 1;
+}
+
+#btn-refresh-drives:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
 /* ── Quick Access List ────────────────────────────────────────────────────── */
 
 .quick-access-list {

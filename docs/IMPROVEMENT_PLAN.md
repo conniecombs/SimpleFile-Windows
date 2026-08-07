@@ -293,10 +293,13 @@ work easier.
 
 ### Remaining Follow-Up
 
-The overlay hosts still intentionally preserve DOM IDs because several
-workflow controllers address those elements directly. A later UI slice can move
-one workflow at a time to component-owned state and events, then delete the
-corresponding DOM ID dependency.
+Progress and the generic modal/settings surface are component-owned via
+`progressUi.svelte.ts` / `ProgressModal.svelte` and `modalUi.svelte.ts` /
+`GenericModal.svelte`. Other overlay hosts still intentionally preserve DOM IDs
+because archive, advanced rename, Quick Look, and some search chrome still
+address those elements directly. A later UI slice can move one workflow at a
+time to component-owned state and events, then delete the corresponding DOM ID
+dependency.
 
 ### Files To Inspect
 

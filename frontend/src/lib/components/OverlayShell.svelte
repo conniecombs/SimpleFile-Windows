@@ -1,6 +1,10 @@
-<script lang="ts"></script>
+<script lang="ts">
+  import GenericModal from './GenericModal.svelte';
+  import ProgressModal from './ProgressModal.svelte';
+</script>
 
-<!-- Native Svelte overlay shell. IDs remain stable for the DOM-based workflow controllers. -->
+<!-- Native Svelte overlay shell. Progress + generic modal are component-owned state.
+     Remaining overlays still expose stable IDs for DOM-based workflow controllers. -->
 <div class="context-menu" id="context-menu" role="menu" aria-label="File actions">
         <button class="context-item" id="ctx-open" role="menuitem">Open</button>
         <button class="context-item" id="ctx-open-with" role="menuitem">Open With...</button>
@@ -28,42 +32,8 @@
         <button class="context-item" id="ctx-info" role="menuitem">Properties</button>
     </div>
 
-    <div class="modal-overlay" id="modal-overlay">
-        <div class="modal" id="modal">
-            <div class="modal-header">
-                <h3 id="modal-title">Dialog</h3>
-                <button class="modal-close" id="modal-close">&times;</button>
-            </div>
-            <div class="modal-body" id="modal-body">
-                </div>
-            <div class="modal-footer" id="modal-footer">
-                <button class="btn btn-secondary" id="modal-cancel">Cancel</button>
-                <button class="btn btn-primary" id="modal-confirm">Confirm</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="modal-overlay" id="progress-overlay">
-        <div class="modal progress-modal">
-            <div class="modal-header">
-                <h3 id="progress-title">Processing...</h3>
-            </div>
-            <div class="modal-body">
-                <div class="progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-bar-fill" id="progress-bar-fill"></div>
-                    </div>
-                    <div class="progress-info">
-                        <span id="progress-text">0%</span>
-                    </div>
-                    <div class="progress-item" id="progress-item"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="progress-cancel">Cancel</button>
-            </div>
-        </div>
-    </div>
+    <GenericModal />
+    <ProgressModal />
 
     <div class="quicklook-overlay" id="quicklook-overlay">
         <div class="quicklook-modal" id="quicklook-modal">
@@ -458,7 +428,15 @@
                     <div class="shortcut-row"><kbd>Ctrl+F</kbd><span>Search files</span></div>
                     <div class="shortcut-row"><kbd>Ctrl+Shift+C</kbd><span>Copy full path</span></div>
                     <div class="shortcut-row"><kbd>F5</kbd><span>Refresh</span></div>
+                </div>
+                <div class="shortcuts-section">
+                    <h4>Dual Pane</h4>
                     <div class="shortcut-row"><kbd>F6</kbd><span>Toggle dual pane</span></div>
+                    <div class="shortcut-row"><kbd>Tab</kbd><span>Switch active pane</span></div>
+                    <div class="shortcut-row"><kbd>Alt+1</kbd> / <kbd>Ctrl+Shift+Left</kbd><span>Focus left pane</span></div>
+                    <div class="shortcut-row"><kbd>Alt+2</kbd> / <kbd>Ctrl+Shift+Right</kbd><span>Focus right pane</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl+Alt+C</kbd><span>Copy selection to other pane</span></div>
+                    <div class="shortcut-row"><kbd>Ctrl+Alt+M</kbd><span>Move selection to other pane</span></div>
                 </div>
                 <div class="shortcuts-section">
                     <h4>Tabs & Bookmarks</h4>

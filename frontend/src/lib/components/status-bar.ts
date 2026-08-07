@@ -4,6 +4,7 @@ import StatusBar from './status-bar/StatusBar.svelte';
 import type { StatusBarDisk, StatusBarGit } from './status-bar/StatusBar.svelte';
 
 export type LegacyStatusBarProps = {
+  activePaneLabel?: string | null;
   currentPath?: string | null;
   disk?: StatusBarDisk | null;
   git?: StatusBarGit | null;

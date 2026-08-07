@@ -67,9 +67,19 @@ assertContains('frontend/src/css/modules/file-list.css', [
 
 assertContains('frontend/src/lib/app/localState.svelte.ts', [
   'folderMetricsToken: 0',
-  'currentProgressCancel',
   'secondaryNavigationToken: 0',
 ], 'freshness tokens');
+
+assertContains('frontend/src/lib/app/progressUi.svelte.ts', [
+  'onCancel',
+  'visible: false',
+  'export function showProgressUi',
+  'export function cancelProgressUi',
+  'bytesPerSecond',
+  'etaSeconds',
+  "phase = 'cancelling'",
+  'formatProgressBytes',
+], 'progress UI state owns cancel callback and transfer metrics');
 
 assertContains('frontend/src/lib/app/core.ts', [
   'cancelFolderMetricWork',
@@ -85,11 +95,19 @@ assertContains('frontend/src/lib/app/core.ts', [
 ], 'lazy metric cancellation and freshness');
 
 assertContains('frontend/src/lib/app/setup.ts', [
-  'localState.currentProgressCancel',
-  'Promise.resolve(localState.currentProgressCancel())',
+  'progressUi.operationId',
   'lastCancelledOperationId',
   "update.status === 'cancelled'",
 ], 'progress cancel callback wiring');
+
+assertContains('frontend/src/lib/components/ProgressModal.svelte', [
+  'cancelProgressUi',
+  'id="progress-cancel"',
+  'progress-transfer',
+  'progress-rate',
+  'progress-eta',
+  'Cancelling…',
+], 'progress cancel button owned by ProgressModal');
 
 assertContains('frontend/src/lib/fileNavigationPrimary.ts', [
   'void host.getGitFileStatuses(listing.path).then',

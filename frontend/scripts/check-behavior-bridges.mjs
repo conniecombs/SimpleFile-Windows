@@ -150,11 +150,8 @@ assertContains('frontend/src/App.svelte', [
 
 assertContains('frontend/src/lib/components/OverlayShell.svelte', [
   'id="context-menu"',
-  'id="modal-overlay"',
-  'id="modal-title"',
-  'id="modal-body"',
-  'id="progress-overlay"',
-  'id="progress-cancel"',
+  'GenericModal',
+  'ProgressModal',
   'id="quicklook-overlay"',
   'id="quicklook-content"',
   'id="archive-overlay"',
@@ -164,6 +161,19 @@ assertContains('frontend/src/lib/components/OverlayShell.svelte', [
   'id="about-overlay"',
   'id="external-drop-overlay"',
 ], 'native overlay shell contract');
+
+assertContains('frontend/src/lib/components/GenericModal.svelte', [
+  'id="modal-overlay"',
+  'id="modal-title"',
+  'id="modal-body"',
+  'modalUi',
+], 'component-owned generic modal');
+
+assertContains('frontend/src/lib/components/ProgressModal.svelte', [
+  'id="progress-overlay"',
+  'id="progress-cancel"',
+  'progressUi',
+], 'component-owned progress modal');
 
 assertContains('frontend/scripts/migrate-components.ps1', [
   'one-shot Svelte component migration script is retired',

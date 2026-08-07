@@ -16,6 +16,7 @@ This roadmap tracks the Windows-focused SimpleFile release.
   Installer package smoke runs nightly and on demand via `.github/workflows/installer-smoke.yml`.
 - Add targeted tests around mapped network drive display names.
 - Improve large-folder progress and cancellation visibility.
+  Transfer progress now shows bytes/total, rate, ETA, and cancelling state.
 - Continue tightening archive path validation and extraction safety.
 - Expand file metadata support while keeping preview limits conservative.
 

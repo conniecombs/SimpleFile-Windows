@@ -82,21 +82,37 @@ import {
   import { getRecentSearches, rememberRecentSearch } from '../searchStorage';
   import { getOpenWithSuggestions, rememberOpenWithApplication } from '../localCommandStorage';
   import { readAdvancedSearchOptions, searchResultToFileEntry, toSearchCommandOptions, type SearchWorkflowOptions } from '../searchOptions';
-  import { sanitizeModalHtml } from '../modalHtmlSecurity.mjs';
   import { renderAdvancedRenamePreview } from '../components/advanced-rename-preview';
   import { renderArchiveContents, renderArchiveInfo, renderCreateArchiveBody } from '../components/archive-surfaces';
   import { clearSearchResultsHeader, renderSearchResultsHeader } from '../components/search-chrome';
   import { renderContextMenu } from '../components/context-menus';
   import { clearQuickLook, renderQuickLook } from '../components/quick-look';
     import { renderStatusBar } from '../components/status-bar';
-  import { clearSettingsBody, renderSettingsBody } from '../components/settings-body';
   import { showError, showSuccess } from '../components/toasts';
+  import {
+    closeSettingsModalUi,
+    isModalVisible,
+    isSettingsModalOpen,
+    openConfirmDialog,
+    openHtmlDialog,
+    openPromptDialog,
+    openSettingsModalUi,
+  } from './modalUi.svelte';
+  import {
+    hideProgressUi,
+    isProgressVisible,
+    progressUi,
+    showProgressUi,
+    updateProgressUi,
+    type ProgressTransferDetails,
+  } from './progressUi.svelte';
   import type {
     ArchiveFormat,
     ColumnId,
     ClipboardAction,
     CleanupResult,
     ConflictAction,
+    DriveInfo,
     FileEntry,
     NativeFileDropEventPayload,
     OperationId,
@@ -507,11 +523,13 @@ const defaultColorLabels = [
   }
 
   export function updateStatusBar() {
+    const activePane = appState.activePane as PaneId;
     renderStatusBar(document.getElementById('status-bar'), {
-      currentPath: appState.currentPath,
-      selectedCount: selectedSetForPane().size,
+      activePaneLabel: activePaneLabel(),
+      currentPath: pathForPane(activePane) || appState.currentPath,
+      selectedCount: selectedSetForPane(activePane).size,
       selectedSizeText: selectedSizeText(),
-      totalItems: filteredEntriesForPane().length,
+      totalItems: filteredEntriesForPane(activePane).length,
     });
   }
 
@@ -733,6 +751,49 @@ const defaultColorLabels = [
     updateStatusBar();
   }
 
+  /** Focus the file list for the active pane so keyboard nav lands correctly. */
+  export function focusActiveFileList() {
+    const listId = appState.activePane === 'secondary' ? 'secondary-file-list' : 'file-list';
+    const list = document.getElementById(listId) as HTMLElement | null;
+    list?.focus({ preventScroll: true });
+  }
+
+  export function activatePane(pane: PaneId) {
+    if (!appState.dualPaneEnabled) {
+      appState.activePane = 'primary';
+      updateStatusBar();
+      focusActiveFileList();
+      return;
+    }
+
+    const next: PaneId = pane === 'secondary' ? 'secondary' : 'primary';
+    if (appState.activePane === next) {
+      focusActiveFileList();
+      return;
+    }
+
+    appState.activePane = next;
+    // Keep a sensible focus index if the target pane has items but no focus yet.
+    const entries = filteredEntriesForPane(next);
+    if (entries.length > 0 && (appState.focusedIndex < 0 || appState.focusedIndex >= entries.length)) {
+      appState.focusedIndex = 0;
+      appState.lastSelectedIndex = 0;
+    }
+    updateStatusBar();
+    if (next === 'primary') void updatePreviewPane();
+    focusActiveFileList();
+  }
+
+  export function switchActivePane() {
+    if (!appState.dualPaneEnabled) return;
+    activatePane(appState.activePane === 'primary' ? 'secondary' : 'primary');
+  }
+
+  export function activePaneLabel() {
+    if (!appState.dualPaneEnabled) return null;
+    return appState.activePane === 'secondary' ? 'Right pane' : 'Left pane';
+  }
+
   export function selectAllEntries() {
     const activePane = appState.activePane as PaneId;
     const entries = filteredEntriesForPane(activePane);
@@ -912,41 +973,17 @@ const defaultColorLabels = [
   }
 
   export function closeSettingsModal() {
-    const overlay = document.getElementById('modal-overlay');
-    const modal = document.getElementById('modal');
-    const body = document.getElementById('modal-body');
-    const cancelBtn = document.getElementById('modal-cancel');
-    const confirmBtn = document.getElementById('modal-confirm');
+    closeSettingsModalUi();
+  }
 
-    overlay?.classList.remove('visible');
-    modal?.classList.remove('settings-modal');
-    body?.classList.remove('settings-body');
-    if (cancelBtn) cancelBtn.style.display = '';
-    if (confirmBtn) {
-      confirmBtn.textContent = 'Confirm';
-      confirmBtn.onclick = null;
-    }
-    clearSettingsBody(body);
+  export function openSettingsModal() {
+    openSettingsModalUi();
   }
 
   export function resetGenericModal() {
-    const modal = document.getElementById('modal');
-    const body = document.getElementById('modal-body');
-    const cancelBtn = document.getElementById('modal-cancel') as HTMLButtonElement | null;
-    const confirmBtn = document.getElementById('modal-confirm') as HTMLButtonElement | null;
-
-    modal?.classList.remove('settings-modal');
-    body?.classList.remove('settings-body');
-    clearSettingsBody(body);
-    body?.replaceChildren();
-    if (cancelBtn) {
-      cancelBtn.style.display = '';
-      cancelBtn.textContent = 'Cancel';
-    }
-    if (confirmBtn) {
-      confirmBtn.style.display = '';
-      confirmBtn.textContent = 'Confirm';
-      confirmBtn.onclick = null;
+    // Settings/dialogs are owned by modalUi; closing clears the surface.
+    if (isSettingsModalOpen()) {
+      closeSettingsModalUi();
     }
   }
 
@@ -965,82 +1002,20 @@ const defaultColorLabels = [
     title: string;
     type?: 'confirm' | 'prompt';
   }) {
-    const overlay = document.getElementById('modal-overlay');
-    const titleElement = document.getElementById('modal-title');
-    const body = document.getElementById('modal-body');
-    const cancelBtn = document.getElementById('modal-cancel') as HTMLButtonElement | null;
-    const confirmBtn = document.getElementById('modal-confirm') as HTMLButtonElement | null;
-    const closeBtn = document.getElementById('modal-close') as HTMLButtonElement | null;
-
-    if (!overlay || !body || !confirmBtn) {
-      showError(`Dialog is unavailable: ${title}`);
-      return Promise.resolve(type === 'prompt' ? null : false);
-    }
-
-    resetGenericModal();
-    if (titleElement) titleElement.textContent = title;
-    confirmBtn.textContent = confirmText;
-
-    let input: HTMLInputElement | null = null;
-    if (message) {
-      const paragraph = document.createElement('p');
-      paragraph.textContent = message;
-      body.appendChild(paragraph);
-    }
-
     if (type === 'prompt') {
-      const group = document.createElement('div');
-      group.className = 'form-group';
-      const labelElement = document.createElement('label');
-      labelElement.className = 'form-label';
-      labelElement.htmlFor = 'core-dialog-input';
-      labelElement.textContent = label || title;
-      input = document.createElement('input');
-      input.id = 'core-dialog-input';
-      input.className = 'form-input input-full';
-      input.value = defaultValue;
-      group.append(labelElement, input);
-      body.appendChild(group);
+      return openPromptDialog({
+        confirmText,
+        defaultValue,
+        label,
+        message,
+        title,
+      });
     }
 
-    const overlayElement = overlay;
-    overlayElement.classList.add('visible');
-
-    return new Promise<string | boolean | null>((resolve) => {
-      function cleanup(result: string | boolean | null) {
-        overlayElement.classList.remove('visible');
-        document.removeEventListener('keydown', handleKeydown);
-        overlayElement.removeEventListener('mousedown', handleOverlayMouseDown);
-        cancelBtn?.removeEventListener('click', handleCancel);
-        closeBtn?.removeEventListener('click', handleCancel);
-        confirmBtn?.removeEventListener('click', handleConfirm);
-        resetGenericModal();
-        resolve(result);
-      }
-
-      function handleCancel() {
-        cleanup(null);
-      }
-
-      function handleConfirm() {
-        cleanup(type === 'prompt' ? input?.value.trim() || '' : true);
-      }
-
-      function handleOverlayMouseDown(event: MouseEvent) {
-        if (event.target === overlayElement) cleanup(null);
-      }
-
-      function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') cleanup(null);
-        if (event.key === 'Enter' && type === 'prompt') cleanup(input?.value.trim() || '');
-      }
-
-      document.addEventListener('keydown', handleKeydown);
-      overlayElement.addEventListener('mousedown', handleOverlayMouseDown);
-      cancelBtn?.addEventListener('click', handleCancel);
-      closeBtn?.addEventListener('click', handleCancel);
-      confirmBtn.addEventListener('click', handleConfirm);
-      window.setTimeout(() => input?.focus(), 0);
+    return openConfirmDialog({
+      confirmText,
+      message,
+      title,
     });
   }
 
@@ -1066,59 +1041,17 @@ const defaultColorLabels = [
     showCancel?: boolean;
     title: string;
   }) {
-    const overlay = document.getElementById('modal-overlay');
-    const titleElement = document.getElementById('modal-title');
-    const body = document.getElementById('modal-body');
-    const cancelBtn = document.getElementById('modal-cancel') as HTMLButtonElement | null;
-    const confirmBtn = document.getElementById('modal-confirm') as HTMLButtonElement | null;
-    const closeBtn = document.getElementById('modal-close') as HTMLButtonElement | null;
-
-    if (!overlay || !body || !confirmBtn) {
-      return Promise.resolve(false);
-    }
-
-    resetGenericModal();
-    if (titleElement) titleElement.textContent = title;
-    body.innerHTML = sanitizeModalHtml(bodyHtml);
-    confirmBtn.textContent = confirmText;
-    if (cancelBtn) cancelBtn.style.display = showCancel ? '' : 'none';
-    overlay.classList.add('visible');
-
-    return new Promise<unknown | false>((resolve) => {
-      function cleanup(result: unknown | false) {
-        overlay?.classList.remove('visible');
-        document.removeEventListener('keydown', handleKeydown);
-        overlay?.removeEventListener('mousedown', handleOverlayMouseDown);
-        cancelBtn?.removeEventListener('click', handleCancel);
-        closeBtn?.removeEventListener('click', handleCancel);
-        confirmBtn?.removeEventListener('click', handleConfirm);
-        resetGenericModal();
-        resolve(result);
-      }
-
-      function handleCancel() {
-        cleanup(false);
-      }
-
-      function handleConfirm() {
-        cleanup(onConfirm ? onConfirm() : true);
-      }
-
-      function handleOverlayMouseDown(event: MouseEvent) {
-        if (event.target === overlay) cleanup(false);
-      }
-
-      function handleKeydown(event: KeyboardEvent) {
-        if (event.key === 'Escape') cleanup(false);
-      }
-
-      document.addEventListener('keydown', handleKeydown);
-      overlay.addEventListener('mousedown', handleOverlayMouseDown);
-      cancelBtn?.addEventListener('click', handleCancel);
-      closeBtn?.addEventListener('click', handleCancel);
-      confirmBtn.addEventListener('click', handleConfirm);
-      window.setTimeout(() => body.querySelector<HTMLElement>('input, button, select, textarea')?.focus(), 0);
+    return openHtmlDialog({
+      bodyHtml,
+      confirmText,
+      onConfirm,
+      showCancel,
+      title,
     });
+  }
+
+  export function isGenericModalVisible() {
+    return isModalVisible();
   }
 
   const MAX_OPERATION_HISTORY = 50;
@@ -1410,6 +1343,90 @@ const defaultColorLabels = [
     }, 250);
   }
 
+  export function findDriveForPath(path: PathString): DriveInfo | null {
+    const normalized = normalizeComparablePath(path);
+    if (!normalized) return null;
+
+    const drives = [...(appState.drives || [])].sort(
+      (left, right) => String(right.path || '').length - String(left.path || '').length,
+    );
+
+    for (const drive of drives) {
+      const drivePath = normalizeComparablePath(drive.path);
+      if (!drivePath) continue;
+      if (normalized === drivePath || normalized.startsWith(drivePath.endsWith('/') ? drivePath : `${drivePath}/`)) {
+        return drive;
+      }
+    }
+    return null;
+  }
+
+  export async function refreshDrives(options: { quiet?: boolean } = {}) {
+    try {
+      const drives = await listDrives();
+      if (drives.length > 0) {
+        appState.drives = drives;
+      } else {
+        const fallbackDrive = createFallbackDriveForPath(appState.homePath || appState.currentPath);
+        appState.drives = fallbackDrive ? [fallbackDrive] : [];
+      }
+      return appState.drives;
+    } catch (error) {
+      if (!options.quiet) showError(error);
+      console.error('Failed to refresh drives:', error);
+      return appState.drives || [];
+    }
+  }
+
+  async function offerNetworkDriveReconnect(drive: DriveInfo, path: PathString, pane: PaneId) {
+    const status = String(drive.drive_status || 'available').toLowerCase();
+    if (status === 'available') return false;
+
+    const detail = escapeHtml(drive.status_detail || 'This mapped network drive is not reachable right now.');
+    const share = drive.remote_path
+      ? `<p class="settings-section-hint"><strong>Share:</strong> ${escapeHtml(drive.remote_path)}</p>`
+      : '';
+    const letter = escapeHtml(drive.path);
+
+    const shouldRetry = await showHtmlDialog({
+      bodyHtml: `
+        <div class="network-drive-dialog">
+          <p><strong>${escapeHtml(drive.name || drive.path)}</strong> is currently
+            <span class="network-drive-status network-drive-status--${escapeHtml(status)}">${escapeHtml(status)}</span>.
+          </p>
+          <p>${detail}</p>
+          ${share}
+          <p class="settings-section-hint">Path: ${letter}</p>
+          <p>Retry probes the mapping again (with a short timeout). Check VPN or credentials if it stays offline.</p>
+        </div>
+      `,
+      confirmText: 'Retry',
+      showCancel: true,
+      title: 'Network drive unavailable',
+    });
+
+    if (!shouldRetry) return true;
+
+    showProgressFlow('Checking network drive', drive.name || drive.path, 12);
+    try {
+      await refreshDrives({ quiet: true });
+      const updated = findDriveForPath(path);
+      const nextStatus = String(updated?.drive_status || 'offline').toLowerCase();
+      if (nextStatus === 'available') {
+        showSuccess(updated?.remote_path
+          ? `Connected to ${updated.remote_path}`
+          : 'Network drive is available again');
+        if (pane === 'secondary') await loadSecondaryDirectory(path);
+        else await loadDirectory(path);
+      } else {
+        showError(updated?.status_detail || 'The network drive is still unavailable.');
+      }
+    } finally {
+      hideProgressFlow();
+    }
+    return true;
+  }
+
   export async function loadDirectory(path: string, historyMode: HistoryMode = 'push') {
     const token = ++localState.navigationToken;
     try {
@@ -1437,7 +1454,15 @@ const defaultColorLabels = [
       syncActiveTab();
       void updatePreviewPane();
     } catch (e) {
-      showError(e);
+      const drive = findDriveForPath(path);
+      if (drive && String(drive.drive_type || '').toLowerCase() === 'network') {
+        const detail = drive.status_detail || String(e);
+        showError(detail);
+        // Refresh status so badges update after a failed open.
+        void refreshDrives({ quiet: true });
+      } else {
+        showError(e);
+      }
       console.error('Failed to load directory:', e);
     } finally {
       if (token === localState.navigationToken) {
@@ -1463,7 +1488,13 @@ const defaultColorLabels = [
       recordSecondaryHistory(listing.path, historyMode);
       applySecondaryEntryFilters();
     } catch (error) {
-      showError(error);
+      const drive = findDriveForPath(path);
+      if (drive && String(drive.drive_type || '').toLowerCase() === 'network') {
+        showError(drive.status_detail || String(error));
+        void refreshDrives({ quiet: true });
+      } else {
+        showError(error);
+      }
     }
   }
 
@@ -1864,7 +1895,7 @@ const defaultColorLabels = [
       throw error;
     } finally {
       window.setTimeout(() => {
-        if (localState.currentProgressOperationId === operationId) hideProgressFlow();
+        if (progressUi.operationId === operationId) hideProgressFlow();
       }, 220);
     }
   }
@@ -2054,7 +2085,7 @@ const defaultColorLabels = [
       }
     } finally {
       window.setTimeout(() => {
-        if (!localState.currentProgressOperationId) hideProgressFlow();
+        if (!progressUi.operationId) hideProgressFlow();
       }, 180);
     }
 
@@ -2235,6 +2266,16 @@ const defaultColorLabels = [
     const entry = pane === 'secondary' ? findSecondaryEntry(path) : findEntry(path);
     let shouldNavigate = isDirectory ?? entry?.is_dir;
 
+    // Drive roots from the tree are always directories.
+    const drive = findDriveForPath(path);
+    if (drive && pathsEqual(drive.path, path)) {
+      shouldNavigate = true;
+      if (String(drive.drive_type || '').toLowerCase() === 'network') {
+        const handled = await offerNetworkDriveReconnect(drive, path, pane);
+        if (handled) return;
+      }
+    }
+
     // When neither the caller nor the local entries list knows the type,
     // ask the backend instead of guessing.  This covers edge cases such as
     // stale entry lists or paths that arrive from external sources.
@@ -2329,7 +2370,7 @@ const defaultColorLabels = [
 
   type ProgressFlowOptions = {
     onCancel?: (() => unknown) | null;
-  };
+  } & ProgressTransferDetails;
 
   export function showProgressFlow(
     title: string,
@@ -2338,27 +2379,27 @@ const defaultColorLabels = [
     operationId: string | null = null,
     options: ProgressFlowOptions = {},
   ) {
-    localState.currentProgressOperationId = operationId;
-    localState.currentProgressCancel = options.onCancel ?? null;
-    setElementText('progress-title', title);
-    setElementText('progress-text', `${Math.max(0, Math.min(100, Math.round(percent)))}%`);
-    setElementText('progress-item', item);
-    const fill = document.getElementById('progress-bar-fill') as HTMLElement | null;
-    if (fill) fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-    setOverlayVisible('progress-overlay', true);
+    const { onCancel = null, currentBytes = null, totalBytes = null } = options;
+    showProgressUi(title, item, percent, operationId, onCancel, {
+      currentBytes,
+      totalBytes,
+    });
   }
 
-  export function updateProgressFlow(percent: number, item = '') {
-    setElementText('progress-text', `${Math.max(0, Math.min(100, Math.round(percent)))}%`);
-    if (item) setElementText('progress-item', item);
-    const fill = document.getElementById('progress-bar-fill') as HTMLElement | null;
-    if (fill) fill.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+  export function updateProgressFlow(
+    percent: number,
+    item = '',
+    details: ProgressTransferDetails = {},
+  ) {
+    updateProgressUi(percent, item, details);
   }
 
   export function hideProgressFlow() {
-    localState.currentProgressOperationId = null;
-    localState.currentProgressCancel = null;
-    setOverlayVisible('progress-overlay', false);
+    hideProgressUi();
+  }
+
+  export function isProgressDialogVisible() {
+    return isProgressVisible();
   }
 
   export async function runWithProgress<T>(
@@ -2528,22 +2569,37 @@ const defaultColorLabels = [
   }
 
   export async function copyOrMoveToOtherPane(action: 'copy' | 'move') {
-    if (!appState.dualPaneEnabled || !appState.secondaryPath) {
-      showError('Turn on Dual Pane and choose a destination pane first.');
+    if (!appState.dualPaneEnabled) {
+      showError('Turn on Dual Pane (F6) first.');
+      return;
+    }
+
+    const destinationPane: PaneId = appState.activePane === 'secondary' ? 'primary' : 'secondary';
+    const destination = pathForPane(destinationPane);
+    if (!destination) {
+      showError('Open a folder in the other pane first.');
       return;
     }
 
     const selectedEntries = selectedFileEntries();
-    if (selectedEntries.length === 0) return;
-    const destination = appState.activePane === 'secondary' ? appState.currentPath : appState.secondaryPath;
+    if (selectedEntries.length === 0) {
+      showError('Select one or more items in the active pane first.');
+      return;
+    }
 
     try {
       await transferEntriesWithSafety(
         selectedEntries.map((entry: FileEntry) => entry.path),
         destination,
         action,
-        { successMessage: action === 'copy' ? 'Copied to other pane' : 'Moved to other pane' },
+        {
+          successMessage: action === 'copy'
+            ? `Copied to ${destinationPane === 'secondary' ? 'right' : 'left'} pane`
+            : `Moved to ${destinationPane === 'secondary' ? 'right' : 'left'} pane`,
+        },
       );
+      if (destinationPane === 'secondary') await refreshSecondaryPane();
+      else await refreshCurrentDirectory();
     } catch (error) {
       if (!isCancellationError(error)) showError(error);
     }
@@ -2694,6 +2750,19 @@ const defaultColorLabels = [
     },
     {
       rows: [
+        ['pane.toggleDual', 'Toggle dual pane'],
+        ['pane.switch', 'Switch active pane'],
+        ['pane.focusPrimary', 'Focus left pane'],
+        ['pane.focusSecondary', 'Focus right pane'],
+        ['pane.focusLeft', 'Focus left pane'],
+        ['pane.focusRight', 'Focus right pane'],
+        ['pane.copyToOther', 'Copy selection to other pane'],
+        ['pane.moveToOther', 'Move selection to other pane'],
+      ],
+      title: 'Dual Pane',
+    },
+    {
+      rows: [
         ['quickLook.toggle', 'Quick Look'],
         ['search.focus', 'Focus search'],
         ['commandPalette.open', 'Command palette'],
@@ -2701,7 +2770,6 @@ const defaultColorLabels = [
         ['history.undo', 'Undo last create/rename/copy/move'],
         ['history.redo', 'Redo last create/rename/copy/move'],
         ['history.redo.shift', 'Redo last create/rename/copy/move'],
-        ['pane.toggleDual', 'Toggle dual pane'],
         ['terminal.open', 'Open terminal here'],
         ['help.keyboard', 'Keyboard shortcuts'],
         ['help.keyboard.ctrl', 'Keyboard shortcuts'],

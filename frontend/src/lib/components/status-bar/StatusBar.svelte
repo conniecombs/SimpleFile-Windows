@@ -13,6 +13,7 @@
   };
 
   let {
+    activePaneLabel = null,
     currentPath = null,
     disk = null,
     git = null,
@@ -20,6 +21,7 @@
     selectedSizeText = null,
     totalItems = 0,
   }: {
+    activePaneLabel?: string | null;
     currentPath?: string | null;
     disk?: StatusBarDisk | null;
     git?: StatusBarGit | null;
@@ -28,6 +30,12 @@
     totalItems?: number;
   } = $props();
 </script>
+
+{#if activePaneLabel}
+  <span class="status-bar-section status-active-pane" title="Active dual-pane side">
+    {activePaneLabel}
+  </span>
+{/if}
 
 <span class="status-bar-section status-items">
   {totalItems} item{totalItems === 1 ? '' : 's'}

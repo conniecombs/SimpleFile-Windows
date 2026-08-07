@@ -404,9 +404,16 @@ fn copy_file_with_progress(
     let file_len = fs::symlink_metadata(src)
         .map_err(|e| format!("Failed to stat source file: {e}"))?
         .len();
-    ctx.progress
-        .total_bytes
-        .fetch_add(file_len, Ordering::Relaxed);
+    // Keep the reported total at least as large as bytes already queued for
+    // this file when the preflight estimate was incomplete or stale.
+    let known = ctx.progress.total_bytes.load(Ordering::Relaxed);
+    let completed = *completed_bytes;
+    let needed = completed.saturating_add(file_len);
+    if needed > known {
+        ctx.progress
+            .total_bytes
+            .store(needed, Ordering::Relaxed);
+    }
 
     if file_len == 0 {
         fs::OpenOptions::new()
@@ -439,12 +446,20 @@ fn copy_file_with_progress(
             Ok(written) => {
                 *completed_bytes += written;
                 if written > file_len {
-                    ctx.progress
-                        .total_bytes
-                        .fetch_add(written - file_len, Ordering::Relaxed);
+                    let known = ctx.progress.total_bytes.load(Ordering::Relaxed);
+                    let needed = (*completed_bytes).max(known);
+                    if needed > known {
+                        ctx.progress.total_bytes.store(needed, Ordering::Relaxed);
+                    }
                 }
-                ctx.progress.emit(
+                let total = ctx
+                    .progress
+                    .total_bytes
+                    .load(Ordering::Relaxed)
+                    .max(*completed_bytes);
+                ctx.progress.emit_with_total(
                     *completed_bytes,
+                    total,
                     src.to_string_lossy().to_string(),
                     "running",
                     None,
@@ -558,9 +573,23 @@ fn move_plan_with_progress(
         remove_existing_destination(&plan.final_dest)?;
     }
 
+    let rename_size = fs::symlink_metadata(&plan.source_path)
+        .map(|meta| {
+            if meta.file_type().is_file() {
+                meta.len()
+            } else {
+                0
+            }
+        })
+        .unwrap_or(0);
     if plan.allow_rename && !network && fs::rename(&plan.source_path, &plan.final_dest).is_ok() {
-        let total = ctx.total_bytes.fetch_add(1, Ordering::Relaxed) + 1;
-        *completed_bytes += 1;
+        // Same-volume rename is effectively instant; count the source size as
+        // completed so the byte progress bar still advances.
+        *completed_bytes = completed_bytes.saturating_add(rename_size.max(1));
+        let total = ctx
+            .total_bytes
+            .load(Ordering::Relaxed)
+            .max(*completed_bytes);
         ctx.emit_with_total(
             *completed_bytes,
             total,
@@ -606,6 +635,73 @@ fn choose_next_keep_both_destination(
     Ok(())
 }
 
+/// Best-effort recursive size of a source path for progress totals / ETA.
+/// Symlinks contribute 0 (recreated, not followed as trees).
+fn estimate_path_bytes(path: &Path, state: &Arc<AppState>, operation_id: &str) -> Result<u64, String> {
+    check_cancelled(state, operation_id)?;
+    let meta =
+        fs::symlink_metadata(path).map_err(|e| format!("Failed to stat {}: {e}", path.display()))?;
+    let file_type = meta.file_type();
+    if file_type.is_symlink() {
+        return Ok(0);
+    }
+    if file_type.is_file() {
+        return Ok(meta.len());
+    }
+    if !file_type.is_dir() {
+        return Ok(0);
+    }
+
+    let mut total = 0u64;
+    let mut stack = vec![path.to_path_buf()];
+    let mut visited = 0u32;
+    while let Some(dir) = stack.pop() {
+        check_cancelled(state, operation_id)?;
+        let entries = fs::read_dir(&dir).map_err(|e| format!("Failed to read {}: {e}", dir.display()))?;
+        for entry in entries {
+            check_cancelled(state, operation_id)?;
+            let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
+            let entry_path = entry.path();
+            let entry_meta = match fs::symlink_metadata(&entry_path) {
+                Ok(meta) => meta,
+                Err(_) => continue,
+            };
+            let entry_type = entry_meta.file_type();
+            if entry_type.is_symlink() {
+                continue;
+            }
+            if entry_type.is_dir() {
+                stack.push(entry_path);
+            } else if entry_type.is_file() {
+                total = total.saturating_add(entry_meta.len());
+            }
+            visited = visited.saturating_add(1);
+            // Keep cancel responsive on huge trees without per-entry checks only.
+            if visited.is_multiple_of(256) {
+                check_cancelled(state, operation_id)?;
+            }
+        }
+    }
+    Ok(total)
+}
+
+fn estimate_transfer_bytes(
+    plans: &[TransferPlan],
+    state: &Arc<AppState>,
+    operation_id: &str,
+) -> Result<u64, String> {
+    let mut total = 0u64;
+    for plan in plans {
+        check_cancelled(state, operation_id)?;
+        total = total.saturating_add(estimate_path_bytes(
+            &plan.source_path,
+            state,
+            operation_id,
+        )?);
+    }
+    Ok(total)
+}
+
 fn transfer_with_progress_blocking(
     operation_type: &'static str,
     sources: Vec<String>,
@@ -640,7 +736,39 @@ fn transfer_with_progress_blocking(
         total_bytes: &total_bytes,
     };
 
-    progress.emit_with_total(0, 0, String::new(), "running", None);
+    // Size preflight gives the UI a stable total for percent / rate / ETA.
+    progress.emit_with_total(0, 0, "Calculating size…".to_string(), "running", None);
+    let estimated = match estimate_transfer_bytes(&plans, &state, &operation_id) {
+        Ok(value) => value,
+        Err(e) if e == "Operation cancelled" => {
+            clear_cancelled_operation(&state, &operation_id);
+            progress.emit_with_total(
+                0,
+                0,
+                String::new(),
+                "cancelled",
+                Some("Operation cancelled".to_string()),
+            );
+            return Ok(Vec::new());
+        }
+        Err(e) => {
+            // Fall through with an unknown total; transfer can still proceed.
+            log::warn!("transfer size estimate failed: {e}");
+            0
+        }
+    };
+    total_bytes.store(estimated, Ordering::Relaxed);
+    progress.emit_with_total(
+        0,
+        estimated,
+        if estimated > 0 {
+            "Starting transfer…".to_string()
+        } else {
+            String::new()
+        },
+        "running",
+        None,
+    );
 
     // Outcome separates user cancel (with any completed items) from hard errors so
     // the frontend can mark history as cancelled without losing partial results.

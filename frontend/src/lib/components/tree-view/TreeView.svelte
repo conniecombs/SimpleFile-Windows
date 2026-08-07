@@ -1,5 +1,6 @@
 <script lang="ts">
   export type TreeViewNode = {
+    badge?: string;
     children: TreeViewNode[];
     description?: string;
     hasChildren: boolean;
@@ -142,7 +143,15 @@
       {/if}
       <span class="tree-icon" aria-hidden="true">{node.icon}</span>
       <span class="tree-label">
-        <span class="tree-name">{node.name}</span>
+        <span class="tree-name-row">
+          <span class="tree-name">{node.name}</span>
+          {#if node.badge}
+            <span
+              class={`tree-status-badge tree-status-badge--${node.status || 'unknown'}`}
+              title={node.title || node.description || node.badge}
+            >{node.badge}</span>
+          {/if}
+        </span>
         {#if node.description}
           <span class="tree-description">{node.description}</span>
         {/if}

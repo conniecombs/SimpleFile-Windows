@@ -1,4 +1,9 @@
 use crate::models::DriveInfo;
+use std::sync::mpsc;
+use std::time::Duration;
+
+/// Bound network probe time so one dead mapped drive cannot hang listing.
+const NETWORK_PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 
 #[tauri::command]
 pub async fn list_drives() -> Result<Vec<DriveInfo>, String> {
@@ -111,38 +116,73 @@ fn windows_error_detail(error_code: u32) -> String {
     }
 }
 
-fn network_drive_status(wide_path: &[u16], remote_path: Option<&str>) -> (String, Option<String>) {
+/// Probe a network root with a timeout so disconnected maps fail fast.
+/// Returns Ok(attributes) when reachable, Err(Some(code)) on Windows error,
+/// Err(None) on probe timeout.
+fn probe_network_attributes(wide_path: &[u16]) -> Result<u32, Option<u32>> {
     use winapi::um::fileapi::{GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
 
-    let attributes = unsafe { GetFileAttributesW(wide_path.as_ptr()) };
-    if attributes != INVALID_FILE_ATTRIBUTES {
-        let detail = remote_path
-            .map(|remote| format!("Connected to {remote}"))
-            .or_else(|| Some("Network drive is reachable; share name is unavailable.".to_string()));
-        return ("available".to_string(), detail);
-    }
+    let (tx, rx) = mpsc::channel();
+    let wide = wide_path.to_vec();
+    std::thread::spawn(move || {
+        let attributes = unsafe { GetFileAttributesW(wide.as_ptr()) };
+        let result = if attributes == INVALID_FILE_ATTRIBUTES {
+            let error_code = std::io::Error::last_os_error()
+                .raw_os_error()
+                .unwrap_or(0)
+                .max(0) as u32;
+            Err(Some(error_code))
+        } else {
+            Ok(attributes)
+        };
+        let _ = tx.send(result);
+    });
 
-    let error_code = std::io::Error::last_os_error()
-        .raw_os_error()
-        .unwrap_or(0)
-        .max(0) as u32;
-    if remote_path.is_some() {
-        return (
+    match rx.recv_timeout(NETWORK_PROBE_TIMEOUT) {
+        Ok(Ok(attributes)) => Ok(attributes),
+        Ok(Err(code)) => Err(code),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(None),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(Some(0)),
+    }
+}
+
+fn network_drive_status(wide_path: &[u16], remote_path: Option<&str>) -> (String, Option<String>) {
+    match probe_network_attributes(wide_path) {
+        Ok(_) => {
+            let detail = remote_path
+                .map(|remote| format!("Connected to {remote}"))
+                .or_else(|| {
+                    Some("Network drive is reachable; share name is unavailable.".to_string())
+                });
+            ("available".to_string(), detail)
+        }
+        Err(None) => {
+            let share = remote_path
+                .map(|remote| format!(" Share: {remote}."))
+                .unwrap_or_default();
+            (
+                "offline".to_string(),
+                Some(format!(
+                    "Timed out after {}s waiting for the network share.{share} Check VPN, Wi‑Fi, or the server, then retry.",
+                    NETWORK_PROBE_TIMEOUT.as_secs()
+                )),
+            )
+        }
+        Err(Some(error_code)) if remote_path.is_some() => (
             "offline".to_string(),
             Some(format!(
-                "{} The mapping is still present; open the drive to reconnect.",
+                "{} The mapping is still present; open the drive or retry to reconnect.",
                 windows_error_detail(error_code)
             )),
-        );
+        ),
+        Err(Some(error_code)) => (
+            "stale".to_string(),
+            Some(format!(
+                "{} Windows did not return a share name for this mapping; reconnect or remove the stale drive.",
+                windows_error_detail(error_code)
+            )),
+        ),
     }
-
-    (
-        "stale".to_string(),
-        Some(format!(
-            "{} Windows did not return a share name for this mapping; reconnect or remove the stale drive.",
-            windows_error_detail(error_code)
-        )),
-    )
 }
 
 fn windows_drive_display_name(
@@ -247,7 +287,7 @@ fn list_drives_blocking() -> Result<Vec<DriveInfo>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::network_remote_display_name;
+    use super::{network_remote_display_name, windows_error_detail};
 
     #[test]
     fn network_remote_display_name_formats_unc_share() {
@@ -263,5 +303,19 @@ mod tests {
             network_remote_display_name("Network Root"),
             Some("Network Root".to_string())
         );
+    }
+
+    #[test]
+    fn windows_error_detail_covers_common_network_failures() {
+        use winapi::shared::winerror::{
+            ERROR_ACCESS_DENIED, ERROR_BAD_NETPATH, ERROR_BAD_NET_NAME, ERROR_NOT_READY,
+        };
+
+        assert!(windows_error_detail(ERROR_BAD_NETPATH).contains("Network path"));
+        assert!(windows_error_detail(ERROR_BAD_NET_NAME).contains("share"));
+        assert!(windows_error_detail(ERROR_ACCESS_DENIED).contains("Access was denied"));
+        assert!(windows_error_detail(ERROR_NOT_READY).contains("not ready"));
+        assert!(windows_error_detail(0).contains("unavailable"));
+        assert!(windows_error_detail(12345).contains("12345"));
     }
 }

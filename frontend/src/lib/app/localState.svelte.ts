@@ -24,8 +24,6 @@ interface LocalState {
   secondaryNavigationToken: number;
   currentQuickLookPath: PathString | null;
   currentArchivePath: PathString | null;
-  currentProgressCancel: (() => unknown) | null;
-  currentProgressOperationId: OperationId | null;
   /** Last transfer/progress operation the backend reported as cancelled. */
   lastCancelledOperationId: OperationId | null;
   watchedDirectoryPath: PathString | null;
@@ -44,8 +42,6 @@ export const localState = $state<LocalState>({
   secondaryNavigationToken: 0,
   currentQuickLookPath: null,
   currentArchivePath: null,
-  currentProgressCancel: null,
-  currentProgressOperationId: null,
   lastCancelledOperationId: null,
   watchedDirectoryPath: null,
   fileChangeRefreshTimer: null,

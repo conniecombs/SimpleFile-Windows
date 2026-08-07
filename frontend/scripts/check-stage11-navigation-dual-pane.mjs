@@ -63,6 +63,15 @@ assertContains('frontend/src/lib/app/setup.ts', [
   'tabsLoaded || workspaceLayoutLoaded',
   'const toggleDualPane = () => {',
   "addShortcut('pane.toggleDual', 'F6', toggleDualPane);",
+  "addShortcut('pane.switch', 'Tab'",
+  "addShortcut('pane.focusPrimary', 'Alt+1'",
+  "addShortcut('pane.focusSecondary', 'Alt+2'",
+  "addShortcut('pane.copyToOther', 'Ctrl+Alt+C'",
+  "addShortcut('pane.moveToOther', 'Ctrl+Alt+M'",
+  'switchActivePane',
+  'activatePane',
+  'copyOrMoveToOtherPane',
+  "document.addEventListener('simplefile:activate-pane', handleActivatePane);",
   'const handleSecondaryPaneCommand',
   'const handleFileChange',
   "document.addEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
@@ -137,11 +146,31 @@ assertContains('frontend/src/lib/tauri.ts', [
 
 assertContains('frontend/src/lib/app/core.ts', [
   "['pane.toggleDual', 'Toggle dual pane']",
+  "['pane.switch', 'Switch active pane']",
+  "['pane.copyToOther', 'Copy selection to other pane']",
+  "['pane.moveToOther', 'Move selection to other pane']",
+  'export function activatePane',
+  'export function switchActivePane',
+  'export function activePaneLabel',
+  'export async function copyOrMoveToOtherPane',
 ], 'Stage 11 keyboard help shortcut');
 
 assertContains('frontend/src/lib/components/OverlayShell.svelte', [
   '<div class="shortcut-row"><kbd>F6</kbd><span>Toggle dual pane</span></div>',
+  '<div class="shortcut-row"><kbd>Tab</kbd><span>Switch active pane</span></div>',
+  '<div class="shortcut-row"><kbd>Ctrl+Alt+C</kbd><span>Copy selection to other pane</span></div>',
 ], 'Stage 11 static keyboard help shortcut');
+
+assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
+  "class:active={appState.dualPaneEnabled && appState.activePane === 'primary'}",
+  "class:active={appState.dualPaneEnabled && appState.activePane === 'secondary'}",
+  "simplefile:activate-pane",
+], 'Stage 11 active pane chrome');
+
+assertContains('frontend/src/lib/components/status-bar/StatusBar.svelte', [
+  'activePaneLabel',
+  'status-active-pane',
+], 'Stage 11 status bar active pane indicator');
 
 assertNotContains('frontend/src/lib/index.ts', [
   "export * from './fileNavigation';",
