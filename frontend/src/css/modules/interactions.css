@@ -169,6 +169,19 @@
     background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
     pointer-events: none;
     z-index: 100;
+    box-sizing: border-box;
+}
+
+/* While marquee-selecting, suppress text selection and item drag chrome. */
+body.marquee-selecting,
+body.marquee-selecting * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    cursor: default !important;
+}
+
+.file-list.marquee-selecting {
+    touch-action: none;
 }
 
 /* ── Type-ahead Find Indicator ────────────────────────────────────────────── */

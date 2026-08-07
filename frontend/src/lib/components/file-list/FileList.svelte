@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
-  import { localState } from '../../app/localState.svelte';
+  import {
+    clearActiveSelection,
+    selectPaths,
+    selectSecondaryPaths,
+    updateStatusBar,
+  } from '../../app/core';
   import { isProgressVisible, progressUi } from '../../app/progressUi.svelte';
   import { fileType, formatFileSize, formatModified, visibleEntries } from '../../coreFileManager';
   import {
@@ -14,6 +19,17 @@
     isImageFileName,
     subscribeThumbnailCache,
   } from '../../fileListLazyData';
+  import {
+    MARQUEE_AUTO_SCROLL_EDGE_PX,
+    MARQUEE_AUTO_SCROLL_SPEED_PX,
+    clientPointToContent,
+    exceededMarqueeThreshold,
+    indicesInMarquee,
+    isPointOnScrollbar,
+    mergeMarqueeSelection,
+    normalizeRect,
+    type MarqueeLayout,
+  } from '../../marqueeSelection';
   import type { ColumnId, FileEntry, PathString } from '../../types';
   import FileListItems from './FileListItems.svelte';
   import type { FileListViewItem } from './FileListItems.svelte';
@@ -37,6 +53,24 @@
   let measureFrame = 0;
   let lazyMetricsFrame = 0;
   let lazyThumbnailsFrame = 0;
+  let marqueeFrame = 0;
+  let marqueeAutoScrollFrame = 0;
+  let marqueeRectElement: HTMLDivElement | null = null;
+  let marqueeSession: {
+    additive: boolean;
+    basePaths: PathString[];
+    contentWidth: number;
+    dragging: boolean;
+    lastClientX: number;
+    lastClientY: number;
+    paddingLeft: number;
+    paddingTop: number;
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startContentX: number;
+    startContentY: number;
+  } | null = null;
 
   let visibleColumns = $derived(appState.settings?.visibleColumns || ['size', 'date', 'type']);
   let sourceEntries = $derived(
@@ -249,6 +283,360 @@
     });
   }
 
+  function listPadding(list: HTMLElement) {
+    const styles = getComputedStyle(list);
+    return {
+      left: Number.parseFloat(styles.paddingLeft) || 0,
+      right: Number.parseFloat(styles.paddingRight) || 0,
+      top: Number.parseFloat(styles.paddingTop) || 0,
+    };
+  }
+
+  function currentMarqueeLayout(list: HTMLElement): MarqueeLayout {
+    const padding = listPadding(list);
+    const contentWidth = Math.max(1, list.clientWidth - padding.left - padding.right);
+    if (appState.isGridView) {
+      return {
+        mode: 'grid',
+        itemCount: sourceEntries.length,
+        columns: gridColumnCount,
+        itemWidth: gridItemWidth,
+        itemHeight: gridItemHeight,
+        gap: GRID_GAP,
+      };
+    }
+
+    return {
+      mode: 'list',
+      itemCount: sourceEntries.length,
+      rowHeight: LIST_ROW_HEIGHT,
+      contentWidth,
+    };
+  }
+
+  function ensureMarqueeRectElement() {
+    if (marqueeRectElement) {
+      return marqueeRectElement;
+    }
+
+    const element = document.createElement('div');
+    element.className = 'selection-rect';
+    element.setAttribute('aria-hidden', 'true');
+    element.style.display = 'none';
+    document.body.appendChild(element);
+    marqueeRectElement = element;
+    return element;
+  }
+
+  function hideMarqueeRect() {
+    if (marqueeRectElement) {
+      marqueeRectElement.style.display = 'none';
+    }
+  }
+
+  function updateMarqueeRectVisual(x1: number, y1: number, x2: number, y2: number) {
+    const element = ensureMarqueeRectElement();
+    const left = Math.min(x1, x2);
+    const top = Math.min(y1, y2);
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
+    element.style.display = 'block';
+    element.style.left = `${left}px`;
+    element.style.top = `${top}px`;
+    element.style.width = `${width}px`;
+    element.style.height = `${height}px`;
+  }
+
+  function applyMarqueeSelectionFromContent(
+    contentX: number,
+    contentY: number,
+    list: HTMLElement,
+  ) {
+    const session = marqueeSession;
+    if (!session) {
+      return;
+    }
+
+    const rect = normalizeRect(
+      session.startContentX,
+      session.startContentY,
+      contentX,
+      contentY,
+    );
+    const layout = currentMarqueeLayout(list);
+    const hitIndices = indicesInMarquee(rect, layout);
+    const hitPaths = hitIndices
+      .map((index) => sourceEntries[index]?.path)
+      .filter((path): path is PathString => Boolean(path));
+    const nextPaths = mergeMarqueeSelection(session.basePaths, hitPaths, session.additive) as PathString[];
+    const focusIndex = hitIndices.length > 0
+      ? hitIndices[hitIndices.length - 1]
+      : -1;
+
+    if (pane === 'secondary') {
+      selectSecondaryPaths(nextPaths, focusIndex);
+    } else {
+      selectPaths(nextPaths, focusIndex);
+    }
+
+    // Keep the marquee anchor stable for shift-click ranges after the drag.
+    if (hitIndices.length > 0) {
+      appState.lastSelectedIndex = hitIndices[0];
+      appState.focusedIndex = focusIndex;
+    }
+  }
+
+  function pointerToContent(list: HTMLElement, clientX: number, clientY: number, session: NonNullable<typeof marqueeSession>) {
+    const listRect = list.getBoundingClientRect();
+    return clientPointToContent(
+      clientX,
+      clientY,
+      listRect,
+      list.scrollLeft,
+      list.scrollTop,
+      session.paddingLeft,
+      session.paddingTop,
+    );
+  }
+
+  function contentPointToClient(
+    list: HTMLElement,
+    contentX: number,
+    contentY: number,
+    session: NonNullable<typeof marqueeSession>,
+  ) {
+    const listRect = list.getBoundingClientRect();
+    return {
+      x: listRect.left + session.paddingLeft + contentX - list.scrollLeft,
+      y: listRect.top + session.paddingTop + contentY - list.scrollTop,
+    };
+  }
+
+  function processMarqueePointer(clientX: number, clientY: number) {
+    const list = fileListElement;
+    const session = marqueeSession;
+    if (!list || !session) {
+      return;
+    }
+
+    session.lastClientX = clientX;
+    session.lastClientY = clientY;
+
+    if (!session.dragging) {
+      if (!exceededMarqueeThreshold(
+        session.startClientX,
+        session.startClientY,
+        clientX,
+        clientY,
+      )) {
+        return;
+      }
+      session.dragging = true;
+      list.classList.add('marquee-selecting');
+      document.body.classList.add('marquee-selecting');
+    }
+
+    const content = pointerToContent(list, clientX, clientY, session);
+    // Anchor stays in content space so auto-scroll keeps the band stable.
+    const startClient = contentPointToClient(
+      list,
+      session.startContentX,
+      session.startContentY,
+      session,
+    );
+    updateMarqueeRectVisual(startClient.x, startClient.y, clientX, clientY);
+    applyMarqueeSelectionFromContent(content.x, content.y, list);
+  }
+
+  function queueMarqueePointer(clientX: number, clientY: number) {
+    if (marqueeFrame) {
+      cancelAnimationFrame(marqueeFrame);
+    }
+    marqueeFrame = requestAnimationFrame(() => {
+      marqueeFrame = 0;
+      processMarqueePointer(clientX, clientY);
+    });
+  }
+
+  function stopMarqueeAutoScroll() {
+    if (marqueeAutoScrollFrame) {
+      cancelAnimationFrame(marqueeAutoScrollFrame);
+      marqueeAutoScrollFrame = 0;
+    }
+  }
+
+  function tickMarqueeAutoScroll() {
+    marqueeAutoScrollFrame = 0;
+    const list = fileListElement;
+    const session = marqueeSession;
+    if (!list || !session || !session.dragging) {
+      return;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    let delta = 0;
+    if (session.lastClientY < listRect.top + MARQUEE_AUTO_SCROLL_EDGE_PX) {
+      delta = -MARQUEE_AUTO_SCROLL_SPEED_PX;
+    } else if (session.lastClientY > listRect.bottom - MARQUEE_AUTO_SCROLL_EDGE_PX) {
+      delta = MARQUEE_AUTO_SCROLL_SPEED_PX;
+    }
+
+    if (delta !== 0) {
+      const previous = list.scrollTop;
+      list.scrollTop = Math.max(0, Math.min(list.scrollHeight - list.clientHeight, previous + delta));
+      if (list.scrollTop !== previous) {
+        scrollTop = list.scrollTop;
+        processMarqueePointer(session.lastClientX, session.lastClientY);
+      }
+    }
+
+    marqueeAutoScrollFrame = requestAnimationFrame(tickMarqueeAutoScroll);
+  }
+
+  function startMarqueeAutoScroll() {
+    stopMarqueeAutoScroll();
+    marqueeAutoScrollFrame = requestAnimationFrame(tickMarqueeAutoScroll);
+  }
+
+  function endMarqueeSession(commitEmptyClick: boolean) {
+    const session = marqueeSession;
+    const list = fileListElement;
+    marqueeSession = null;
+    stopMarqueeAutoScroll();
+    if (marqueeFrame) {
+      cancelAnimationFrame(marqueeFrame);
+      marqueeFrame = 0;
+    }
+    hideMarqueeRect();
+    list?.classList.remove('marquee-selecting');
+    document.body.classList.remove('marquee-selecting');
+
+    if (!session) {
+      return;
+    }
+
+    // Click empty space without dragging: clear selection (Explorer-like).
+    if (commitEmptyClick && !session.dragging && !session.additive) {
+      appState.activePane = pane;
+      clearActiveSelection();
+      updateStatusBar();
+    }
+  }
+
+  function onMarqueePointerMove(event: PointerEvent) {
+    if (!marqueeSession || event.pointerId !== marqueeSession.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    queueMarqueePointer(event.clientX, event.clientY);
+  }
+
+  function onMarqueePointerUp(event: PointerEvent) {
+    if (!marqueeSession || event.pointerId !== marqueeSession.pointerId) {
+      return;
+    }
+    event.preventDefault();
+    // Flush any pending rAF so the final pointer position is applied.
+    if (marqueeFrame) {
+      cancelAnimationFrame(marqueeFrame);
+      marqueeFrame = 0;
+    }
+    if (marqueeSession.dragging) {
+      processMarqueePointer(event.clientX, event.clientY);
+    }
+    try {
+      fileListElement?.releasePointerCapture(event.pointerId);
+    } catch {
+      // Pointer may already be released.
+    }
+    window.removeEventListener('pointermove', onMarqueePointerMove);
+    window.removeEventListener('pointerup', onMarqueePointerUp);
+    window.removeEventListener('pointercancel', onMarqueePointerUp);
+    endMarqueeSession(true);
+  }
+
+  function handleMarqueePointerDown(event: PointerEvent) {
+    if (event.button !== 0 || event.altKey) {
+      return;
+    }
+
+    const list = fileListElement;
+    if (!list || event.currentTarget !== list) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    // Item drag-and-drop / click selection own pointer interactions on rows.
+    if (target?.closest('.file-item')) {
+      return;
+    }
+
+    const listRect = list.getBoundingClientRect();
+    if (isPointOnScrollbar(
+      event.clientX,
+      event.clientY,
+      listRect,
+      list.clientWidth,
+      list.clientHeight,
+    )) {
+      return;
+    }
+
+    // Don't start marquee while a modal transfer dialog is open.
+    if (isProgressVisible()) {
+      return;
+    }
+
+    const padding = listPadding(list);
+    const content = clientPointToContent(
+      event.clientX,
+      event.clientY,
+      listRect,
+      list.scrollLeft,
+      list.scrollTop,
+      padding.left,
+      padding.top,
+    );
+
+    const baseSet = pane === 'primary'
+      ? appState.selectedEntries
+      : (appState.secondarySelectedEntries || new Set<PathString>());
+    const additive = event.ctrlKey || event.metaKey;
+
+    marqueeSession = {
+      additive,
+      basePaths: [...baseSet] as PathString[],
+      contentWidth: Math.max(1, list.clientWidth - padding.left - padding.right),
+      dragging: false,
+      lastClientX: event.clientX,
+      lastClientY: event.clientY,
+      paddingLeft: padding.left,
+      paddingTop: padding.top,
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startContentX: content.x,
+      startContentY: content.y,
+    };
+
+    appState.activePane = pane;
+    updateStatusBar();
+
+    // Prevent native text selection while deciding whether this is a drag.
+    event.preventDefault();
+
+    try {
+      list.setPointerCapture(event.pointerId);
+    } catch {
+      // Capture is best-effort; window listeners still track the gesture.
+    }
+
+    window.addEventListener('pointermove', onMarqueePointerMove);
+    window.addEventListener('pointerup', onMarqueePointerUp);
+    window.addEventListener('pointercancel', onMarqueePointerUp);
+    startMarqueeAutoScroll();
+  }
+
   function queueVisibleFolderMetrics(entries: FileEntry[]) {
     if (lazyMetricsFrame) {
       cancelAnimationFrame(lazyMetricsFrame);
@@ -327,6 +715,14 @@
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateViewportMeasurements);
       unsubscribeThumbnails();
+      window.removeEventListener('pointermove', onMarqueePointerMove);
+      window.removeEventListener('pointerup', onMarqueePointerUp);
+      window.removeEventListener('pointercancel', onMarqueePointerUp);
+      endMarqueeSession(false);
+      if (marqueeRectElement) {
+        marqueeRectElement.remove();
+        marqueeRectElement = null;
+      }
       if (measureFrame) {
         cancelAnimationFrame(measureFrame);
       }
@@ -403,6 +799,7 @@
   aria-label="Files and folders"
   aria-multiselectable="true"
   onscroll={handleScroll}
+  onpointerdown={handleMarqueePointerDown}
   style={`height: 100%; overflow: auto; --file-list-columns: ${fileListColumns()}; --file-list-row-height: ${LIST_ROW_HEIGHT}px; --file-list-grid-item-width: ${gridItemWidth}px; --file-list-grid-item-height: ${gridItemHeight}px;`}
 >
   <FileListItems

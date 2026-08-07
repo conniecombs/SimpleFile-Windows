@@ -193,10 +193,26 @@ Out of scope (intentionally):
 
 ## Candidate next implementations
 
-(I) About / keyboard-help component ownership (low value)
-(J) Advanced-rename form fields fully reactive (large refactor)
+### Drag / marquee multi-select — DONE (2026-08-07)
 
-Pick one of the above (or another item from this file) as the next implementation slice.
+Rubber-band selection for files and folders:
+
+- Drag empty space in the file list (list or grid) to select intersecting items
+- Ctrl/Meta + drag adds to the existing selection
+- Click empty space clears selection
+- Auto-scroll near top/bottom edges while dragging
+- Works with virtualized huge folders (geometry hit-test, not DOM-only)
+- Does not conflict with item drag-and-drop (starts only off `.file-item`)
+
+Key files:
+- `frontend/src/lib/marqueeSelection.ts`
+- `frontend/src/lib/components/file-list/FileList.svelte`
+- `frontend/src/css/modules/interactions.css` (`.selection-rect`)
+- `frontend/scripts/check-marquee-selection.mjs`
+
+---
+
+Pick a new product slice from docs/FEATURE_OPPORTUNITIES.md or docs/ROADMAP.md.
 
 ---
 
