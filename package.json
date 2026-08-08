@@ -24,6 +24,7 @@
     "smoke:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-release-startup.ps1",
     "smoke:msi": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-msi-artifact.ps1",
     "smoke:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-nsis-install.ps1",
+    "release:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
     "release:local": "npm run check:release && npm run build:tauri:local"
   }
 }

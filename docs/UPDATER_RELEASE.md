@@ -58,16 +58,32 @@ On local Windows machines, make sure the Windows SDK Resource Compiler
 (`rc.exe`) is available on `PATH` before running Rust tests or Tauri builds.
 
 To also prove that local Windows installer packaging works without requiring
-the updater private key, run:
+the updater private key, run the complete release build script:
+
+```powershell
+npm run release:build
+```
+
+That command installs frontend dependencies, runs the full release gate, builds
+the local Windows installers, smoke-tests the release executable, MSI artifact,
+and NSIS install path, and prints the generated artifact paths. It keeps release
+signing enabled in `tauri.conf.json`, but passes the local Tauri config override
+in `src-tauri/tauri.local.conf.json` so updater artifacts are not created.
+Signed updater artifacts are still required for the real GitHub release flow.
+
+If you only need to build the local installers after checks, run:
 
 ```powershell
 npm run release:local
 ```
 
-That command keeps release signing enabled in `tauri.conf.json`, but passes the
-local Tauri config override in `src-tauri/tauri.local.conf.json` so updater
-artifacts are not created.
-Signed updater artifacts are still required for the real GitHub release flow.
+The complete script is conservative about installing machine-wide tools. If
+Tauri CLI or WiX Toolset are missing and you want the script to install them
+where possible, run:
+
+```powershell
+npm run release:build -- -InstallMissingTools
+```
 
 After a local bundle build, smoke-test the release executable startup path:
 

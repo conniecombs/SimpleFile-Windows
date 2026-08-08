@@ -53,11 +53,7 @@ For release or installer changes:
 
 ```powershell
 npm run check:release
-npm run build:tauri:local
-npm run smoke:settings
-npm run smoke:release
-npm run smoke:msi
-npm run smoke:installer
+npm run release:build
 ```
 
 ## Pull Request Notes

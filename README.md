@@ -196,6 +196,7 @@ All scripts are run from the **repository root** via `npm run <script>`.
 | `check:security` | Rust dependency audit via `cargo-audit` |
 | `check:release` | Combined frontend + Rust + security gate — full release-quality validation |
 | `build:tauri:local` | Build unsigned NSIS and MSI installers locally |
+| `release:build` | Complete local release build: install frontend dependencies, run release checks, build installers, smoke artifacts, and list outputs |
 | `release:local` | Run release checks then build local installers |
 | `smoke:settings` | Startup and settings persistence smoke test |
 | `smoke:release` | Built executable startup smoke test |
@@ -355,6 +356,7 @@ SimpleFile follows a clean **frontend ↔ backend** split via Tauri's IPC bridge
 | `npm run check:rust` | `cargo fmt`, `cargo test`, and `cargo clippy -D warnings` |
 | `npm run check:security` | Rust dependency audit via `cargo-audit` |
 | `npm run check:release` | All of the above combined — the full release-quality gate |
+| `npm run release:build` | Complete local release build, installer smoke tests, and artifact listing |
 
 ### Smoke Tests
 

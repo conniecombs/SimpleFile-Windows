@@ -119,6 +119,9 @@ const installerSmokeSnippets = [
     'npm run smoke:installer',
     'tauri.local.conf.json',
     'Install WiX Toolset (MSI)',
+    'function Resolve-WixBin',
+    'Get-Command candle.exe',
+    'choco install wixtoolset -y --no-progress',
     'tool: tauri-cli',
     'uses: actions/upload-artifact@v4',
 ];
