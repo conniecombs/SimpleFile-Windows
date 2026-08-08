@@ -1,0 +1,134 @@
+name: Release build
+
+# Builds release-quality Windows artifacts on demand without publishing a
+# GitHub Release. Use this for release candidates, tester drops, and build
+# verification. The signed updater publishing path stays in release.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_smoke:
+        description: 'Run release executable, MSI, and NSIS smoke tests'
+        required: true
+        default: true
+        type: boolean
+      full_installer_smoke:
+        description: 'Run the full NSIS install, launch, and uninstall smoke test'
+        required: true
+        default: true
+        type: boolean
+      clean:
+        description: 'Clean previous release output before building'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows-release-build:
+    name: Windows release build
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: release-build-x86_64-pc-windows-msvc
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Install Tauri CLI
+        uses: taiki-e/install-action@v2
+        with:
+          tool: tauri-cli
+
+      - name: Run release build
+        shell: pwsh
+        run: |
+          $releaseArgs = @('-InstallMissingTools')
+
+          if ('${{ inputs.clean }}' -eq 'true') {
+            $releaseArgs += '-Clean'
+          }
+
+          if ('${{ inputs.run_smoke }}' -ne 'true') {
+            $releaseArgs += '-SkipSmoke'
+          } elseif ('${{ inputs.full_installer_smoke }}' -ne 'true') {
+            $releaseArgs += '-SkipInstallerSmoke'
+          }
+
+          Write-Host "npm run release:build -- $($releaseArgs -join ' ')"
+          & npm run release:build -- @releaseArgs
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Summarize artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          $patterns = @(
+            'src-tauri\target\release\simplefile.exe',
+            'src-tauri\target\release\bundle\nsis\*',
+            'src-tauri\target\release\bundle\msi\*'
+          )
+
+          $files = foreach ($pattern in $patterns) {
+            Get-ChildItem -Path $pattern -File -ErrorAction SilentlyContinue
+          }
+
+          if (-not $files) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value 'No release artifacts were produced.'
+            exit 0
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Release artifacts'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '| File | Size |'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '| --- | ---: |'
+
+          foreach ($file in ($files | Sort-Object FullName -Unique)) {
+            $relative = Resolve-Path -LiteralPath $file.FullName -Relative
+            $sizeMb = [Math]::Round($file.Length / 1MB, 2)
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| ``$relative`` | $sizeMb MB |"
+          }
+
+      - name: Upload release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: simplefile-release-build-${{ github.ref_name }}-${{ github.run_number }}
+          path: |
+            src-tauri/target/release/simplefile.exe
+            src-tauri/target/release/bundle/nsis/*
+            src-tauri/target/release/bundle/msi/*
+          if-no-files-found: warn
+          retention-days: 30

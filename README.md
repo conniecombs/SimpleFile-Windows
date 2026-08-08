@@ -406,6 +406,8 @@ Production builds include signed updater artifacts (`latest.json` + `.sig` files
 
 ### Release Workflow
 
+For an on-demand GitHub-hosted release candidate build, run the [Release build workflow](.github/workflows/release-build.yml) from the Actions tab. It runs `npm run release:build`, uploads the Windows executable and installer artifacts, and does not publish a GitHub Release.
+
 The [release workflow](.github/workflows/release.yml) is triggered by pushing a `v*` tag or manual dispatch:
 
 1. **Validate** — ensures the tag version matches `tauri.conf.json` and `Cargo.toml`

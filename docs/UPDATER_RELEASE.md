@@ -71,6 +71,12 @@ signing enabled in `tauri.conf.json`, but passes the local Tauri config override
 in `src-tauri/tauri.local.conf.json` so updater artifacts are not created.
 Signed updater artifacts are still required for the real GitHub release flow.
 
+To build release-quality artifacts on GitHub without publishing a release, run
+the `Release build` workflow from the Actions tab. It runs `npm run
+release:build` on a Windows runner, optionally runs installer smoke tests, and
+uploads the generated executable, NSIS installer, and MSI installer as workflow
+artifacts.
+
 If you only need to build the local installers after checks, run:
 
 ```powershell

@@ -36,11 +36,13 @@ function requireOccurrenceCount(source, file, snippet, expectedCount) {
 
 const ciPath = '.github/workflows/ci.yml';
 const releasePath = '.github/workflows/release.yml';
+const releaseBuildPath = '.github/workflows/release-build.yml';
 const installerSmokePath = '.github/workflows/installer-smoke.yml';
 const dependabotPath = '.github/dependabot.yml';
 
 const ciWorkflow = readText(ciPath);
 const releaseWorkflow = readText(releasePath);
+const releaseBuildWorkflow = readText(releaseBuildPath);
 const installerSmokeWorkflow = readText(installerSmokePath);
 const dependabot = readText(dependabotPath);
 
@@ -99,6 +101,31 @@ const releaseSnippets = [
 
 for (const snippet of releaseSnippets) {
     requireSnippet(releaseWorkflow, releasePath, snippet);
+}
+
+const releaseBuildSnippets = [
+    'name: Release build',
+    'workflow_dispatch:',
+    'permissions:',
+    'contents: read',
+    'runs-on: windows-latest',
+    'uses: actions/checkout@v6',
+    'uses: dtolnay/rust-toolchain@stable',
+    'targets: x86_64-pc-windows-msvc',
+    'components: rustfmt, clippy',
+    'uses: actions/setup-node@v6',
+    'node-version: 24',
+    'tool: cargo-audit',
+    'tool: tauri-cli',
+    "npm run release:build -- $($releaseArgs -join ' ')",
+    "src-tauri/target/release/bundle/nsis/*",
+    "src-tauri/target/release/bundle/msi/*",
+    'uses: actions/upload-artifact@v4',
+    'retention-days: 30',
+];
+
+for (const snippet of releaseBuildSnippets) {
+    requireSnippet(releaseBuildWorkflow, releaseBuildPath, snippet);
 }
 
 const installerSmokeSnippets = [
@@ -167,6 +194,9 @@ for (const snippet of retiredWorkflowSnippets) {
     if (installerSmokeWorkflow.includes(snippet)) {
         fail(`${installerSmokePath} should not include retired workflow snippet: ${snippet}.`);
     }
+    if (releaseBuildWorkflow.includes(snippet)) {
+        fail(`${releaseBuildPath} should not include retired workflow snippet: ${snippet}.`);
+    }
 }
 
 const retiredArtifactTargets = [
@@ -184,6 +214,9 @@ for (const target of retiredArtifactTargets) {
     }
     if (installerSmokeWorkflow.includes(target)) {
         fail(`${installerSmokePath} should not build ${target} on the Windows-focused branch.`);
+    }
+    if (releaseBuildWorkflow.includes(target)) {
+        fail(`${releaseBuildPath} should not build ${target} on the Windows-focused branch.`);
     }
 }
 

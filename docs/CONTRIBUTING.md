@@ -56,6 +56,10 @@ npm run check:release
 npm run release:build
 ```
 
+For GitHub-built release candidate artifacts, run the `Release build` workflow
+from the Actions tab. It uses the same `release:build` script and uploads the
+Windows release artifacts without publishing a GitHub Release.
+
 ## Pull Request Notes
 
 - Keep unrelated refactors out of focused fixes.
