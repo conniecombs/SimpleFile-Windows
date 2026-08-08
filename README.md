@@ -224,7 +224,7 @@ SimpleFile-Windows/
 │   │   │   ├── types.ts             Shared TypeScript type definitions
 │   │   │   ├── app/                 Workflow orchestration and business logic
 │   │   │   └── components/          Svelte UI components
-│   │   └── vanilla-js/runtime/      Shared runtime helpers
+│   │   └── vanilla-js/runtime/      Shared typed runtime helpers
 │   ├── scripts/                     Frontend migration and guard checks
 │   └── public/                      Static assets
 │
@@ -302,6 +302,8 @@ SimpleFile-Windows/
 └── .gitignore
 ```
 
+The shipping frontend starts at `frontend/src/main.ts`, and shared typed runtime helpers live under `frontend/src/vanilla-js/runtime/`.
+
 ---
 
 ## Architecture
@@ -367,7 +369,7 @@ SimpleFile follows a clean **frontend ↔ backend** split via Tauri's IPC bridge
 
 The `check` pipeline also enforces architectural invariants:
 
-- Cloud provider and mount-management surfaces are excluded from this branch
+- Out-of-scope provider and mount-management surfaces are excluded from this branch
 - All renderer Tauri access is channeled through `frontend/src/lib/tauri.ts`
 - The global `__TAURI__` bridge is disabled
 - Modal HTML paths sanitize content before insertion
