@@ -1,21 +1,21 @@
 # SimpleFile
 
-SimpleFile is a Windows-focused desktop file manager built with Tauri, Rust, and Svelte. This branch is scoped to local files, Windows drives, mapped network drives, archives, search, previews, metadata, Git status, cleanup tools, and signed Windows installers.
+[![CI](https://github.com/conniecombs/SimpleFile-Windows/actions/workflows/ci.yml/badge.svg)](https://github.com/conniecombs/SimpleFile-Windows/actions/workflows/ci.yml)
+[![Release](https://github.com/conniecombs/SimpleFile-Windows/actions/workflows/release.yml/badge.svg)](https://github.com/conniecombs/SimpleFile-Windows/actions/workflows/release.yml)
+[![Installer smoke](https://github.com/conniecombs/SimpleFile-Windows/actions/workflows/installer-smoke.yml/badge.svg)](https://github.com/conniecombs/SimpleFile-Windows/actions/workflows/installer-smoke.yml)
+![Version](https://img.shields.io/badge/version-1.1.0-2563eb)
+![License](https://img.shields.io/badge/license-proprietary-444444)
 
-## Current Windows Release Scope
+SimpleFile is a Windows-first desktop file manager built with Tauri 2, Rust,
+Svelte 5, and Vite. It is designed for fast local browsing with the power
+workflows people usually bolt onto File Explorer later: dual panes, tabbed
+navigation, archive tools, search, previews, metadata, checksums, Git status,
+cleanup utilities, and signed Windows installer/update plumbing.
 
-- Dual-pane and tabbed browsing for local folders.
-- Windows drive listing with volume labels, mapped network drive names, and native drive types.
-- In-app folder navigation from file lists, breadcrumbs, Quick Access, and the tree view.
-- Conflict-aware copy and move operations with progress, cancellation, keep-both, replace, and skip flows.
-- Archive creation, listing, and extraction for common formats.
-- Advanced rename, quick filtering, recursive search, smart folders, file labels, and clipboard history.
-- Preview, Quick Look, thumbnails, checksums, EXIF metadata, symlink handling, folder size, and item counts.
-- Git status display plus pull and push commands where a folder is inside a repository.
-- Windows terminal and elevated PowerShell launch actions.
-- Signed updater metadata and Windows installer outputs for NSIS and MSI.
-
-This branch does not include app-managed provider integrations or provider-backed mount workflows. Windows mapped network drives remain supported as normal Windows drives.
+The supported product surface for this repository is intentionally local:
+Windows drives, removable media, mapped network drives, normal folders, and
+local archives. App-managed online storage integrations and provider-owned mount
+workflows are outside this branch.
 
 ## Screenshots
 
@@ -27,16 +27,50 @@ This branch does not include app-managed provider integrations or provider-backe
 | --- |
 | ![Configurable file list columns](docs/assets/screenshots/simplefile-configurable-columns.png) |
 
+## What It Does
+
+| Area | Highlights |
+| --- | --- |
+| Navigation | Tabs, dual-pane mode, breadcrumbs, tree view, Quick Access, bookmarks, recent locations, path bar editing, type-ahead selection, and in-app folder opening. |
+| Windows drives | Native drive list with volume labels, drive types, free-space status, mapped network share names, offline/stale status, refresh, and reconnect flow. |
+| File operations | Create, rename, delete to Recycle Bin, permanent delete, copy, move, paste, drag and drop, copy path, undo/redo, operation history, progress, cancellation, and conflict choices. |
+| Search | Quick filtering, recursive search, content search, size/date/depth filters, cancellable result batches, and saved smart folders. |
+| Archives | List, create, and extract ZIP, TAR, TAR.GZ/TGZ, and RAR archives, with extraction path checks and optional RAR tooling from Settings. |
+| Inspection | Preview pane, Quick Look, thumbnails, text/code/Markdown/PDF/image/audio/video preview, folder sizes, item counts, image EXIF, PDF/audio/video/Office metadata, and MD5/SHA-1/SHA-256 checksums. |
+| Organization | Color labels, configurable columns, list/grid view, dark/light themes, saved workspace layout, custom startup location, and remappable keyboard shortcuts. |
+| Developer tools | Git branch/status counts, per-file Git status, Git pull/push actions, terminal launch, elevated PowerShell launch, and safe Open With handling. |
+| Release support | NSIS and MSI Windows bundles, signed updater metadata in release builds, local unsigned package validation, and installer smoke checks. |
+
+## Install
+
+Published Windows builds are attached to
+[GitHub Releases](https://github.com/conniecombs/SimpleFile-Windows/releases).
+For normal installation, use the NSIS setup executable:
+
+```text
+SimpleFile_1.1.0_x64-setup.exe
+```
+
+An MSI package is also produced for environments that prefer MSI deployment:
+
+```text
+SimpleFile_1.1.0_x64_en-US.msi
+```
+
+The first updater-enabled release must be installed manually. After that,
+published updates can be checked and installed from `Settings -> Updates`.
+
 ## Requirements
 
-- Windows 10 or later for the supported desktop release target.
+- Windows 10 or later.
 - Node.js 24 or newer.
-- Rust stable and the Tauri prerequisites for Windows.
-- Windows SDK Resource Compiler (`rc.exe`) on `PATH` for Rust tests and Tauri
-  builds that stamp Windows resources.
-- Optional: RAR tooling can be installed from Settings when needed for RAR archive workflows.
+- Stable Rust.
+- Tauri prerequisites for Windows desktop builds.
+- Windows SDK Resource Compiler, `rc.exe`, on `PATH` for Rust tests and Tauri
+  resource stamping.
+- WiX Toolset when validating MSI packages locally.
 
-## Development
+## Quick Start
 
 Install frontend dependencies:
 
@@ -44,25 +78,25 @@ Install frontend dependencies:
 npm ci --prefix frontend
 ```
 
-Run the app in development:
+Run the desktop app in development:
 
 ```powershell
 npm run dev
 ```
 
-Run the standard check gate:
+Run the standard repository checks:
 
 ```powershell
 npm run check
 ```
 
-Run Rust checks:
+Run the full release-quality gate:
 
 ```powershell
-npm run check:rust
+npm run check:release
 ```
 
-Build Windows installers locally:
+Build unsigned local Windows installers:
 
 ```powershell
 npm run build:tauri:local
@@ -70,43 +104,104 @@ npm run build:tauri:local
 
 ## Verification
 
-The main release checks are:
+| Command | Purpose |
+| --- | --- |
+| `npm run check` | Frontend migration checks, API parity, behavior guards, Svelte checks, smoke settings UI, and frontend build. |
+| `npm run check:rust` | Rust formatting, locked tests, and Clippy with warnings denied. |
+| `npm run check:security` | Rust dependency audit through the release audit wrapper. |
+| `npm run check:release` | Combined frontend, repository guard, Rust, and security gate. |
+| `npm run build:tauri:local` | Local NSIS/MSI build using `src-tauri/tauri.local.conf.json`. |
+| `npm run smoke:settings` | Startup/settings persistence smoke test. |
+| `npm run smoke:release` | Built executable startup smoke test. |
+| `npm run smoke:msi` | MSI artifact extract and launch smoke test. |
+| `npm run smoke:installer` | NSIS install, launch, and uninstall smoke test. |
 
-```powershell
-npm run check
-npm run check:rust
-npm run check:security
-npm run check:release
-npm run build:tauri:local
-npm run smoke:settings
-npm run smoke:release
-npm run smoke:msi
-npm run smoke:installer
-```
+`npm run check` also protects several important project boundaries:
 
-`npm run check` includes provider-surface, Tauri renderer-surface, modal HTML safety, and Windows-asset guards. The provider guard fails if retired provider UI, command contracts, docs, or setup text reappear outside historical changelog notes and generated syntax-highlighter data. The Tauri renderer guard keeps the global `__TAURI__` API disabled and requires active frontend Tauri imports to stay behind `frontend/src/lib/tauri.ts`. The modal HTML guard requires shared modal renderers to sanitize HTML before insertion and blocks unreviewed raw HTML sinks. The Windows-asset guard fails if non-Windows packaging assets or bundle targets return.
+- Current-facing provider and mount-management surfaces stay out of this branch.
+- Renderer access to Tauri stays behind `frontend/src/lib/tauri.ts`.
+- The global `__TAURI__` bridge remains disabled.
+- Shared modal HTML paths must sanitize before insertion.
+- Windows packaging assets and bundle targets stay Windows-only.
+- Tauri command registration stays aligned with frontend typed wrappers.
 
-Installer package smoke (full NSIS/MSI build plus `smoke:release` / `smoke:msi` / `smoke:installer`) is not on every PR. Run the **Installer smoke** GitHub Actions workflow manually, or rely on its nightly schedule, before cutting a release.
+Full installer smoke is intentionally separate from every pull request because
+packaging is slow. Run the `Installer smoke` GitHub Actions workflow manually,
+or rely on its nightly schedule, before cutting a release.
 
 ## Project Layout
 
-- `frontend/src/main.ts` starts the Svelte app.
-- `frontend/src/lib/components/` contains Svelte components.
-- `frontend/src/lib/app/` contains workflow orchestration.
-- `frontend/src/lib/api.ts` and `frontend/src/lib/tauri.ts` define the typed Tauri command and media URL boundary plus browser-dev fallback.
-- `frontend/src/vanilla-js/runtime/` contains typed runtime helpers still shared by the Svelte app.
-- `src-tauri/src/` contains Rust commands for filesystem, archive, preview, search, metadata, Git, cleanup, updater, and Windows drive behavior.
-- `.github/workflows/` contains CI and release automation.
+```text
+.
+|-- frontend/
+|   |-- src/main.ts                 Svelte app entry
+|   |-- src/lib/api.ts              typed frontend API wrapper
+|   |-- src/lib/tauri.ts            typed Tauri boundary and browser-dev fallback
+|   |-- src/lib/app/                workflow orchestration
+|   |-- src/lib/components/         Svelte UI components
+|   |-- src/vanilla-js/runtime/     shared runtime helpers
+|   `-- scripts/                    frontend and migration guards
+|-- src-tauri/
+|   |-- src/                        Rust commands and desktop backend
+|   |-- tauri.conf.json             production Tauri config
+|   `-- tauri.local.conf.json       local package-build config
+|-- scripts/                        repository, release, and smoke checks
+|-- docs/                           support docs, changelog, roadmap, security
+`-- .github/workflows/              CI, release, and installer smoke automation
+```
 
-## Packaging
+Key backend modules:
 
-`src-tauri/tauri.conf.json` targets Windows installer bundles only:
+- `src-tauri/src/fs_ops.rs` handles filesystem operations.
+- `src-tauri/src/progress.rs` handles cancellable copy/move progress.
+- `src-tauri/src/drives.rs` handles Windows drive and mapped-share metadata.
+- `src-tauri/src/archive.rs` handles archive listing, creation, and extraction.
+- `src-tauri/src/search.rs` and `src-tauri/src/smart_folders.rs` handle search.
+- `src-tauri/src/preview.rs` and `src-tauri/src/metadata.rs` handle previews and
+  properties.
+- `src-tauri/src/git.rs` handles repository status and pull/push commands.
+- `src-tauri/src/updater.rs` handles app version and updater commands.
 
-- NSIS installer.
+## Release Packaging
+
+`src-tauri/tauri.conf.json` is the production package configuration. It builds
+Windows-only bundles:
+
+- NSIS setup executable.
 - MSI installer.
+- Updater artifacts and `latest.json`.
 
-Updater metadata is generated for the Windows release channel. The updater uses passive install mode on Windows.
+`src-tauri/tauri.local.conf.json` is for local package validation. It keeps the
+same Windows bundle targets while disabling signing requirements that only exist
+in the GitHub release workflow.
 
-## Security
+The release workflow validates that the tag version matches both
+`src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, runs the release-quality
+checks, builds Windows x64 installers, uploads updater signatures, and can leave
+the release as a draft until it is reviewed.
 
-Do not commit signing keys, local `.env` files, updater private keys, or personal settings files. See [docs/SECURITY.md](docs/SECURITY.md) for reporting and release-security details.
+## Documentation
+
+- [Changelog](docs/CHANGELOG.md)
+- [SimpleFile 1.1.0 release notes](docs/RELEASE_1.1.0.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Support guide](docs/SUPPORT.md)
+- [Security policy](docs/SECURITY.md)
+- [Contributing guide](docs/CONTRIBUTING.md)
+- [Updater release guide](docs/UPDATER_RELEASE.md)
+
+Historical release notes may describe retired experiments. Treat this README,
+the roadmap, and the support/security docs as the current branch contract.
+
+## Security Notes
+
+Do not commit signing keys, updater private keys, `.env` files, local secrets,
+personal settings exports, or logs containing private paths. See
+[docs/SECURITY.md](docs/SECURITY.md) for the reporting policy and release
+security checklist.
+
+## License
+
+SimpleFile is proprietary software. All rights are reserved by conniecombs. See
+[LICENSE](LICENSE) for the project license; third-party dependencies remain
+under their own licenses.
