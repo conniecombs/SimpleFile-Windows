@@ -208,11 +208,11 @@ pub async fn search_files(
         let mut content_matches = false;
         if !name_matches && options.content_search && is_file && size < 2_000_000 {
             if let Ok(content) = fs::read_to_string(path) {
-                if options.case_sensitive {
-                    content_matches = content.contains(&options.query);
+                content_matches = if options.case_sensitive {
+                    content.contains(&options.query)
                 } else {
-                    content_matches = content.to_lowercase().contains(&query);
-                }
+                    crate::native_accel::contains_case_insensitive(&content, &options.query)
+                };
             }
         }
 

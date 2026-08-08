@@ -13,6 +13,7 @@ mod git;
 
 mod metadata;
 mod models;
+mod native_accel;
 
 mod open_with;
 

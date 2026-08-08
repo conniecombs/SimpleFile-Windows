@@ -85,7 +85,7 @@ fn read_text_file(path: &Path) -> Result<(String, u64), String> {
     }
 
     let bytes = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
-    if bytes.contains(&0) {
+    if crate::native_accel::contains_zero_byte(&bytes) {
         return Err("File comparison is available for text files, not binary files.".to_string());
     }
 
@@ -234,10 +234,21 @@ fn build_rows(
 
 #[cfg(test)]
 mod tests {
-    use super::{build_diff_ops, build_rows};
+    use super::{build_diff_ops, build_rows, read_text_file};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn lines(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| value.to_string()).collect()
+    }
+
+    fn unique_temp_path(name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("simplefile_compare_test_{}_{}", name, nanos))
     }
 
     #[test]
@@ -267,5 +278,19 @@ mod tests {
         assert_eq!(changed, 0);
         assert!(rows.iter().any(|row| row.kind == "removed"));
         assert!(rows.iter().any(|row| row.kind == "added"));
+    }
+
+    #[test]
+    fn read_text_file_rejects_nul_bytes_as_binary() {
+        let path = unique_temp_path("binary");
+        fs::write(&path, b"text before\0text after").unwrap();
+
+        let err = read_text_file(&path).unwrap_err();
+
+        assert_eq!(
+            err,
+            "File comparison is available for text files, not binary files."
+        );
+        let _ = fs::remove_file(path);
     }
 }
