@@ -98,19 +98,107 @@ import type { PaneId } from "../fileNavigation.js";
 import type { TransferAction } from "../transferPathUtils.js";
 import { handleKeyDown, isEditableTarget, normalizeShortcutCombo, registerShortcut, unregisterShortcut, updateShortcutCombo, type ShortcutOptions } from "../keyboardShortcuts.js";
 import { showAdvancedRenameFlow, closeAdvancedRenameFlow, applyAdvancedRenameFlow, updateAdvancedRenameOperationClasses, refreshAdvancedRenamePreview } from "./advanced_rename.js";
-import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow } from "./archive.js";
+import { isAdvancedRenameVisible } from './advancedRenameUi.svelte';
+import { closeAboutUi, isAboutVisible } from './aboutUi.svelte';
+import { isKeyboardHelpVisible } from './keyboardHelpUi.svelte';
+import { isQuickLookVisible, closeQuickLookUi } from './quickLookUi.svelte';
+import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow, confirmCreateArchiveFlow } from "./archive.js";
+import { isArchiveViewerVisible, isCreateArchiveVisible, closeCreateArchiveUi } from './archiveUi.svelte';
+import { requestSearchFocus } from './searchUi.svelte';
 import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives } from "./core.js";
 import { cancelModalUi, isSettingsModalOpen } from './modalUi.svelte';
 import { dismissProgressUi, progressUi } from './progressUi.svelte';
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
 
+type AppDetailEvent<T> = CustomEvent<T> & Event;
+
+type OpenEntryDetail = {
+  isDir?: boolean;
+  pane?: PaneId;
+  path?: PathString;
+  segment?: { path?: PathString };
+};
+
+type ItemSelectionDetail = {
+  ctrlKey?: boolean;
+  index: number;
+  metaKey?: boolean;
+  pane?: PaneId;
+  path?: PathString;
+  shiftKey?: boolean;
+};
+
+type ToolbarCommandDetail = {
+  command?: string;
+};
+
+type SecondaryPaneCommandDetail = {
+  command?: string;
+  path?: PathString;
+};
+
+type PathDetail = {
+  path?: PathString;
+};
+
+type SortDetail = {
+  sort?: string;
+};
+
+type IconSizeDetail = {
+  commit?: boolean;
+  value?: number;
+};
+
+type ToastDetail = {
+  message?: string;
+  type?: string;
+};
+
+type SearchSubmitDetail = {
+  query?: string;
+};
+
+type SearchResultsSaveDetail = {
+  handled?: boolean;
+};
+
+type SmartFolderOpenDetail = {
+  folder?: SmartFolder;
+};
+
+type SmartFolderDeleteDetail = {
+  id?: string;
+};
+
+type SmartFoldersChangedDetail = {
+  smartFolders?: SmartFolder[];
+};
+
+type TabIdDetail = {
+  direction?: number;
+  tabId?: string;
+};
+
+type CreateArchiveConfirmDetail = {
+  format?: ArchiveFormat;
+  name?: string;
+  selectedPaths?: PathString[];
+  targetDirectory?: PathString;
+};
+
+function detailOf<T>(event: Event): T {
+  return ((event as AppDetailEvent<T>).detail ?? {}) as T;
+}
 
 export function initApp() {
     loadSettings();
     loadBookmarks();
     loadRecentLocations();
-    const tabsLoaded = loadTabs();
+    // Workspace layout is the single source of truth for tabs; legacy simplefile-tabs
+    // is only used when no workspace snapshot exists (loadTabs migrates then clears it).
     const workspaceLayoutLoaded = loadWorkspaceLayout();
+    const tabsLoaded = loadTabs() || workspaceLayoutLoaded;
     applyPersistedViewSettings();
     renderLayoutShell(localState.appContainer);
     renderContextMenu(document.getElementById('context-menu'));
@@ -238,21 +326,23 @@ export function initApp() {
         });
     };
 
-    const handleOpenEntry = (e: any) => {
-      const path = e.detail?.path || e.detail?.segment?.path;
+    const handleOpenEntry = (e: Event) => {
+      const detail = detailOf<OpenEntryDetail>(e);
+      const path = detail.path || detail.segment?.path;
       if (!path) return;
 
       // Tree-node and breadcrumb events are always directories; infer isDir
       // from the event type if the detail doesn't already include it.
       const alwaysDir = e.type === 'simplefile:tree-node-open' || e.type === 'simplefile:breadcrumb-navigate';
-      const isDir = e.detail?.isDir ?? alwaysDir;
+      const isDir = detail.isDir ?? alwaysDir;
 
-      void openEntryPath(path, isDir, e.detail?.pane || 'primary');
+      void openEntryPath(path, isDir, detail.pane || 'primary');
     };
 
-    const handleItemSelection = (e: any) => {
-      const { ctrlKey, index, metaKey, pane = 'primary', path, shiftKey } = e.detail;
-      if (!path) return;
+    const handleItemSelection = (e: Event) => {
+      const detail = detailOf<ItemSelectionDetail>(e);
+      const { ctrlKey, index, metaKey, pane = 'primary', path, shiftKey } = detail;
+      if (!path || !Number.isFinite(index)) return;
       const activePane = pane === 'secondary' ? 'secondary' : 'primary';
       const paneEntries = filteredEntriesForPane(activePane);
       const paneSelection = selectedSetForPane(activePane);
@@ -288,8 +378,9 @@ export function initApp() {
       else selectPaths([path], index);
     };
 
-    const handleToolbarCommand = (e: any) => {
-      const command = e.detail.command;
+    const handleToolbarCommand = (e: Event) => {
+      const command = detailOf<ToolbarCommandDetail>(e).command;
+      if (!command) return;
       if (command === 'back') void navigateHistory(-1);
       else if (command === 'forward') void navigateHistory(1);
       else if (command === 'up') {
@@ -347,8 +438,9 @@ export function initApp() {
       }
     };
 
-    const handleSecondaryPaneCommand = (e: any) => {
-      const command = e.detail?.command;
+    const handleSecondaryPaneCommand = (e: Event) => {
+      const detail = detailOf<SecondaryPaneCommandDetail>(e);
+      const command = detail.command;
       if (command === 'back') {
         void navigateSecondaryHistory(-1);
       } else if (command === 'forward') {
@@ -356,13 +448,13 @@ export function initApp() {
       } else if (command === 'up') {
         const parent = getParentPath(appState.secondaryPath);
         if (parent) void loadSecondaryDirectory(parent);
-      } else if (command === 'navigate' && e.detail?.path) {
-        void loadSecondaryDirectory(e.detail.path);
+      } else if (command === 'navigate' && detail.path) {
+        void loadSecondaryDirectory(detail.path);
       }
     };
 
-    const handleTreeToggle = async (e: any) => {
-      const path = e.detail?.path;
+    const handleTreeToggle = async (e: Event) => {
+      const path = detailOf<PathDetail>(e).path;
       if (!path) return;
 
       const expanded = new Set(appState.treeExpanded);
@@ -381,8 +473,8 @@ export function initApp() {
       appState.treeExpanded = expanded;
     };
 
-    const handleSort = (e: any) => {
-      const sortBy = e.detail?.sort;
+    const handleSort = (e: Event) => {
+      const sortBy = detailOf<SortDetail>(e).sort;
       if (!sortBy) return;
       if (appState.sortBy === sortBy) {
         appState.sortAsc = !appState.sortAsc;
@@ -394,22 +486,23 @@ export function initApp() {
       if (appState.dualPaneEnabled) applySecondaryEntryFilters();
     };
 
-    const handleIconSize = (e: any) => {
-      const value = Math.max(48, Math.min(128, Number(e.detail?.value || appState.iconSize || 64)));
+    const handleIconSize = (e: Event) => {
+      const detail = detailOf<IconSizeDetail>(e);
+      const value = Math.max(48, Math.min(128, Number(detail.value || appState.iconSize || 64)));
       appState.iconSize = value;
       appState.settings = { ...appState.settings, defaultIconSize: value };
       document.documentElement.style.setProperty('--icon-size', `${value}px`);
-      if (e.detail?.commit) saveSettings();
+      if (detail.commit) saveSettings();
     };
 
-    const handleToast = (e: any) => {
-      const { message, type } = e.detail || {};
+    const handleToast = (e: Event) => {
+      const { message, type } = detailOf<ToastDetail>(e);
       if (type === 'error') showError(message);
       else showSuccess(message);
     };
 
-    const handleSearchSubmit = (e: any) => {
-      void runSearch(e.detail?.query || '');
+    const handleSearchSubmit = (e: Event) => {
+      void runSearch(detailOf<SearchSubmitDetail>(e).query || '');
     };
 
     const handleSearchClear = () => {
@@ -429,8 +522,8 @@ export function initApp() {
       void openAdvancedSearchFlow();
     };
 
-    const handleSearchResultsSave = (e: any) => {
-      if (e.detail?.handled) return;
+    const handleSearchResultsSave = (e: Event) => {
+      if (detailOf<SearchResultsSaveDetail>(e).handled) return;
       void saveCurrentSearchAsSmartFolderFlow();
     };
 
@@ -455,22 +548,21 @@ export function initApp() {
     };
 
     const handleSearchFocus = () => {
-      const input = document.getElementById('search-input') as HTMLInputElement | null;
-      input?.focus();
-      input?.select();
+      requestSearchFocus();
     };
 
-    const handleSmartFolderOpen = (e: any) => {
-      void openSmartFolderFlow(e.detail?.folder);
+    const handleSmartFolderOpen = (e: Event) => {
+      void openSmartFolderFlow(detailOf<SmartFolderOpenDetail>(e).folder);
     };
 
-    const handleSmartFolderDelete = (e: any) => {
-      void deleteSmartFolderFlow(e.detail?.id);
+    const handleSmartFolderDelete = (e: Event) => {
+      void deleteSmartFolderFlow(detailOf<SmartFolderDeleteDetail>(e).id);
     };
 
-    const handleSmartFoldersChanged = (e: any) => {
-      if (Array.isArray(e.detail?.smartFolders)) {
-        appState.smartFolders = e.detail.smartFolders;
+    const handleSmartFoldersChanged = (e: Event) => {
+      const smartFolders = detailOf<SmartFoldersChangedDetail>(e).smartFolders;
+      if (Array.isArray(smartFolders)) {
+        appState.smartFolders = smartFolders;
       }
     };
 
@@ -478,19 +570,20 @@ export function initApp() {
       void openNewTab();
     };
 
-    const handleTabSwitch = (e: any) => {
-      const tabId = e.detail?.tabId;
+    const handleTabSwitch = (e: Event) => {
+      const tabId = detailOf<TabIdDetail>(e).tabId;
       if (tabId) void switchToTab(tabId);
     };
 
-    const handleTabClose = (e: any) => {
-      const tabId = e.detail?.tabId;
+    const handleTabClose = (e: Event) => {
+      const tabId = detailOf<TabIdDetail>(e).tabId;
       if (tabId) void closeTab(tabId);
     };
 
-    const handleTabFocusMove = (e: any) => {
-      const tabId = e.detail?.tabId;
-      const direction = Number(e.detail?.direction || 0);
+    const handleTabFocusMove = (e: Event) => {
+      const detail = detailOf<TabIdDetail>(e);
+      const tabId = detail.tabId;
+      const direction = Number(detail.direction || 0);
       if (tabId && direction) moveTabFocus(tabId, direction);
     };
 
@@ -508,6 +601,14 @@ export function initApp() {
 
     const handleCreateArchive = () => {
       void showCreateArchiveFlow();
+    };
+
+    const handleArchiveExtract = () => {
+      void extractArchiveFlow(pathForPane());
+    };
+
+    const handleCreateArchiveConfirm = (event: Event) => {
+      void confirmCreateArchiveFlow(detailOf<CreateArchiveConfirmDetail>(event));
     };
 
     const handleAdvancedRename = () => {
@@ -579,9 +680,10 @@ export function initApp() {
           syncSettingsControls();
           void updateToolStatus();
         });
-      } catch (err: any) {
-        showError(`Failed to open settings: ${err?.message || err}`);
-        console.error("Failed to open settings:", err);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        showError(`Failed to open settings: ${message}`);
+        console.error('Failed to open settings:', err);
       }
     };
 
@@ -707,66 +809,32 @@ export function initApp() {
       const target = event.target instanceof HTMLElement ? event.target : null;
       if (!target) return;
 
-      const quickLookOverlay = overlayById('quicklook-overlay');
-      if (quickLookOverlay?.classList.contains('visible')) {
-        if (target === quickLookOverlay || target.closest('#quicklook-close')) {
-          event.preventDefault();
-          closeQuickLookFlow();
-          return;
-        }
-        if (target.closest('#quicklook-open')) {
-          event.preventDefault();
-          if (localState.currentQuickLookPath) openFile(localState.currentQuickLookPath).catch(showError);
-          return;
-        }
-      }
-
-      const archiveOverlay = overlayById('archive-overlay');
-      if (archiveOverlay?.classList.contains('visible')) {
-        if (target === archiveOverlay || target.closest('#archive-close, #archive-cancel')) {
-          event.preventDefault();
-          closeArchiveFlow();
-          return;
-        }
-        if (target.closest('#archive-extract')) {
-          event.preventDefault();
-          void extractArchiveFlow(pathForPane());
-          return;
-        }
-      }
-
-      const advancedRenameOverlay = overlayById('advanced-rename-overlay');
-      if (advancedRenameOverlay?.classList.contains('visible')) {
-        if (target === advancedRenameOverlay || target.closest('#adv-rename-close, #adv-rename-cancel')) {
-          event.preventDefault();
-          closeAdvancedRenameFlow();
-          return;
-        }
-        if (target.closest('#adv-rename-confirm')) {
-          event.preventDefault();
-          void applyAdvancedRenameFlow();
-          return;
-        }
-      }
-
-      const keyboardHelpOverlay = overlayById('keyboard-help-overlay');
-      if (
-        keyboardHelpOverlay?.classList.contains('visible')
-        && (target === keyboardHelpOverlay || target.closest('#keyboard-help-close, #keyboard-help-ok'))
-      ) {
-        event.preventDefault();
-        closeKeyboardHelpFlow();
-        return;
-      }
-
+      // Quick Look, archive, advanced rename, keyboard help, and about are component-owned.
       // Progress cancel is owned by ProgressModal (progressUi).
     };
 
-    const handleAdvancedRenameControlInput = (event: Event) => {
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      if (!target?.closest('#advanced-rename-overlay')) return;
+    const handleAdvancedRenameControlInput = () => {
+      if (!isAdvancedRenameVisible()) return;
       updateAdvancedRenameOperationClasses();
       void refreshAdvancedRenamePreview();
+    };
+
+    const handleAdvancedRenameClose = () => {
+      closeAdvancedRenameFlow();
+    };
+
+    const handleAdvancedRenameConfirm = () => {
+      void applyAdvancedRenameFlow();
+    };
+
+    const handleQuickLookClose = () => {
+      closeQuickLookFlow();
+    };
+
+    const handleQuickLookOpen = (event: Event) => {
+      const path = (event as CustomEvent<{ path?: string }>).detail?.path
+        || localState.currentQuickLookPath;
+      if (path) openFile(path).catch(showError);
     };
 
     const handleModalPointerDown = (_event: MouseEvent) => {
@@ -838,20 +906,28 @@ export function initApp() {
     };
 
     const closeVisibleOverlay = () => {
-      if (overlayById('quicklook-overlay')?.classList.contains('visible')) {
+      if (isQuickLookVisible()) {
         closeQuickLookFlow();
         return true;
       }
-      if (overlayById('archive-overlay')?.classList.contains('visible')) {
+      if (isArchiveViewerVisible()) {
         closeArchiveFlow();
         return true;
       }
-      if (overlayById('advanced-rename-overlay')?.classList.contains('visible')) {
+      if (isCreateArchiveVisible()) {
+        closeCreateArchiveUi();
+        return true;
+      }
+      if (isAdvancedRenameVisible()) {
         closeAdvancedRenameFlow();
         return true;
       }
-      if (overlayById('keyboard-help-overlay')?.classList.contains('visible')) {
+      if (isKeyboardHelpVisible()) {
         closeKeyboardHelpFlow();
+        return true;
+      }
+      if (isAboutVisible()) {
+        closeAboutUi();
         return true;
       }
       if (isProgressDialogVisible()) {
@@ -1042,8 +1118,10 @@ export function initApp() {
       // Avoid type-ahead while modal/overlay surfaces own the keyboard.
       if (
         isProgressDialogVisible()
-        || overlayById('quicklook-overlay')?.classList.contains('visible')
-        || overlayById('keyboard-help-overlay')?.classList.contains('visible')
+        || isQuickLookVisible()
+        || isAdvancedRenameVisible()
+        || isKeyboardHelpVisible()
+        || isAboutVisible()
         || isGenericModalVisible()
         || appState.commandPaletteVisible
       ) {
@@ -1204,7 +1282,14 @@ export function initApp() {
     document.addEventListener('simplefile:quick-look', handleQuickLook);
     document.addEventListener('simplefile:preview-close', handlePreviewClose);
     document.addEventListener('simplefile:create-archive', handleCreateArchive);
+    document.addEventListener('simplefile:archive-extract', handleArchiveExtract);
+    document.addEventListener('simplefile:create-archive-confirm', handleCreateArchiveConfirm);
     document.addEventListener('simplefile:advanced-rename', handleAdvancedRename);
+    document.addEventListener('simplefile:advanced-rename-close', handleAdvancedRenameClose);
+    document.addEventListener('simplefile:advanced-rename-confirm', handleAdvancedRenameConfirm);
+    document.addEventListener('simplefile:advanced-rename-input', handleAdvancedRenameControlInput);
+    document.addEventListener('simplefile:quick-look-close', handleQuickLookClose);
+    document.addEventListener('simplefile:quick-look-open', handleQuickLookOpen);
     document.addEventListener('simplefile:keyboard-help', handleKeyboardHelp);
     document.addEventListener('simplefile:operation-history', handleOperationHistory);
     document.addEventListener('simplefile:set-color-label', handleSetColorLabel);
@@ -1272,7 +1357,14 @@ export function initApp() {
       document.removeEventListener('simplefile:quick-look', handleQuickLook);
       document.removeEventListener('simplefile:preview-close', handlePreviewClose);
       document.removeEventListener('simplefile:create-archive', handleCreateArchive);
+      document.removeEventListener('simplefile:archive-extract', handleArchiveExtract);
+      document.removeEventListener('simplefile:create-archive-confirm', handleCreateArchiveConfirm);
       document.removeEventListener('simplefile:advanced-rename', handleAdvancedRename);
+      document.removeEventListener('simplefile:advanced-rename-close', handleAdvancedRenameClose);
+      document.removeEventListener('simplefile:advanced-rename-confirm', handleAdvancedRenameConfirm);
+      document.removeEventListener('simplefile:advanced-rename-input', handleAdvancedRenameControlInput);
+      document.removeEventListener('simplefile:quick-look-close', handleQuickLookClose);
+      document.removeEventListener('simplefile:quick-look-open', handleQuickLookOpen);
       document.removeEventListener('simplefile:keyboard-help', handleKeyboardHelp);
       document.removeEventListener('simplefile:operation-history', handleOperationHistory);
       document.removeEventListener('simplefile:set-color-label', handleSetColorLabel);

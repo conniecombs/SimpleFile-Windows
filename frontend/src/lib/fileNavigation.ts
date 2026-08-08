@@ -74,7 +74,10 @@ export type FileNavigationHost = {
   switchToTab: (tabId: string) => PathString | null | undefined;
   closeTab: (tabId: string) => PathString | null | undefined;
   getParentPath: (path: PathString) => PathString;
-  listDirectory: (path: PathString) => Promise<DirectoryListing>;
+  listDirectory: (
+    path: PathString,
+    options?: { onChunk?: (chunk: import('./types').DirectoryListingChunk) => void },
+  ) => Promise<DirectoryListing>;
   getGitFileStatuses: (path: PathString) => Promise<Record<string, string>>;
   isArchiveFile: (path: PathString) => boolean;
   isArchivePath: (path: PathString) => boolean;

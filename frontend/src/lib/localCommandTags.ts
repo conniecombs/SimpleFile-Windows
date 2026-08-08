@@ -52,8 +52,9 @@ export async function setColorLabel(host: LocalCommandWorkflowHost): Promise<voi
         await api.setTagsForPath(path, []);
         delete state.fileTags[path];
       } else {
-        await api.setTagsForPath(path, [parseInt(tagId, 10)]);
-        const tag = state.tags.find(t => t.id == tagId);
+        const selectedTagId = Number.parseInt(tagId, 10);
+        await api.setTagsForPath(path, [selectedTagId]);
+        const tag = state.tags.find(t => t.id === selectedTagId);
         if (tag) {
           state.fileTags[path] = tag;
         }

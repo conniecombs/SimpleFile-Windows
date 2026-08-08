@@ -71,12 +71,6 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import { getRecentSearches, rememberRecentSearch } from '../searchStorage';
   import { getOpenWithSuggestions, rememberOpenWithApplication } from '../localCommandStorage';
   import { readAdvancedSearchOptions, searchResultToFileEntry, toSearchCommandOptions, type SearchWorkflowOptions } from '../searchOptions';
-  import { renderAdvancedRenamePreview } from '../components/advanced-rename-preview';
-  import { renderArchiveContents, renderArchiveInfo, renderCreateArchiveBody } from '../components/archive-surfaces';
-  import { clearSearchResultsHeader, renderSearchResultsHeader } from '../components/search-chrome';
-  import { renderContextMenu } from '../components/context-menus';
-  import { clearQuickLook, renderQuickLook } from '../components/quick-look';
-  import { renderStatusBar } from '../components/status-bar';
   import { showError, showSuccess } from '../components/toasts';
   import type {
     ArchiveFormat,
@@ -95,21 +89,22 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   } from '../types';
 import { localState } from './localState.svelte';
 import { extensionForPath } from "./archive.js";
-import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersistedViewSettings, showDialog, showHtmlDialog, escapeHtml, overlayById, refreshSecondaryPane, selectedFileEntries, runWithOperationLog } from "./core.js";
+import {
+  closeAdvancedRenameUi,
+  formChecked,
+  formString,
+  isAdvancedRenameVisible,
+  openAdvancedRenameUi,
+  setAdvancedRenamePreview,
+  setAdvancedRenameSummary,
+} from './advancedRenameUi.svelte';
+import { refreshCurrentDirectory, showHtmlDialog, escapeHtml, refreshSecondaryPane, selectedFileEntries, runWithOperationLog } from "./core.js";
 
   type AdvancedRenameTarget = {
     entry: FileEntry;
     index: number;
     parentPath: PathString;
   };
-
-  export function inputChecked(id: string) {
-    return Boolean((document.getElementById(id) as HTMLInputElement | null)?.checked);
-  }
-
-  export function inputString(id: string, fallback = '') {
-    return (document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null)?.value ?? fallback;
-  }
 
   export function splitFileName(name: string) {
     const dotIndex = name.lastIndexOf('.');
@@ -128,7 +123,7 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
   }
 
   export function transformNamePart(name: string, transform: (value: string) => string) {
-    const applyPart = inputString('adv-apply-part', 'full');
+    const applyPart = formString('applyPart', 'full');
     const { base, ext } = splitFileName(name);
 
     if (applyPart === 'base') {
@@ -199,9 +194,9 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
     const parent = basename(getParentPath(entry.path) || '');
     const now = new Date();
     const pad = (value: number) => String(value).padStart(2, '0');
-    const start = Number(inputString('adv-number-start', '1')) || 1;
-    const step = Number(inputString('adv-number-step', '1')) || 1;
-    const width = Math.max(1, Number(inputString('adv-number-pad', '3')) || 3);
+    const start = Number(formString('numberStart', '1')) || 1;
+    const step = Number(formString('numberStep', '1')) || 1;
+    const width = Math.max(1, Number(formString('numberPad', '3')) || 3);
     const n = String(start + index * step).padStart(width, '0');
 
     return [
@@ -222,27 +217,27 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
   }
 
   export function passesAdvancedFilter(entry: FileEntry) {
-    if (!inputChecked('adv-filter-enabled')) return true;
+    if (!formChecked('filterEnabled')) return true;
 
-    const filterText = inputString('adv-filter-text').trim();
-    const extensions = inputString('adv-filter-extensions')
+    const filterText = formString('filterText').trim();
+    const extensions = formString('filterExtensions')
       .split(',')
       .map((value) => value.trim().replace(/^\./, '').toLowerCase())
       .filter(Boolean);
 
     let matchesName = true;
     if (filterText) {
-      if (inputChecked('adv-filter-regex')) {
-        const flags = inputChecked('adv-filter-case') ? '' : 'i';
+      if (formChecked('filterRegex')) {
+        const flags = formChecked('filterCase') ? '' : 'i';
         matchesName = new RegExp(filterText, flags).test(entry.name);
-      } else if (inputChecked('adv-filter-case')) {
+      } else if (formChecked('filterCase')) {
         matchesName = entry.name.includes(filterText);
       } else {
         matchesName = entry.name.toLowerCase().includes(filterText.toLowerCase());
       }
     }
 
-    if (inputChecked('adv-filter-invert')) {
+    if (formChecked('filterInvert')) {
       matchesName = !matchesName;
     }
 
@@ -256,61 +251,61 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
   export function buildAdvancedName(entry: FileEntry, index: number) {
     let name = entry.name;
 
-    if (inputChecked('adv-template-enabled')) {
-      const rendered = templateName(inputString('adv-template-pattern', '{base}_{n}'), entry, index);
-      const keepExtension = inputChecked('adv-template-keep-ext');
+    if (formChecked('templateEnabled')) {
+      const rendered = templateName(formString('templatePattern', '{base}_{n}'), entry, index);
+      const keepExtension = formChecked('templateKeepExt');
       const { ext } = splitFileName(entry.name);
       name = keepExtension && ext && !rendered.toLowerCase().endsWith(`.${ext.toLowerCase()}`)
         ? joinFileName(rendered, ext)
         : rendered;
     }
 
-    if (inputChecked('adv-remove-enabled')) {
+    if (formChecked('removeEnabled')) {
       name = transformNamePart(name, (value) => replaceWithOptions(
         value,
-        inputString('adv-remove-string'),
+        formString('removeString'),
         '',
-        inputChecked('adv-remove-regex'),
-        inputChecked('adv-remove-case'),
+        formChecked('removeRegex'),
+        formChecked('removeCase'),
       ));
     }
 
-    if (inputChecked('adv-replace-enabled')) {
+    if (formChecked('replaceEnabled')) {
       name = transformNamePart(name, (value) => replaceWithOptions(
         value,
-        inputString('adv-replace-find'),
-        inputString('adv-replace-with'),
-        inputChecked('adv-replace-regex'),
-        inputChecked('adv-replace-case'),
+        formString('replaceFind'),
+        formString('replaceWith'),
+        formChecked('replaceRegex'),
+        formChecked('replaceCase'),
       ));
     }
 
-    if (inputChecked('adv-trim-enabled')) {
-      const mode = inputString('adv-trim-mode', 'both');
+    if (formChecked('trimEnabled')) {
+      const mode = formString('trimMode', 'both');
       name = transformNamePart(name, (value) => {
         let next = value;
         if (mode === 'start' || mode === 'both') next = next.replace(/^\s+/, '');
         if (mode === 'end' || mode === 'both') next = next.replace(/\s+$/, '');
-        if (inputChecked('adv-trim-collapse')) next = next.replace(/\s+/g, ' ');
+        if (formChecked('trimCollapse')) next = next.replace(/\s+/g, ' ');
         return next;
       });
     }
 
-    if (inputChecked('adv-add-enabled')) {
+    if (formChecked('addEnabled')) {
       name = insertValue(
         name,
-        inputString('adv-add-string'),
-        inputString('adv-add-position', 'prefix'),
-        Number(inputString('adv-add-index', '0')) || 0,
+        formString('addString'),
+        formString('addPosition', 'prefix'),
+        Number(formString('addIndex', '0')) || 0,
       );
     }
 
-    if (inputChecked('adv-capitalize-enabled')) {
-      name = transformNamePart(name, (value) => capitalizeValue(value, inputString('adv-capitalize-mode', 'first')));
+    if (formChecked('capitalizeEnabled')) {
+      name = transformNamePart(name, (value) => capitalizeValue(value, formString('capitalizeMode', 'first')));
     }
 
-    if (inputChecked('adv-separator-enabled')) {
-      const mode = inputString('adv-separator-mode', 'spaces-to-dashes');
+    if (formChecked('separatorEnabled')) {
+      const mode = formString('separatorMode', 'spaces-to-dashes');
       name = transformNamePart(name, (value) => {
         let next = value;
         if (mode === 'spaces-to-dashes') next = next.replace(/\s+/g, '-');
@@ -318,37 +313,37 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
         if (mode === 'underscores-to-spaces') next = next.replace(/_+/g, ' ');
         if (mode === 'dashes-to-spaces') next = next.replace(/-+/g, ' ');
         if (mode === 'dots-to-spaces') next = next.replace(/\.+/g, ' ');
-        if (inputChecked('adv-separator-collapse')) {
+        if (formChecked('separatorCollapse')) {
           next = next.replace(/([ _.-])\1+/g, '$1');
         }
         return next;
       });
     }
 
-    if (inputChecked('adv-number-enabled')) {
-      const start = Number(inputString('adv-number-start', '1')) || 1;
-      const step = Number(inputString('adv-number-step', '1')) || 1;
-      const width = Math.max(1, Number(inputString('adv-number-pad', '3')) || 3);
+    if (formChecked('numberEnabled')) {
+      const start = Number(formString('numberStart', '1')) || 1;
+      const step = Number(formString('numberStep', '1')) || 1;
+      const width = Math.max(1, Number(formString('numberPad', '3')) || 3);
       const numberText = String(start + index * step).padStart(width, '0');
       name = numberedValue(
         name,
         numberText,
-        inputString('adv-number-position', 'suffix'),
-        inputString('adv-number-separator', '_'),
+        formString('numberPosition', 'suffix'),
+        formString('numberSeparator', '_'),
       );
     }
 
-    if (inputChecked('adv-extension-enabled')) {
+    if (formChecked('extensionEnabled')) {
       const { base, ext } = splitFileName(name);
-      const mode = inputString('adv-extension-mode', 'lower');
+      const mode = formString('extensionMode', 'lower');
       if (mode === 'lower') name = joinFileName(base, ext.toLowerCase());
       if (mode === 'upper') name = joinFileName(base, ext.toUpperCase());
-      if (mode === 'set') name = joinFileName(base, inputString('adv-extension-custom').replace(/^\./, ''));
+      if (mode === 'set') name = joinFileName(base, formString('extensionCustom').replace(/^\./, ''));
       if (mode === 'remove') name = base;
     }
 
-    if (inputChecked('adv-sanitize-enabled')) {
-      name = sanitizeFileName(name, inputString('adv-sanitize-replacement', '_'));
+    if (formChecked('sanitizeEnabled')) {
+      name = sanitizeFileName(name, formString('sanitizeReplacement', '_'));
     }
 
     return name;
@@ -356,8 +351,8 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
 
   export async function collectAdvancedRenameTargets() {
     const selectedEntries = selectedFileEntries();
-    const includeRecursive = inputChecked('adv-scope-recursive');
-    const includeHidden = inputChecked('adv-scope-hidden');
+    const includeRecursive = formChecked('scopeRecursive');
+    const includeHidden = formChecked('scopeHidden');
     const targets: AdvancedRenameTarget[] = [];
     const seen = new Set<PathString>();
 
@@ -391,14 +386,14 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
   }
 
   export async function refreshAdvancedRenamePreview() {
-    const preview = document.getElementById('adv-rename-preview');
-    const overlay = overlayById('advanced-rename-overlay');
-    if (!preview || !overlay?.classList.contains('visible')) return;
+    if (!isAdvancedRenameVisible()) return;
 
-    renderAdvancedRenamePreview(preview, {
-      message: 'Building preview...',
+    setAdvancedRenamePreview({
+      message: 'Building preview…',
       mode: 'loading',
+      rows: [],
     });
+    setAdvancedRenameSummary('Building preview…');
 
     try {
       localState.advancedRenameTargets = await collectAdvancedRenameTargets();
@@ -439,7 +434,7 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
         oldName: plan.oldName,
       }));
 
-      renderAdvancedRenamePreview(preview, {
+      setAdvancedRenamePreview({
         extraCount: Math.max(0, localState.advancedRenamePlans.length - rows.length),
         limit: 500,
         message: localState.advancedRenamePlans.length === 0 ? 'No matching files.' : '',
@@ -448,20 +443,22 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
         totalRows: localState.advancedRenamePlans.length,
       });
 
-      setElementText('adv-rename-summary', `${localState.advancedRenamePlans.length} target${localState.advancedRenamePlans.length === 1 ? '' : 's'} ready.`);
+      setAdvancedRenameSummary(
+        `${localState.advancedRenamePlans.length} target${localState.advancedRenamePlans.length === 1 ? '' : 's'} ready.`,
+      );
     } catch (error) {
-      renderAdvancedRenamePreview(preview, {
+      setAdvancedRenamePreview({
         message: error instanceof Error ? error.message : String(error),
         mode: 'error',
+        rows: [],
       });
+      setAdvancedRenameSummary('Preview failed.');
     }
   }
 
+  /** Kept for setup wiring; op-enabled classes are now reactive on the form. */
   export function updateAdvancedRenameOperationClasses() {
-    for (const element of document.querySelectorAll<HTMLElement>('.adv-rename-op')) {
-      const checkbox = element.querySelector<HTMLInputElement>('input[type="checkbox"][id$="-enabled"]');
-      element.classList.toggle('op-enabled', Boolean(checkbox?.checked));
-    }
+    // no-op: AdvancedRenameModal binds class:op-enabled from form state
   }
 
   export async function showAdvancedRenameFlow() {
@@ -470,20 +467,14 @@ import { setElementText, setOverlayVisible, refreshCurrentDirectory, applyPersis
       return;
     }
 
-    const overlay = overlayById('advanced-rename-overlay');
-    if (!overlay) {
-      showError('Advanced Rename is unavailable.');
-      return;
-    }
-
-    overlay.classList.add('visible');
-    updateAdvancedRenameOperationClasses();
-    overlay.querySelector<HTMLElement>('#adv-rename-close')?.focus();
+    openAdvancedRenameUi();
+    await Promise.resolve();
+    document.getElementById('adv-rename-close')?.focus();
     await refreshAdvancedRenamePreview();
   }
 
   export function closeAdvancedRenameFlow() {
-    setOverlayVisible('advanced-rename-overlay', false);
+    closeAdvancedRenameUi();
     localState.advancedRenamePlans = [];
     localState.advancedRenameTargets = [];
   }

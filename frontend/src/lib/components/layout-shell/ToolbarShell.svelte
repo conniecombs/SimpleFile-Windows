@@ -1,5 +1,6 @@
 <script lang="ts">
 import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
+  import { searchUi } from '../../app/searchUi.svelte';
   import BreadcrumbTrail from '../breadcrumb/BreadcrumbTrail.svelte';
   import type { BreadcrumbSegment } from '../breadcrumb/BreadcrumbTrail.svelte';
 
@@ -106,12 +107,18 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   }
 
   function currentSearchQuery() {
-    return searchInputElement?.value?.trim() || '';
+    return (searchUi.query || searchInputElement?.value || '').trim();
   }
 
   function emitSearchSubmit(event: MouseEvent | KeyboardEvent) {
     emitFromTarget(SEARCH_SUBMIT_EVENT, event, { query: currentSearchQuery() });
   }
+
+  $effect(() => {
+    if (searchUi.focusToken <= 0) return;
+    searchInputElement?.focus();
+    searchInputElement?.select();
+  });
 
   function handleSearchKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter') {
@@ -175,7 +182,16 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   </div>
 
   <div class="search-bar" role="search">
-    <input bind:this={searchInputElement} type="text" id="search-input" class="search-input" placeholder="Search files..." aria-label="Search files" onkeydown={handleSearchKeydown} />
+    <input
+      bind:this={searchInputElement}
+      bind:value={searchUi.query}
+      type="text"
+      id="search-input"
+      class="search-input"
+      placeholder="Search files..."
+      aria-label="Search files"
+      onkeydown={handleSearchKeydown}
+    />
     <button class="search-btn" id="search-btn" title="Search" aria-label="Start search" onclick={emitSearchSubmit}>🔍</button>
     <button class="search-btn" id="search-advanced" title="Advanced Search" aria-label="Advanced search options" onclick={(event) => emitFromTarget(SEARCH_OPEN_ADVANCED_EVENT, event)}>
       <svg class="search-advanced-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -187,8 +203,24 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
         <circle cx="8" cy="17" r="2" />
       </svg>
     </button>
-    <button class="search-clear-btn" id="search-cancel" title="Cancel Search" aria-label="Cancel search" style="display: none;" onclick={(event) => emitFromTarget(SEARCH_CANCEL_EVENT, event)}>■</button>
-    <button class="search-clear-btn" id="search-clear" title="Clear Search" aria-label="Clear search results" style="display: none;" onclick={(event) => emitFromTarget(SEARCH_CLEAR_EVENT, event)}>✕</button>
+    <button
+      class="search-clear-btn"
+      id="search-cancel"
+      title="Cancel Search"
+      aria-label="Cancel search"
+      hidden={!searchUi.showCancel}
+      style:display={searchUi.showCancel ? 'inline-flex' : 'none'}
+      onclick={(event) => emitFromTarget(SEARCH_CANCEL_EVENT, event)}
+    >■</button>
+    <button
+      class="search-clear-btn"
+      id="search-clear"
+      title="Clear Search"
+      aria-label="Clear search results"
+      hidden={!searchUi.showClear}
+      style:display={searchUi.showClear ? 'inline-flex' : 'none'}
+      onclick={(event) => emitFromTarget(SEARCH_CLEAR_EVENT, event)}
+    >✕</button>
   </div>
 
   <div class="toolbar-actions" role="group" aria-label="Actions">

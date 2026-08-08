@@ -74,10 +74,6 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import { readAdvancedSearchOptions, searchResultToFileEntry, toSearchCommandOptions, type SearchWorkflowOptions } from '../searchOptions';
   import { renderAdvancedRenamePreview } from '../components/advanced-rename-preview';
   import { renderArchiveContents, renderArchiveInfo, renderCreateArchiveBody } from '../components/archive-surfaces';
-  import { clearSearchResultsHeader, renderSearchResultsHeader } from '../components/search-chrome';
-  import { renderContextMenu } from '../components/context-menus';
-  import { clearQuickLook, renderQuickLook } from '../components/quick-look';
-  import { renderStatusBar } from '../components/status-bar';
   import { showError, showSuccess } from '../components/toasts';
   import type {
     ArchiveFormat,
@@ -98,37 +94,22 @@ import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
 import { escapeHtml } from "./core.js";
 import { findEntry } from "../localCommandSelection.js";
-import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusBar, selectedSetForPane, currentSelectionPaths, findSecondaryEntry, setElementText } from "./core.js";
+import { showDialog, showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusBar, selectedSetForPane, currentSelectionPaths, findSecondaryEntry, setElementText } from "./core.js";
+import {
+  clearSearchQuery,
+  requestSearchFocus,
+  searchUi,
+  setSearchControlsVisible as setSearchChromeVisible,
+  setSearchQuery,
+} from './searchUi.svelte';
 
   export function setSearchControlsVisible({ clear = false, cancel = false } = {}) {
-    const clearBtn = document.getElementById('search-clear') as HTMLElement | null;
-    const cancelBtn = document.getElementById('search-cancel') as HTMLElement | null;
-    if (clearBtn) clearBtn.style.display = clear ? 'inline-flex' : 'none';
-    if (cancelBtn) cancelBtn.style.display = cancel ? 'inline-flex' : 'none';
+    setSearchChromeVisible({ clear, cancel });
   }
 
+  /** Results header is owned by ContentShell; keep this as a no-op sync hook. */
   export function renderSearchHeader() {
-    if (!appState.searchMode) {
-      clearSearchResultsHeader(document.querySelector('.search-results-header'));
-      return;
-    }
-
-    const count = appState.searchResults?.length || 0;
-    renderSearchResultsHeader(
-      document.getElementById('file-list')?.parentElement,
-      document.getElementById('file-list'),
-      {
-        clearLabel: 'Clear',
-        label: `${count} result${count === 1 ? '' : 's'} for "${appState.searchQuery}"`,
-        onClear: () => {
-          void clearSearch();
-        },
-        onSave: () => {
-          void saveCurrentSearchAsSmartFolderFlow();
-        },
-        saveLabel: 'Save Search',
-      },
-    );
+    // Reactive SearchResultsHeader in ContentShell tracks appState.searchMode/query/results.
   }
 
   export function searchOptionsToWorkflowOptions(options: SearchOptions): SearchWorkflowOptions {
@@ -171,24 +152,15 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
       return;
     }
 
-    const result = await showHtmlDialog({
-      bodyHtml: `
-        <div class="form-group">
-          <label class="form-label" for="smart-folder-name">Name</label>
-          <input
-            id="smart-folder-name"
-            class="form-input input-full"
-            autocomplete="off"
-            value="${escapeHtml(query)}"
-          >
-        </div>
-      `,
+    const result = await showDialog({
       confirmText: 'Save',
-      onConfirm: () => (document.getElementById('smart-folder-name') as HTMLInputElement | null)?.value?.trim() || '',
+      defaultValue: query,
+      label: 'Name',
       title: 'Save Smart Folder',
+      type: 'prompt',
     });
 
-    if (result === false) return;
+    if (result === null || result === false) return;
 
     const name = typeof result === 'string' ? result.trim() : '';
     if (!name) {
@@ -219,8 +191,7 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
       return;
     }
 
-    const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
-    if (searchInput) searchInput.value = query;
+    setSearchQuery(query);
     await runSearch(query, searchOptionsToWorkflowOptions(options));
   }
 
@@ -259,10 +230,8 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
     appState.searchResults = [];
     appState.searchOptions = null;
     restoreDirectoryEntriesAfterSearch();
-    const input = document.getElementById('search-input') as HTMLInputElement | null;
-    if (input) input.value = '';
+    clearSearchQuery();
     setSearchControlsVisible();
-    clearSearchResultsHeader(document.querySelector('.search-results-header'));
     applyEntryFilters();
     selectPaths([]);
   }
@@ -287,6 +256,7 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
     appState.filterQuery = '';
     appState.selectedEntries = new Set();
     rememberRecentSearch(cleanQuery);
+    setSearchQuery(cleanQuery);
     setSearchControlsVisible({ clear: true, cancel: true });
 
     try {
@@ -321,12 +291,11 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
   }
 
   export async function openAdvancedSearchFlow() {
-    const searchInput = document.getElementById('search-input') as HTMLInputElement | null;
     const result = await showHtmlDialog({
       bodyHtml: renderAdvancedSearchDialog({
         escapeHtml,
         includeHidden: appState.showHiddenFiles,
-        initialQuery: searchInput?.value || appState.searchQuery || '',
+        initialQuery: searchUi.query || appState.searchQuery || '',
         recentSearches: getRecentSearches(),
       }),
       confirmText: 'Search',
@@ -339,8 +308,12 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
     if (!result || typeof result !== 'object') return;
 
     const { options, query } = result as { options: SearchWorkflowOptions; query: string };
-    if (searchInput) searchInput.value = query;
+    setSearchQuery(query);
     await runSearch(query, options);
+  }
+
+  export function focusSearchInput() {
+    requestSearchFocus();
   }
 
   function documentKindForExtension(extension: string) {
@@ -571,7 +544,5 @@ import { showHtmlDialog, uniqueId, applyEntryFilters, selectPaths, updateStatusB
     appState.searchOptions = null;
     appState._savedEntries = null;
     setSearchControlsVisible();
-    clearSearchResultsHeader(document.querySelector('.search-results-header'));
-    const input = document.getElementById('search-input') as HTMLInputElement | null;
-    if (input) input.value = '';
+    clearSearchQuery();
   }

@@ -9,11 +9,17 @@
   };
 
   let {
+    info = '',
     preview = null,
     title = 'Preview',
+    onClose = undefined,
+    onOpen = undefined,
   }: {
+    info?: string;
     preview?: QuickLookPreview | null;
     title?: string;
+    onClose?: (event?: Event) => void;
+    onOpen?: (event: MouseEvent) => void;
   } = $props();
 
   let pdfUrl: string | null = $state(null);
@@ -72,7 +78,13 @@
 <div class="quicklook-modal" id="quicklook-modal">
   <div class="quicklook-header">
     <span class="quicklook-title" id="quicklook-title">{title}</span>
-    <button class="quicklook-close" id="quicklook-close" type="button" aria-label="Close quick look">
+    <button
+      class="quicklook-close"
+      id="quicklook-close"
+      type="button"
+      aria-label="Close quick look"
+      onclick={(event) => onClose?.(event)}
+    >
       &times;
     </button>
   </div>
@@ -103,7 +115,12 @@
     {/if}
   </div>
   <div class="quicklook-footer">
-    <span class="quicklook-info" id="quicklook-info"></span>
-    <button class="btn btn-primary" id="quicklook-open" type="button">Open with Default App</button>
+    <span class="quicklook-info" id="quicklook-info">{info}</span>
+    <button
+      class="btn btn-primary"
+      id="quicklook-open"
+      type="button"
+      onclick={(event) => onOpen?.(event)}
+    >Open with Default App</button>
   </div>
 </div>
