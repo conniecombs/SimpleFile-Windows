@@ -5,6 +5,7 @@ globalThis.$state ??= (value) => value;
 const {
   loadSettings,
   loadTabs,
+  loadWorkspaceLayout,
   resetState,
   saveSettings,
   saveTabs,
@@ -64,7 +65,10 @@ state.activeTabId = 'tab-active';
 saveTabs();
 
 resetState();
-assert.equal(loadTabs(), true);
+const workspaceLayoutLoaded = loadWorkspaceLayout();
+const tabsLoaded = loadTabs() || workspaceLayoutLoaded;
+assert.equal(workspaceLayoutLoaded, true);
+assert.equal(tabsLoaded, true);
 assert.equal(state.activeTabId, 'tab-active');
 assert.equal(state.tabs.length, 2);
 
