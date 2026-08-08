@@ -18,6 +18,8 @@
     "check:markdown-preview-safety": "node scripts/check-markdown-preview-safety.mjs",
     "check:html-sink-safety": "node scripts/check-html-sink-safety.mjs",
     "check:huge-folder": "node scripts/check-huge-folder-virtualization.mjs",
+    "check:marquee-selection": "node scripts/check-marquee-selection.mjs",
+    "check:fast-listing": "node scripts/check-fast-listing.mjs",
     "check:stage9-organization-cleanup": "node scripts/check-stage9-organization-cleanup.mjs",
     "check:stage10-transfer-safety": "node scripts/check-stage10-transfer-safety.mjs",
     "check:stage11-navigation-dual-pane": "node scripts/check-stage11-navigation-dual-pane.mjs",
@@ -27,7 +29,7 @@
     "build": "npm run build:app",
     "dev": "vite",
     "preview": "vite preview",
-    "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:markdown-preview-safety && npm run check:html-sink-safety && npm run check:huge-folder && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run smoke:settings-ui && npm run build"
+    "check": "npm run check:migration && npm run check:api-parity && npm run check:behavior-bridges && npm run check:core-file-manager && npm run check:stage3-command-surfaces && npm run check:stage4-settings-tools && npm run check:stage5-menu-overlays && npm run check:stage7-search-smart-folders && npm run check:stage8-file-inspection && npm run check:markdown-preview-safety && npm run check:html-sink-safety && npm run check:huge-folder && npm run check:marquee-selection && npm run check:fast-listing && npm run check:stage9-organization-cleanup && npm run check:stage10-transfer-safety && npm run check:stage11-navigation-dual-pane && npm run check:svelte && npm run smoke:settings-ui && npm run build"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
@@ -36,7 +38,7 @@
     "svelte": "^5.56.8",
     "svelte-check": "^4.7.4",
     "ts-morph": "^28.0.0",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vite": "^8.2.0"
   },
   "dependencies": {

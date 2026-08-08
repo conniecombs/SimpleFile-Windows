@@ -96,7 +96,13 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   } from '../types';
 import { localState } from './localState.svelte';
 import type { PaneId } from "../fileNavigation.js";
-import { setOverlayVisible, singleSelectedEntry, overlayById, setElementText, pathForPane, refreshSecondaryPane, refreshCurrentDirectory, selectedFileEntries, showHtmlDialog, openEntryPath, runWithOperationLog, escapeHtml } from "./core.js";
+import {
+  closeArchiveViewer,
+  closeCreateArchiveUi,
+  openCreateArchiveUi,
+  showArchiveViewer,
+} from './archiveUi.svelte';
+import { singleSelectedEntry, pathForPane, refreshSecondaryPane, refreshCurrentDirectory, selectedFileEntries, showHtmlDialog, openEntryPath, runWithOperationLog, escapeHtml } from "./core.js";
 
 const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
 
@@ -144,7 +150,7 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
   }
 
   export function closeArchiveFlow() {
-    setOverlayVisible('archive-overlay', false);
+    closeArchiveViewer();
     localState.currentArchivePath = null;
   }
 
@@ -188,8 +194,7 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
       return;
     }
 
-    const overlay = overlayById('archive-overlay');
-    if (!overlay || !entry) {
+    if (!entry) {
       showError('Archive viewer is unavailable.');
       return;
     }
@@ -197,20 +202,15 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
     try {
       const info = await listArchive(entry.path);
       localState.currentArchivePath = entry.path;
-      setElementText('archive-title', `Archive: ${entry.name}`);
-      renderArchiveInfo(document.getElementById('archive-info'), {
+      showArchiveViewer({
         archivePath: info.path,
         compressedSize: info.compressed_size,
         entries: info.entries,
         format: info.format,
+        title: `Archive: ${entry.name}`,
         totalSize: info.total_size,
         unsafeEntries: info.unsafe_entries || [],
       });
-      renderArchiveContents(document.getElementById('archive-list'), {
-        entries: info.entries,
-      });
-      overlay.classList.add('visible');
-      overlay.querySelector<HTMLElement>('#archive-close')?.focus();
     } catch (error) {
       showError(error);
     }
@@ -280,49 +280,56 @@ const archiveExtensions = new Set(['zip', 'tar', 'tgz', 'gz', 'rar']);
       defaultFormat,
     );
 
-    const dialogPromise = showHtmlDialog({
-      bodyHtml: '<div id="create-archive-stage5-host"></div>',
-      confirmText: 'Create',
-      onConfirm: () => {
-        const nameInput = document.getElementById('archive-name') as HTMLInputElement | null;
-        const formatSelect = document.getElementById('archive-format') as HTMLSelectElement | null;
-        const format = (formatSelect?.value || defaultFormat) as ArchiveFormat;
-        const archiveName = normalizeArchiveFileName(nameInput?.value || defaultName, format);
-        const archivePath = joinPath(archiveDirectory, archiveName);
-        void (async () => {
-          try {
-            await runWithOperationLog({
-              action: 'create-archive',
-              detail: `From ${selectedPaths.length} selected item${selectedPaths.length === 1 ? '' : 's'}`,
-              item: archiveName,
-              itemCount: selectedPaths.length,
-              retry: {
-                kind: 'create-archive',
-                archivePath,
-                format,
-                sourcePaths: [...selectedPaths],
-              },
-              target: archivePath,
-              title: 'Creating Archive',
-            }, async () => {
-              await createArchive(selectedPaths, archivePath, format);
-            });
-            showSuccess(`Created ${archiveName}`);
-            if (activePane === 'secondary') await refreshSecondaryPane();
-            else await refreshCurrentDirectory();
-          } catch (error) {
-            showError(error);
-          }
-        })();
-        return true;
-      },
-      title: 'Create Archive',
-    });
-
-    renderCreateArchiveBody(document.getElementById('create-archive-stage5-host'), {
+    openCreateArchiveUi({
       defaultName,
       format: defaultFormat,
       selectedNames: selectedEntries.map((entry: FileEntry) => entry.name),
+      selectedPaths,
+      targetDirectory: archiveDirectory,
     });
-    await dialogPromise;
+  }
+
+  export async function confirmCreateArchiveFlow(detail: {
+    format?: ArchiveFormat;
+    name?: string;
+    selectedPaths?: PathString[];
+    targetDirectory?: PathString;
+  } = {}) {
+    const format = (detail.format || 'zip') as ArchiveFormat;
+    const selectedPaths = detail.selectedPaths || [];
+    const archiveDirectory = detail.targetDirectory || pathForPane();
+    if (selectedPaths.length === 0 || !archiveDirectory) {
+      showError('Select files or folders to compress.');
+      closeCreateArchiveUi();
+      return;
+    }
+
+    const archiveName = normalizeArchiveFileName(detail.name || 'archive', format);
+    const archivePath = joinPath(archiveDirectory, archiveName);
+    const activePane = appState.activePane as PaneId;
+    closeCreateArchiveUi();
+
+    try {
+      await runWithOperationLog({
+        action: 'create-archive',
+        detail: `From ${selectedPaths.length} selected item${selectedPaths.length === 1 ? '' : 's'}`,
+        item: archiveName,
+        itemCount: selectedPaths.length,
+        retry: {
+          kind: 'create-archive',
+          archivePath,
+          format,
+          sourcePaths: [...selectedPaths],
+        },
+        target: archivePath,
+        title: 'Creating Archive',
+      }, async () => {
+        await createArchive(selectedPaths, archivePath, format);
+      });
+      showSuccess(`Created ${archiveName}`);
+      if (activePane === 'secondary') await refreshSecondaryPane();
+      else await refreshCurrentDirectory();
+    } catch (error) {
+      showError(error);
+    }
   }

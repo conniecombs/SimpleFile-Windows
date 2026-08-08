@@ -18,6 +18,7 @@
       && progressUi.percent <= 0,
   );
   const transferLine = $derived.by(() => {
+    if (progressUi.detailLine) return progressUi.detailLine;
     if (progressUi.currentBytes == null && progressUi.totalBytes == null) return '';
     const current = formatProgressBytes(progressUi.currentBytes ?? 0);
     if (progressUi.totalBytes != null && progressUi.totalBytes > 0) {
@@ -25,9 +26,13 @@
     }
     return `${current} copied`;
   });
-  const rateLabel = $derived(formatProgressRate(progressUi.bytesPerSecond));
+  const rateLabel = $derived(
+    progressUi.detailLine ? '' : formatProgressRate(progressUi.bytesPerSecond),
+  );
   const etaLabel = $derived(
-    progressUi.phase === 'cancelling' ? '' : formatProgressEta(progressUi.etaSeconds),
+    progressUi.phase === 'cancelling' || progressUi.detailLine
+      ? ''
+      : formatProgressEta(progressUi.etaSeconds),
   );
   const itemLabel = $derived(progressItemLabel(progressUi.item));
   const cancelling = $derived(isProgressCancelling());

@@ -1,5 +1,6 @@
 import type { TreeNode, ConflictAction, DirectoryListing, FileEntry, Nullable, PathString, TransferResult } from './types';
 import * as api from './api';
+import type { ListDirectoryOptions } from './api';
 import { basename, getParentPath } from './coreFileManager';
 
 export interface IVirtualFileSystem {
@@ -7,7 +8,7 @@ export interface IVirtualFileSystem {
   readonly name: string;
   readonly isRemote: boolean;
 
-  listDirectory(path: PathString): Promise<DirectoryListing>;
+  listDirectory(path: PathString, options?: ListDirectoryOptions): Promise<DirectoryListing>;
   createDirectory(path: PathString, name: string): Promise<string>;
   deleteEntry(path: PathString): Promise<void>;
   renameEntry(path: PathString, newName: string): Promise<string>;
@@ -28,8 +29,8 @@ export class LocalFileSystem implements IVirtualFileSystem {
   readonly name = 'Local File System';
   readonly isRemote = false;
 
-  async listDirectory(path: PathString): Promise<DirectoryListing> {
-    return api.listDirectory(path);
+  async listDirectory(path: PathString, options?: ListDirectoryOptions): Promise<DirectoryListing> {
+    return api.listDirectory(path, options);
   }
 
   async createDirectory(path: PathString, name: string): Promise<string> {

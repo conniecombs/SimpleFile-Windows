@@ -4,6 +4,7 @@ mod cleanup;
 
 mod compare;
 mod db;
+mod dir_list;
 mod drives;
 
 mod fs_ops;

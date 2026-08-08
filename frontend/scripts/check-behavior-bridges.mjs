@@ -152,13 +152,12 @@ assertContains('frontend/src/lib/components/OverlayShell.svelte', [
   'id="context-menu"',
   'GenericModal',
   'ProgressModal',
-  'id="quicklook-overlay"',
-  'id="quicklook-content"',
-  'id="archive-overlay"',
-  'id="create-archive-overlay"',
-  'id="advanced-rename-overlay"',
-  'id="keyboard-help-overlay"',
-  'id="about-overlay"',
+  'ArchiveViewerModal',
+  'CreateArchiveModal',
+  'QuickLookOverlay',
+  'AdvancedRenameModal',
+  'KeyboardHelpModal',
+  'AboutModal',
   'id="external-drop-overlay"',
 ], 'native overlay shell contract');
 
@@ -174,6 +173,68 @@ assertContains('frontend/src/lib/components/ProgressModal.svelte', [
   'id="progress-cancel"',
   'progressUi',
 ], 'component-owned progress modal');
+
+assertContains('frontend/src/lib/components/ArchiveViewerModal.svelte', [
+  'id="archive-overlay"',
+  'archiveViewer',
+  'closeArchiveViewer',
+], 'component-owned archive viewer');
+
+assertContains('frontend/src/lib/components/CreateArchiveModal.svelte', [
+  'id="create-archive-overlay"',
+  'createArchiveUi',
+  'closeCreateArchiveUi',
+], 'component-owned create archive modal');
+
+assertContains('frontend/src/lib/app/searchUi.svelte.ts', [
+  'export const searchUi',
+  'setSearchControlsVisible',
+  'requestSearchFocus',
+], 'component-owned search chrome state');
+
+assertContains('frontend/src/lib/components/QuickLookOverlay.svelte', [
+  'id="quicklook-overlay"',
+  'quickLookUi',
+  'closeQuickLookUi',
+], 'component-owned quick look');
+
+assertContains('frontend/src/lib/components/AdvancedRenameModal.svelte', [
+  'id="advanced-rename-overlay"',
+  'advancedRenameUi',
+  'AdvancedRenamePreview',
+  'bind:checked={advancedRenameUi.form',
+  'bind:value={advancedRenameUi.form',
+], 'component-owned advanced rename');
+
+assertContains('frontend/src/lib/app/advancedRenameUi.svelte.ts', [
+  'export type AdvancedRenameFormState',
+  'createDefaultAdvancedRenameForm',
+  'formChecked',
+  'formString',
+], 'advanced rename form state');
+
+assertContains('frontend/src/lib/components/KeyboardHelpModal.svelte', [
+  'id="keyboard-help-overlay"',
+  'keyboardHelpUi',
+  'closeKeyboardHelpUi',
+], 'component-owned keyboard help');
+
+assertContains('frontend/src/lib/components/AboutModal.svelte', [
+  'id="about-overlay"',
+  'aboutUi',
+  'closeAboutUi',
+], 'component-owned about modal');
+
+assertContains('frontend/src/lib/app/keyboardHelpUi.svelte.ts', [
+  'export function openKeyboardHelpUi',
+  'export function closeKeyboardHelpUi',
+], 'keyboard help UI state');
+
+assertContains('frontend/src/lib/app/aboutUi.svelte.ts', [
+  'export function openAboutUi',
+  'export function setAboutInfo',
+  'export function closeAboutUi',
+], 'about UI state');
 
 assertContains('frontend/scripts/migrate-components.ps1', [
   'one-shot Svelte component migration script is retired',

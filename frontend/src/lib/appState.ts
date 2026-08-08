@@ -116,13 +116,8 @@ export interface OperationLogEntry {
   title: string;
 }
 
-export interface FileTag {
-  color: string;
-  emoji?: string;
-  id?: number;
-  label?: string;
-  name?: string;
-}
+/** @deprecated Prefer ColorLabelTag from types.ts */
+export type FileTag = import('./types').ColorLabelTag;
 
 export interface FolderStackItem {
   id: string | number;
@@ -178,6 +173,13 @@ export interface SimpleFileAppState {
   secondarySelectedEntries: Set<PathString>;
   secondaryHistory: PathString[];
   secondaryHistoryIndex: number;
+  /** Primary pane path is UNC / mapped network (defers heavy lazy work). */
+  primaryPathIsNetwork: boolean;
+  /** Secondary pane path is UNC / mapped network. */
+  secondaryPathIsNetwork: boolean;
+  /** Listing still streaming chunks for the primary pane. */
+  primaryListingInProgress: boolean;
+  secondaryListingInProgress: boolean;
   currentArchive: ArchiveInfo | null;
   searchQuery: string;
   searchResults: Array<SearchResult | FileEntry>;
@@ -195,7 +197,7 @@ export interface SimpleFileAppState {
   clipboardHistory: ClipboardHistoryItem[];
   operationHistory: OperationLogEntry[];
   fileTags: Record<PathString, FileTag>;
-  tags: any[];
+  tags: FileTag[];
 }
 
 export function createDefaultSettings(): AppSettings {
@@ -274,6 +276,10 @@ export function createInitialAppState(): SimpleFileAppState {
     secondarySelectedEntries: new Set(),
     secondaryHistory: [],
     secondaryHistoryIndex: -1,
+    primaryPathIsNetwork: false,
+    secondaryPathIsNetwork: false,
+    primaryListingInProgress: false,
+    secondaryListingInProgress: false,
     currentArchive: null,
     searchQuery: '',
     searchResults: [],

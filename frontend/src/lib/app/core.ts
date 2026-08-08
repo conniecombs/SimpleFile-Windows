@@ -74,6 +74,7 @@ import {
     formatModified,
     formatFileSize,
     getParentPath,
+    isNetworkFsPath,
     isValidFileName,
     joinPath,
     visibleEntries,
@@ -86,7 +87,7 @@ import {
   import { renderArchiveContents, renderArchiveInfo, renderCreateArchiveBody } from '../components/archive-surfaces';
   import { clearSearchResultsHeader, renderSearchResultsHeader } from '../components/search-chrome';
   import { renderContextMenu } from '../components/context-menus';
-  import { clearQuickLook, renderQuickLook } from '../components/quick-look';
+
     import { renderStatusBar } from '../components/status-bar';
   import { showError, showSuccess } from '../components/toasts';
   import {
@@ -100,6 +101,7 @@ import {
   } from './modalUi.svelte';
   import {
     hideProgressUi,
+    isProgressCancelling,
     isProgressVisible,
     progressUi,
     showProgressUi,
@@ -127,17 +129,11 @@ import {
   } from '../types';
   import type { FileTab, OperationLogEntry, OperationLogRetry, OperationLogStatus } from '../appState';
 
-  export type ColorLabelTag = {
-    color: string;
-    emoji: string;
-    id: number;
-    name: string;
-    label?: string;
-  };
+  export type ColorLabelTag = import('../types').ColorLabelTag;
 
   export type UndoEntry = {
-    undo: () => Promise<any>;
-    redo?: () => Promise<any>;
+    undo: () => Promise<unknown>;
+    redo?: () => Promise<unknown>;
     description: string;
   };
 
@@ -149,6 +145,12 @@ import { setTransferClipboard } from "../transferClipboard.js";
 import { showAdvancedRenameFlow } from "./advanced_rename.js";
 import { isArchiveEntry, showArchiveContentsFlow, showCreateArchiveFlow, extractArchiveFlow, archiveExtractFolderNameForPath } from "./archive.js";
 import { resetSearchStateForNavigation, showPropertiesFlow } from "./search.js";
+import { closeAboutUi, openAboutUi, setAboutInfo } from './aboutUi.svelte';
+import {
+  closeKeyboardHelpUi,
+  openKeyboardHelpUi,
+} from './keyboardHelpUi.svelte';
+import { closeQuickLookUi, openQuickLookUi } from './quickLookUi.svelte';
 
 const defaultColorLabels = [
     { color: '#ef4444', name: 'Red' },
@@ -169,26 +171,28 @@ const defaultColorLabels = [
     return '#64748b';
   }
 
-  export function normalizeTag(raw: any): ColorLabelTag | null {
-    const id = Number(raw?.id);
+  export function normalizeTag(raw: unknown): ColorLabelTag | null {
+    if (!raw || typeof raw !== 'object') return null;
+    const record = raw as Record<string, unknown>;
+    const id = Number(record.id);
     if (!Number.isFinite(id)) return null;
-    const name = String(raw?.name || raw?.label || 'Label').trim() || 'Label';
+    const name = String(record.name || record.label || 'Label').trim() || 'Label';
     return {
-      color: safeTagColor(raw?.color),
-      emoji: raw?.emoji || '\u25cf',
+      color: safeTagColor(record.color),
+      emoji: typeof record.emoji === 'string' && record.emoji ? record.emoji : '\u25cf',
       id,
       label: name,
       name,
     };
   }
 
-  export function normalizeTags(rawTags: any[] = []) {
+  export function normalizeTags(rawTags: unknown[] = []) {
     return rawTags
       .map(normalizeTag)
       .filter((tag): tag is ColorLabelTag => Boolean(tag));
   }
 
-  export function normalizeFileTagMap(rawTags: Record<string, any> = {}) {
+  export function normalizeFileTagMap(rawTags: Record<string, unknown> = {}) {
     const next: Record<PathString, ColorLabelTag> = {};
     for (const [path, rawTag] of Object.entries(rawTags)) {
       const tag = normalizeTag(rawTag);
@@ -287,6 +291,10 @@ const defaultColorLabels = [
     }
 
     const metricsToken = ++localState.folderMetricsToken;
+    const totalFolders = folders.length;
+    let completedFolders = 0;
+    let totalBytes = 0;
+    let cancelled = false;
 
     try {
       await stopPreviousFolderMetricWork();
@@ -295,37 +303,99 @@ const defaultColorLabels = [
       const metrics = new Map<PathString, { count: number; size: number }>();
       const nextFolderSizes = new Map(appState.folderSizes || new Map());
 
-      await runWithProgress(
+      showProgressFlow(
         'Calculating Folder Metrics',
-        folders.length === 1 ? folders[0].name : `${folders.length} folders`,
-        async () => {
-          for (let index = 0; index < folders.length; index += 1) {
-            const folder = folders[index];
-            if (metricsToken !== localState.folderMetricsToken) return;
-
-            const progressLabel = `Folder ${index + 1} of ${folders.length}: ${folder.name}`;
-            updateProgressFlow((index / Math.max(1, folders.length)) * 90, progressLabel);
-            const [size, count] = await Promise.all([
-              calculateFolderSize(folder.path),
-              countFolderItems(folder.path),
-            ]);
-            if (metricsToken !== localState.folderMetricsToken) return;
-
-            const metric = { count: Number(count || 0), size: Number(size || 0) };
-            metrics.set(folder.path, metric);
-            nextFolderSizes.set(folder.path, metric.size);
-          }
+        `Preparing ${totalFolders} folder${totalFolders === 1 ? '' : 's'}…`,
+        2,
+        null,
+        {
+          onCancel: () => {
+            cancelled = true;
+            cancelFolderMetricWork();
+          },
+          detailLine: `0 of ${totalFolders} folders`,
         },
-        { onCancel: cancelFolderMetricWork },
       );
 
-      if (metricsToken !== localState.folderMetricsToken) return;
+      for (let index = 0; index < folders.length; index += 1) {
+        if (metricsToken !== localState.folderMetricsToken || cancelled || isProgressCancelling()) {
+          cancelled = true;
+          break;
+        }
+
+        const folder = folders[index];
+        const ordinal = index + 1;
+        updateProgressFlow(
+          ((index) / Math.max(1, totalFolders)) * 100,
+          folder.name,
+          {
+            detailLine: `Folder ${ordinal} of ${totalFolders} · scanning…`,
+          },
+        );
+
+        const [size, count] = await Promise.all([
+          calculateFolderSize(folder.path),
+          countFolderItems(folder.path),
+        ]);
+
+        if (metricsToken !== localState.folderMetricsToken || cancelled || isProgressCancelling()) {
+          cancelled = true;
+          break;
+        }
+
+        const metric = { count: Number(count || 0), size: Number(size || 0) };
+        metrics.set(folder.path, metric);
+        nextFolderSizes.set(folder.path, metric.size);
+        completedFolders += 1;
+        totalBytes += metric.size;
+
+        updateProgressFlow(
+          (ordinal / Math.max(1, totalFolders)) * 100,
+          folder.name,
+          {
+            detailLine: `${ordinal} of ${totalFolders} folders · ${formatFileSize(totalBytes, false) || '0 B'} total`,
+          },
+        );
+      }
+
+      if (metricsToken !== localState.folderMetricsToken) {
+        hideProgressFlow();
+        return;
+      }
+
+      if (cancelled || isProgressCancelling()) {
+        if (completedFolders > 0) {
+          appState.folderSizes = nextFolderSizes;
+          applyFolderMetrics(metrics);
+        }
+        progressUi.statusMessage = 'Cancelled';
+        updateProgressFlow(
+          (completedFolders / Math.max(1, totalFolders)) * 100,
+          completedFolders > 0 ? `Stopped after ${completedFolders} folder${completedFolders === 1 ? '' : 's'}` : 'Cancelled',
+          {
+            detailLine: completedFolders > 0
+              ? `${completedFolders} of ${totalFolders} folders kept · ${formatFileSize(totalBytes, false) || '0 B'}`
+              : 'No folders completed',
+          },
+        );
+        window.setTimeout(() => {
+          if (localState.folderMetricsToken === metricsToken) hideProgressFlow();
+        }, 700);
+        return;
+      }
 
       appState.folderSizes = nextFolderSizes;
       applyFolderMetrics(metrics);
-      showSuccess(`Calculated ${folders.length} folder${folders.length === 1 ? '' : 's'}`);
+      updateProgressFlow(100, 'Complete', {
+        detailLine: `${totalFolders} folder${totalFolders === 1 ? '' : 's'} · ${formatFileSize(totalBytes, false) || '0 B'} total`,
+      });
+      showSuccess(
+        `Calculated ${totalFolders} folder${totalFolders === 1 ? '' : 's'} (${formatFileSize(totalBytes, false) || '0 B'})`,
+      );
+      window.setTimeout(hideProgressFlow, 280);
     } catch (error) {
       if (metricsToken === localState.folderMetricsToken) {
+        hideProgressFlow();
         showError(error);
       }
     }
@@ -1435,18 +1505,44 @@ const defaultColorLabels = [
       resetPassiveMetricFailures();
       resetSearchStateForNavigation();
       appState.isNavigating = true;
+      appState.primaryListingInProgress = true;
       appState.currentPath = path;
       appState.entries = [];
       appState.filteredEntries = [];
-      const listing = await getActiveFileSystem().listDirectory(path);
-      if (token !== localState.navigationToken) return;
-
-      appState.currentPath = listing.path;
-      appState.entries = listing.entries;
       appState.selectedEntries = new Set();
       appState.focusedIndex = -1;
       appState.lastSelectedIndex = -1;
       appState.filterQuery = '';
+      appState.primaryPathIsNetwork = isNetworkFsPath(path, appState.drives || []);
+
+      let progressive: FileEntry[] = [];
+      let firstChunkPainted = false;
+
+      const listing = await getActiveFileSystem().listDirectory(path, {
+        onChunk: (chunk) => {
+          if (token !== localState.navigationToken) return;
+          if (typeof chunk.is_network === 'boolean') {
+            appState.primaryPathIsNetwork = chunk.is_network;
+          }
+          if (chunk.path) {
+            appState.currentPath = chunk.path;
+          }
+          // Append streamed pages so the first viewport paints before enumeration finishes.
+          progressive = progressive.concat(chunk.entries || []);
+          appState.entries = progressive;
+          applyEntryFilters();
+          if (!firstChunkPainted && progressive.length > 0) {
+            firstChunkPainted = true;
+            appState.isNavigating = false;
+          }
+        },
+      });
+      if (token !== localState.navigationToken) return;
+
+      appState.currentPath = listing.path;
+      appState.entries = listing.entries;
+      appState.primaryPathIsNetwork = listing.is_network
+        ?? isNetworkFsPath(listing.path, appState.drives || []);
       recordHistory(listing.path, historyMode);
       applyEntryFilters();
       startDirectoryWatch(listing.path);
@@ -1467,6 +1563,7 @@ const defaultColorLabels = [
     } finally {
       if (token === localState.navigationToken) {
         appState.isNavigating = false;
+        appState.primaryListingInProgress = false;
       }
     }
   }
@@ -1478,12 +1575,34 @@ const defaultColorLabels = [
       cancelFolderMetricWork();
       clearThumbnailCache();
       resetPassiveMetricFailures();
-      const listing = await getActiveFileSystem().listDirectory(path);
+      appState.secondaryListingInProgress = true;
+      appState.secondaryPath = path;
+      appState.secondaryEntries = [];
+      appState.secondaryFilteredEntries = [];
+      appState.secondarySelectedEntries = new Set();
+      appState.secondaryPathIsNetwork = isNetworkFsPath(path, appState.drives || []);
+
+      let progressive: FileEntry[] = [];
+      const listing = await getActiveFileSystem().listDirectory(path, {
+        onChunk: (chunk) => {
+          if (token !== localState.secondaryNavigationToken) return;
+          if (typeof chunk.is_network === 'boolean') {
+            appState.secondaryPathIsNetwork = chunk.is_network;
+          }
+          if (chunk.path) {
+            appState.secondaryPath = chunk.path;
+          }
+          progressive = progressive.concat(chunk.entries || []);
+          appState.secondaryEntries = progressive;
+          applySecondaryEntryFilters();
+        },
+      });
       if (token !== localState.secondaryNavigationToken) return;
 
       appState.secondaryPath = listing.path;
       appState.secondaryEntries = listing.entries;
-      appState.secondarySelectedEntries = new Set();
+      appState.secondaryPathIsNetwork = listing.is_network
+        ?? isNetworkFsPath(listing.path, appState.drives || []);
       if (activate) appState.activePane = 'secondary';
       recordSecondaryHistory(listing.path, historyMode);
       applySecondaryEntryFilters();
@@ -1494,6 +1613,10 @@ const defaultColorLabels = [
         void refreshDrives({ quiet: true });
       } else {
         showError(error);
+      }
+    } finally {
+      if (token === localState.secondaryNavigationToken) {
+        appState.secondaryListingInProgress = false;
       }
     }
   }
@@ -2379,9 +2502,15 @@ const defaultColorLabels = [
     operationId: string | null = null,
     options: ProgressFlowOptions = {},
   ) {
-    const { onCancel = null, currentBytes = null, totalBytes = null } = options;
+    const {
+      onCancel = null,
+      currentBytes = null,
+      totalBytes = null,
+      detailLine = null,
+    } = options;
     showProgressUi(title, item, percent, operationId, onCancel, {
       currentBytes,
+      detailLine,
       totalBytes,
     });
   }
@@ -2438,9 +2567,7 @@ const defaultColorLabels = [
 
 
   export function closeQuickLookFlow() {
-    const overlay = overlayById('quicklook-overlay');
-    clearQuickLook(overlay);
-    overlay?.classList.remove('visible');
+    closeQuickLookUi();
     localState.currentQuickLookPath = null;
   }
 
@@ -2451,26 +2578,24 @@ const defaultColorLabels = [
       return;
     }
 
-    const overlay = overlayById('quicklook-overlay');
-    if (!overlay) {
-      showError('Quick Look overlay is unavailable.');
-      return;
-    }
-
     const quickLookPath = entry.path;
     localState.currentQuickLookPath = quickLookPath;
     try {
       const preview = entry.is_dir ? null : await getActiveFileSystem().readFilePreview(entry.path, 2_000_000);
       if (localState.currentQuickLookPath !== quickLookPath) return;
-      renderQuickLook(overlay, {
+      openQuickLookUi({
+        info: `${fileType(entry)} - ${formatFileSize(entry.size, entry.is_dir) || 'Folder'}`,
+        path: quickLookPath,
         preview,
         title: entry.name,
       });
-      overlay.classList.add('visible');
-      setElementText('quicklook-info', `${fileType(entry)} - ${formatFileSize(entry.size, entry.is_dir) || 'Folder'}`);
-      overlay.querySelector<HTMLElement>('#quicklook-close')?.focus();
+      await Promise.resolve();
+      document.getElementById('quicklook-close')?.focus();
     } catch (error) {
-      if (localState.currentQuickLookPath === quickLookPath) localState.currentQuickLookPath = null;
+      if (localState.currentQuickLookPath === quickLookPath) {
+        localState.currentQuickLookPath = null;
+        closeQuickLookUi();
+      }
       showError(error);
     }
   }
@@ -2945,9 +3070,9 @@ const defaultColorLabels = [
     showSuccess('Shortcuts reset');
   }
 
-  function renderKeyboardHelpBody() {
+  function buildKeyboardHelpSections() {
     const shortcutMap = getShortcutMap();
-    const sections: HTMLElement[] = [];
+    const sections: Array<{ rows: Array<{ action: string; shortcut: string }>; title: string }> = [];
 
     for (const sectionDefinition of keyboardShortcutSections) {
       const groupedRows = new Map<string, string[]>();
@@ -2959,38 +3084,25 @@ const defaultColorLabels = [
 
       if (groupedRows.size === 0) continue;
 
-      const section = document.createElement('div');
-      section.className = 'shortcuts-section';
-      const heading = document.createElement('h4');
-      heading.textContent = sectionDefinition.title;
-      section.appendChild(heading);
-
-      for (const [label, combos] of groupedRows.entries()) {
-        const row = document.createElement('div');
-        row.className = 'shortcut-row';
-        const shortcut = document.createElement('kbd');
-        shortcut.textContent = combos.join(' / ');
-        const action = document.createElement('span');
-        action.textContent = label;
-        row.append(shortcut, action);
-        section.appendChild(row);
-      }
-
-      sections.push(section);
+      sections.push({
+        title: sectionDefinition.title,
+        rows: [...groupedRows.entries()].map(([action, combos]) => ({
+          action,
+          shortcut: combos.join(' / '),
+        })),
+      });
     }
 
-    const body = document.querySelector<HTMLElement>('.keyboard-help-body');
-    body?.replaceChildren(...sections);
+    return sections;
   }
 
   export function showKeyboardHelpFlow() {
-    renderKeyboardHelpBody();
-    setOverlayVisible('keyboard-help-overlay', true);
-    document.getElementById('keyboard-help-close')?.focus();
+    openKeyboardHelpUi(buildKeyboardHelpSections());
+    queueMicrotask(() => document.getElementById('keyboard-help-close')?.focus());
   }
 
   export function closeKeyboardHelpFlow() {
-    setOverlayVisible('keyboard-help-overlay', false);
+    closeKeyboardHelpUi();
   }
 
   export function pathsFromNativeDropPayload(payload: NativeFileDropEventPayload | null | undefined) {
@@ -3295,34 +3407,13 @@ const defaultColorLabels = [
 
   export async function showAboutFlow() {
     closeSettingsModal();
+    openAboutUi(null);
+    queueMicrotask(() => document.getElementById('about-close')?.focus());
     try {
       const info = await getAppAboutInfo();
-      await showHtmlDialog({
-        bodyHtml: `
-          <div class="about-body">
-            <div class="about-hero">
-              <div class="about-logo" aria-hidden="true">SF</div>
-              <div class="about-heading">
-                <h2 class="about-title">${escapeHtml(info.product_name || 'SimpleFile')}</h2>
-                <p class="about-version">Version ${escapeHtml(info.version)}</p>
-                <p class="about-description">${escapeHtml(info.description)}</p>
-              </div>
-            </div>
-            <div class="about-details">
-              <div class="about-detail-row"><span>Identifier</span><strong>${escapeHtml(info.identifier)}</strong></div>
-              <div class="about-detail-row"><span>Build</span><strong>${escapeHtml(info.build_profile)}</strong></div>
-              <div class="about-detail-row"><span>Platform</span><strong>${escapeHtml(info.platform)} ${escapeHtml(info.architecture)}</strong></div>
-              <div class="about-detail-row"><span>Framework</span><strong>${escapeHtml(info.framework)}</strong></div>
-              <div class="about-detail-row"><span>Runtime</span><strong>${escapeHtml(info.runtime)}</strong></div>
-              <div class="about-detail-row"><span>Authors</span><strong>${escapeHtml(info.authors)}</strong></div>
-            </div>
-          </div>
-        `,
-        confirmText: 'Close',
-        showCancel: false,
-        title: 'About SimpleFile',
-      });
+      setAboutInfo(info);
     } catch (error) {
+      closeAboutUi();
       showError(error);
     }
   }

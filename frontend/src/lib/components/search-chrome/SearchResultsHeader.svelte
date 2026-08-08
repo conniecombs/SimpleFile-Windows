@@ -3,12 +3,14 @@
     clearLabel = 'Clear',
     saveLabel = 'Save Search',
     label = '',
+    showSave = true,
     onClear = undefined,
     onSave = undefined,
   }: {
     clearLabel?: string;
     saveLabel?: string;
     label?: string;
+    showSave?: boolean;
     onClear?: () => void;
     onSave?: () => void;
   } = $props();
@@ -24,6 +26,7 @@
   }
 
   function handleSave(event: MouseEvent) {
+    // handled=true only when a parent callback owns the save path.
     event.currentTarget?.dispatchEvent(new CustomEvent(SEARCH_RESULTS_SAVE_EVENT, {
       bubbles: true,
       detail: { handled: Boolean(onSave) },
@@ -33,7 +36,7 @@
 </script>
 
 <span class="search-results-count">{label}</span>
-{#if onSave}
+{#if showSave}
   <button class="btn btn-secondary btn-sm search-save-btn" type="button" onclick={handleSave}>
     {saveLabel}
   </button>

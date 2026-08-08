@@ -45,8 +45,10 @@ assertContains('frontend/src/lib/app/search.ts', [
   'async function saveCurrentSearchAsSmartFolderFlow',
   'async function openSmartFolderFlow',
   'async function deleteSmartFolderFlow',
-  "onSave: () => {",
-  "saveLabel: 'Save Search'",
+  "title: 'Save Smart Folder'",
+  "type: 'prompt'",
+  'setSearchQuery',
+  'clearSearchQuery',
 ], 'Stage 7 search smart-folder wiring');
 
 assertContains('frontend/src/lib/app/setup.ts', [
@@ -55,6 +57,7 @@ assertContains('frontend/src/lib/app/setup.ts', [
   "document.addEventListener('simplefile:smart-folder-open', handleSmartFolderOpen);",
   "document.addEventListener('simplefile:smart-folder-delete', handleSmartFolderDelete);",
   "document.addEventListener('simplefile:smart-folders-changed', handleSmartFoldersChanged);",
+  'requestSearchFocus',
 ], 'Stage 7 setup smart-folder events');
 
 assertContains('frontend/src/lib/components/layout-shell/SidebarShell.svelte', [
@@ -65,7 +68,21 @@ assertContains('frontend/src/lib/components/layout-shell/SidebarShell.svelte', [
 assertContains('frontend/src/lib/components/search-chrome/SearchResultsHeader.svelte', [
   'SEARCH_RESULTS_SAVE_EVENT',
   'detail: { handled: Boolean(onSave) }',
+  'showSave',
 ], 'Stage 7 search header save event');
+
+assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
+  'SearchResultsHeader',
+  'appState.searchMode',
+  'searchHeaderLabel',
+], 'Stage 7 reactive search results header');
+
+assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
+  'searchUi',
+  'bind:value={searchUi.query}',
+  'searchUi.showCancel',
+  'searchUi.showClear',
+], 'Stage 7 component-owned search toolbar controls');
 
 assertContains('frontend/src/lib/tauri.ts', [
   'const devSmartFolders = new Map',

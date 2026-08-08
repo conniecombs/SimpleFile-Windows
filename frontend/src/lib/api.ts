@@ -1,4 +1,4 @@
-import { invokeCommand, listenToEvent } from './tauri';
+import { createCommandChannel, invokeCommand, listenToEvent } from './tauri';
 import type { EventCallback, UnlistenFn } from './tauri';
 import type {
   AppAboutInfo,
@@ -6,8 +6,10 @@ import type {
   ArchiveInfo,
   Checksums,
   CleanupResult,
+  ColorLabelTag,
   ConflictAction,
   DirectoryListing,
+  DirectoryListingChunk,
   DriveInfo,
   DuplicateGroup,
   FileChangeEvent,
@@ -48,8 +50,20 @@ export function listDrives(): Promise<DriveInfo[]> {
   return invokeCommand('list_drives');
 }
 
-export function listDirectory(path: PathString): Promise<DirectoryListing> {
-  return invokeCommand('list_directory', { path });
+export type ListDirectoryOptions = {
+  /** Called as soon as each enumeration chunk is ready (first page first). */
+  onChunk?: (chunk: DirectoryListingChunk) => void;
+};
+
+export function listDirectory(
+  path: PathString,
+  options?: ListDirectoryOptions,
+): Promise<DirectoryListing> {
+  const onChunk = createCommandChannel<DirectoryListingChunk>();
+  onChunk.onmessage = (chunk) => {
+    options?.onChunk?.(chunk);
+  };
+  return invokeCommand('list_directory', { path, onChunk });
 }
 
 export function listSubdirectories(path: PathString): Promise<TreeNode[]> {
@@ -186,11 +200,11 @@ export function getGitFileStatuses(path: string): Promise<Record<string, string>
   return invokeCommand('get_git_file_statuses', { path });
 }
 
-export function getAllTags(): Promise<any[]> {
+export function getAllTags(): Promise<ColorLabelTag[]> {
   return invokeCommand('get_all_tags');
 }
 
-export function createTag(name: string, color: string): Promise<any> {
+export function createTag(name: string, color: string): Promise<ColorLabelTag> {
   return invokeCommand('create_tag', { name, color });
 }
 
@@ -206,11 +220,11 @@ export function setTagsForPath(path: string, tagIds: number[]): Promise<void> {
   return invokeCommand('set_tags_for_path', { path, tagIds });
 }
 
-export function getTagsForPath(path: string): Promise<any[]> {
+export function getTagsForPath(path: string): Promise<ColorLabelTag[]> {
   return invokeCommand('get_tags_for_path', { path });
 }
 
-export function getAllFileTags(): Promise<Record<string, any>> {
+export function getAllFileTags(): Promise<Record<string, ColorLabelTag>> {
   return invokeCommand('get_all_file_tags');
 }
 

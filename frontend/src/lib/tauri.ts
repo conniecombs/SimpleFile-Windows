@@ -1,4 +1,4 @@
-import { convertFileSrc, invoke, type InvokeArgs } from '@tauri-apps/api/core';
+import { Channel, convertFileSrc, invoke, type InvokeArgs } from '@tauri-apps/api/core';
 import { listen, type EventCallback, type EventName, type UnlistenFn } from '@tauri-apps/api/event';
 export type { EventCallback, UnlistenFn };
 import type {
@@ -46,6 +46,18 @@ function hasTauriInvoke() {
 
 function shouldUseDevFallback() {
   return import.meta.env.DEV && !hasTauriInvoke();
+}
+
+type ChannelLike<T> = Channel<T> | {
+  onmessage?: (message: T) => void;
+};
+
+export function createCommandChannel<T>(): ChannelLike<T> {
+  if (shouldUseDevFallback()) {
+    return {};
+  }
+
+  return new Channel<T>();
 }
 
 function parentPath(path: string): string | null {
@@ -822,8 +834,27 @@ async function invokeDevCommand<Name extends TauriCommandName>(
     }
     case 'list_drives':
       return devDrives() as CommandResult<Name>;
-    case 'list_directory':
-      return devDirectoryListing((args as { path?: string } | undefined)?.path ?? DEV_HOME_PATH) as CommandResult<Name>;
+    case 'list_directory': {
+      const listArgs = args as { path?: string; onChunk?: { onmessage?: (chunk: unknown) => void } } | undefined;
+      const listing = devDirectoryListing(listArgs?.path ?? DEV_HOME_PATH);
+      const chunkPayload = {
+        path: listing.path,
+        parent: listing.parent,
+        entries: listing.entries,
+        chunk_index: 0,
+        done: true,
+        is_network: false,
+      };
+      try {
+        listArgs?.onChunk?.onmessage?.(chunkPayload);
+      } catch {
+        // Dev channel handlers are best-effort.
+      }
+      return {
+        ...listing,
+        is_network: false,
+      } as CommandResult<Name>;
+    }
     case 'list_subdirectories': {
       const listing = devDirectoryListing((args as { path?: string } | undefined)?.path ?? DEV_HOME_PATH);
       return listing.entries

@@ -1,8 +1,10 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
+  import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
+  import { searchResultsLabel } from '../../app/searchUi.svelte';
   import FileListHeader from './FileListHeader.svelte';
   import FileList from '../file-list/FileList.svelte';
+  import SearchResultsHeader from '../search-chrome/SearchResultsHeader.svelte';
 
   const PANE_MIN_PERCENT = 20;
   const PANE_MAX_PERCENT = 80;
@@ -15,6 +17,13 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   let paneResizing = $state(false);
   let panePercent = $state(50);
   let cleanupPaneResize: (() => void) | undefined;
+
+  let searchHeaderLabel = $derived(
+    searchResultsLabel(
+      String(appState.searchQuery || ''),
+      appState.searchResults?.length || 0,
+    ),
+  );
 
   let secondaryPathSegments = $derived.by(() => {
     if (!appState.secondaryPath) return [];
@@ -194,6 +203,16 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   >
     <div class="file-container">
       <FileListHeader pane="primary" />
+      {#if appState.searchMode}
+        <div class="search-results-header" role="status" aria-live="polite">
+          <!-- Events bubble to setup (search-results-clear / search-results-save). -->
+          <SearchResultsHeader
+            label={searchHeaderLabel}
+            clearLabel="Clear"
+            saveLabel="Save Search"
+          />
+        </div>
+      {/if}
       <div class="quick-filter-bar" id="quick-filter-bar" style="display:none;" role="search" aria-label="Quick filter">
         <span class="quick-filter-icon" aria-hidden="true">🔎</span>
         <input
