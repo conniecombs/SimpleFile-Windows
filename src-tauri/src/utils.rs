@@ -71,7 +71,11 @@ pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
     // what users open. Listing uses DirEntry / FindFirstFile and never follows.
     let (is_dir, size, modified) = if is_symlink {
         match fs::metadata(path) {
-            Ok(followed) => (followed.is_dir(), followed.len(), format_modified(&followed)),
+            Ok(followed) => (
+                followed.is_dir(),
+                followed.len(),
+                format_modified(&followed),
+            ),
             Err(_) => (
                 symlink_meta.is_dir(),
                 symlink_meta.len(),

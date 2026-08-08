@@ -380,6 +380,7 @@ export function initApp() {
 
     const handleToolbarCommand = (e: Event) => {
       const command = detailOf<ToolbarCommandDetail>(e).command;
+      if (!command) return;
       if (command === 'back') void navigateHistory(-1);
       else if (command === 'forward') void navigateHistory(1);
       else if (command === 'up') {

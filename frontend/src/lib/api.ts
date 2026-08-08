@@ -1,5 +1,4 @@
-import { Channel } from '@tauri-apps/api/core';
-import { invokeCommand, listenToEvent } from './tauri';
+import { createCommandChannel, invokeCommand, listenToEvent } from './tauri';
 import type { EventCallback, UnlistenFn } from './tauri';
 import type {
   AppAboutInfo,
@@ -60,7 +59,7 @@ export function listDirectory(
   path: PathString,
   options?: ListDirectoryOptions,
 ): Promise<DirectoryListing> {
-  const onChunk = new Channel<DirectoryListingChunk>();
+  const onChunk = createCommandChannel<DirectoryListingChunk>();
   onChunk.onmessage = (chunk) => {
     options?.onChunk?.(chunk);
   };

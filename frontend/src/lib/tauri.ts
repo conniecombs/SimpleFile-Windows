@@ -1,4 +1,4 @@
-import { convertFileSrc, invoke, type InvokeArgs } from '@tauri-apps/api/core';
+import { Channel, convertFileSrc, invoke, type InvokeArgs } from '@tauri-apps/api/core';
 import { listen, type EventCallback, type EventName, type UnlistenFn } from '@tauri-apps/api/event';
 export type { EventCallback, UnlistenFn };
 import type {
@@ -46,6 +46,18 @@ function hasTauriInvoke() {
 
 function shouldUseDevFallback() {
   return import.meta.env.DEV && !hasTauriInvoke();
+}
+
+type ChannelLike<T> = Channel<T> | {
+  onmessage?: (message: T) => void;
+};
+
+export function createCommandChannel<T>(): ChannelLike<T> {
+  if (shouldUseDevFallback()) {
+    return {};
+  }
+
+  return new Channel<T>();
 }
 
 function parentPath(path: string): string | null {

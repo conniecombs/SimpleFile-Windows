@@ -550,7 +550,7 @@ export function setFileTag(path: PathString, tag: string | null) {
   if (!tag || tag === 'clear') {
     delete tags[path];
   } else {
-    tags[path] = { color: tag, label: tag };
+    tags[path] = { color: tag, id: 0, label: tag, name: tag };
   }
   state.fileTags = tags;
   saveFileTags();

@@ -101,6 +101,7 @@ import {
   } from './modalUi.svelte';
   import {
     hideProgressUi,
+    isProgressCancelling,
     isProgressVisible,
     progressUi,
     showProgressUi,
@@ -317,7 +318,7 @@ const defaultColorLabels = [
       );
 
       for (let index = 0; index < folders.length; index += 1) {
-        if (metricsToken !== localState.folderMetricsToken || cancelled || progressUi.phase === 'cancelling') {
+        if (metricsToken !== localState.folderMetricsToken || cancelled || isProgressCancelling()) {
           cancelled = true;
           break;
         }
@@ -337,7 +338,7 @@ const defaultColorLabels = [
           countFolderItems(folder.path),
         ]);
 
-        if (metricsToken !== localState.folderMetricsToken || cancelled || progressUi.phase === 'cancelling') {
+        if (metricsToken !== localState.folderMetricsToken || cancelled || isProgressCancelling()) {
           cancelled = true;
           break;
         }
@@ -362,7 +363,7 @@ const defaultColorLabels = [
         return;
       }
 
-      if (cancelled || progressUi.phase === 'cancelling') {
+      if (cancelled || isProgressCancelling()) {
         if (completedFolders > 0) {
           appState.folderSizes = nextFolderSizes;
           applyFolderMetrics(metrics);

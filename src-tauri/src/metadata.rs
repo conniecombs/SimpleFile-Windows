@@ -95,8 +95,8 @@ fn classify_extension(extension: &str) -> MetadataKind {
     match extension.to_ascii_lowercase().as_str() {
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tif" | "tiff" => MetadataKind::Image,
         "pdf" => MetadataKind::Pdf,
-        "mp3" | "flac" | "ogg" | "oga" | "opus" | "wav" | "m4a" | "aac" | "aiff" | "aif" | "wma"
-        | "wv" | "ape" => MetadataKind::Audio,
+        "mp3" | "flac" | "ogg" | "oga" | "opus" | "wav" | "m4a" | "aac" | "aiff" | "aif"
+        | "wma" | "wv" | "ape" => MetadataKind::Audio,
         "mp4" | "m4v" | "mov" | "webm" | "mkv" | "avi" | "wmv" => MetadataKind::Video,
         "docx" | "xlsx" | "pptx" | "odt" | "ods" | "odp" => MetadataKind::Office,
         _ => MetadataKind::Unsupported,
@@ -104,11 +104,11 @@ fn classify_extension(extension: &str) -> MetadataKind {
 }
 
 fn ensure_regular_file(path: &Path) -> Result<(), String> {
-    let meta =
-        fs::symlink_metadata(path).map_err(|e| format!("Failed to stat path: {e}"))?;
+    let meta = fs::symlink_metadata(path).map_err(|e| format!("Failed to stat path: {e}"))?;
     if meta.file_type().is_symlink() {
         // Resolve only after validating the symlink entry exists; follow for metadata.
-        let target_meta = fs::metadata(path).map_err(|e| format!("Failed to follow symlink: {e}"))?;
+        let target_meta =
+            fs::metadata(path).map_err(|e| format!("Failed to follow symlink: {e}"))?;
         if !target_meta.is_file() {
             return Err("Metadata is available for files only".to_string());
         }
@@ -154,7 +154,10 @@ fn truncate_value(value: impl AsRef<str>) -> String {
     if value.chars().count() <= MAX_FIELD_VALUE_CHARS {
         return value.to_string();
     }
-    let mut out: String = value.chars().take(MAX_FIELD_VALUE_CHARS.saturating_sub(1)).collect();
+    let mut out: String = value
+        .chars()
+        .take(MAX_FIELD_VALUE_CHARS.saturating_sub(1))
+        .collect();
     out.push('…');
     out
 }
@@ -199,7 +202,8 @@ fn extract_image_metadata(path: &Path) -> Result<ImageMetadata, String> {
                         let mut pairs = Vec::new();
                         for field in exif.fields().take(MAX_EXIF_FIELDS) {
                             let tag = format!("{}", field.tag);
-                            let value = truncate_value(field.display_value().with_unit(&exif).to_string());
+                            let value =
+                                truncate_value(field.display_value().with_unit(&exif).to_string());
                             pairs.push((tag, value));
                         }
                         pairs
@@ -285,7 +289,8 @@ fn pdf_object_text(object: &lopdf::Object) -> Option<String> {
 }
 
 fn extract_audio_metadata(path: &Path) -> Result<FileMetadata, String> {
-    let tagged = lofty::read_from_path(path).map_err(|e| format!("Failed to read audio tags: {e}"))?;
+    let tagged =
+        lofty::read_from_path(path).map_err(|e| format!("Failed to read audio tags: {e}"))?;
     let properties = tagged.properties();
     let duration = properties.duration();
 
@@ -377,10 +382,7 @@ fn extract_video_metadata(path: &Path, extension: &str) -> Result<FileMetadata, 
         _ => Ok(FileMetadata {
             kind: "video".to_string(),
             summary: Some("Container metadata not available for this format".to_string()),
-            fields: vec![(
-                "Format".to_string(),
-                extension.to_ascii_uppercase(),
-            )],
+            fields: vec![("Format".to_string(), extension.to_ascii_uppercase())],
         }),
     }
 }
@@ -579,7 +581,8 @@ fn scan_mp4_atoms<R: Read + Seek>(
                 reader
                     .seek(SeekFrom::Start(content_end))
                     .map_err(|e| format!("Failed to skip atom: {e}"))?;
-                bytes_read_limit = bytes_read_limit.saturating_sub(content_size.min(bytes_read_limit));
+                bytes_read_limit =
+                    bytes_read_limit.saturating_sub(content_size.min(bytes_read_limit));
             }
         }
 
@@ -638,7 +641,8 @@ fn parse_tkhd(buf: &[u8]) -> Option<(u32, u32)> {
 
 fn extract_office_metadata(path: &Path, extension: &str) -> Result<FileMetadata, String> {
     let file = File::open(path).map_err(|e| format!("Failed to open document: {e}"))?;
-    let mut archive = ZipArchive::new(file).map_err(|e| format!("Failed to read Office package: {e}"))?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read Office package: {e}"))?;
 
     let mut fields = Vec::new();
     let core_xml = read_zip_text(&mut archive, "docProps/core.xml")
@@ -653,7 +657,11 @@ fn extract_office_metadata(path: &Path, extension: &str) -> Result<FileMetadata,
             xml_local_text(xml, "lastModifiedBy"),
         );
         push_field(&mut fields, "Subject", xml_local_text(xml, "subject"));
-        push_field(&mut fields, "Description", xml_local_text(xml, "description"));
+        push_field(
+            &mut fields,
+            "Description",
+            xml_local_text(xml, "description"),
+        );
         push_field(&mut fields, "Created", xml_local_text(xml, "created"));
         push_field(&mut fields, "Modified", xml_local_text(xml, "modified"));
         push_field(&mut fields, "Keywords", xml_local_text(xml, "keywords"));
@@ -662,10 +670,18 @@ fn extract_office_metadata(path: &Path, extension: &str) -> Result<FileMetadata,
 
     // App properties and package-structure counts.
     if let Some(app_xml) = read_zip_text(&mut archive, "docProps/app.xml") {
-        push_field(&mut fields, "Application", xml_local_text(&app_xml, "Application"));
+        push_field(
+            &mut fields,
+            "Application",
+            xml_local_text(&app_xml, "Application"),
+        );
         push_field(&mut fields, "Pages", xml_local_text(&app_xml, "Pages"));
         push_field(&mut fields, "Words", xml_local_text(&app_xml, "Words"));
-        push_field(&mut fields, "Paragraphs", xml_local_text(&app_xml, "Paragraphs"));
+        push_field(
+            &mut fields,
+            "Paragraphs",
+            xml_local_text(&app_xml, "Paragraphs"),
+        );
         push_field(&mut fields, "Slides", xml_local_text(&app_xml, "Slides"));
         push_field(&mut fields, "Notes", xml_local_text(&app_xml, "Notes"));
         push_field(&mut fields, "Company", xml_local_text(&app_xml, "Company"));
@@ -691,9 +707,10 @@ fn extract_office_metadata(path: &Path, extension: &str) -> Result<FileMetadata,
         }
         "ods" => {
             if let Some(content) = read_zip_text(&mut archive, "content.xml") {
-                let sheets = content.matches("office:spreadsheet").count().max(
-                    content.matches("<table:table").count(),
-                );
+                let sheets = content
+                    .matches("office:spreadsheet")
+                    .count()
+                    .max(content.matches("<table:table").count());
                 if sheets > 0 {
                     fields.push(("Sheets".to_string(), sheets.to_string()));
                 }
@@ -765,10 +782,7 @@ fn count_zip_prefix<R: Read + Seek>(archive: &mut ZipArchive<R>, prefix: &str) -
 
 fn xml_local_text(xml: &str, local_name: &str) -> Option<String> {
     // Accept both <title> and <dc:title> style tags without a full XML parser.
-    let patterns = [
-        format!("<{local_name}>"),
-        format!(":{local_name}>"),
-    ];
+    let patterns = [format!("<{local_name}>"), format!(":{local_name}>")];
     for pattern in patterns {
         let mut search_from = 0usize;
         while let Some(rel) = xml[search_from..].find(&pattern) {
@@ -791,7 +805,9 @@ fn xml_local_text(xml: &str, local_name: &str) -> Option<String> {
                     || after_close
                         .split('>')
                         .next()
-                        .map(|name| name.ends_with(local_name) || name.contains(&format!(":{local_name}")))
+                        .map(|name| {
+                            name.ends_with(local_name) || name.contains(&format!(":{local_name}"))
+                        })
                         .unwrap_or(false)
                 {
                     let raw = &rest[..close_rel];
@@ -859,7 +875,10 @@ mod tests {
               <cp:lastModifiedBy>Grace</cp:lastModifiedBy>
             </cp:coreProperties>
         "#;
-        assert_eq!(xml_local_text(xml, "title").as_deref(), Some("Quarterly Report"));
+        assert_eq!(
+            xml_local_text(xml, "title").as_deref(),
+            Some("Quarterly Report")
+        );
         assert_eq!(xml_local_text(xml, "creator").as_deref(), Some("Ada"));
         assert_eq!(
             xml_local_text(xml, "lastModifiedBy").as_deref(),
@@ -901,8 +920,14 @@ mod tests {
 
         let meta = extract_office_metadata(&path, "docx").unwrap();
         assert_eq!(meta.kind, "office");
-        assert!(meta.fields.iter().any(|(k, v)| k == "Title" && v == "Budget"));
-        assert!(meta.fields.iter().any(|(k, v)| k == "Creator" && v == "Finance"));
+        assert!(meta
+            .fields
+            .iter()
+            .any(|(k, v)| k == "Title" && v == "Budget"));
+        assert!(meta
+            .fields
+            .iter()
+            .any(|(k, v)| k == "Creator" && v == "Finance"));
         assert!(meta.fields.iter().any(|(k, v)| k == "Pages" && v == "3"));
         assert!(meta.summary.as_deref() == Some("Budget"));
 

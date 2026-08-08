@@ -867,6 +867,7 @@
   class:grid-view={appState.isGridView}
   id={pane === 'primary' ? 'file-list' : 'secondary-file-list'}
   role="listbox"
+  tabindex="0"
   aria-label="Files and folders"
   aria-multiselectable="true"
   onscroll={handleScroll}

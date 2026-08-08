@@ -410,9 +410,7 @@ fn copy_file_with_progress(
     let completed = *completed_bytes;
     let needed = completed.saturating_add(file_len);
     if needed > known {
-        ctx.progress
-            .total_bytes
-            .store(needed, Ordering::Relaxed);
+        ctx.progress.total_bytes.store(needed, Ordering::Relaxed);
     }
 
     if file_len == 0 {
@@ -637,10 +635,14 @@ fn choose_next_keep_both_destination(
 
 /// Best-effort recursive size of a source path for progress totals / ETA.
 /// Symlinks contribute 0 (recreated, not followed as trees).
-fn estimate_path_bytes(path: &Path, state: &Arc<AppState>, operation_id: &str) -> Result<u64, String> {
+fn estimate_path_bytes(
+    path: &Path,
+    state: &Arc<AppState>,
+    operation_id: &str,
+) -> Result<u64, String> {
     check_cancelled(state, operation_id)?;
-    let meta =
-        fs::symlink_metadata(path).map_err(|e| format!("Failed to stat {}: {e}", path.display()))?;
+    let meta = fs::symlink_metadata(path)
+        .map_err(|e| format!("Failed to stat {}: {e}", path.display()))?;
     let file_type = meta.file_type();
     if file_type.is_symlink() {
         return Ok(0);
@@ -657,7 +659,8 @@ fn estimate_path_bytes(path: &Path, state: &Arc<AppState>, operation_id: &str) -
     let mut visited = 0u32;
     while let Some(dir) = stack.pop() {
         check_cancelled(state, operation_id)?;
-        let entries = fs::read_dir(&dir).map_err(|e| format!("Failed to read {}: {e}", dir.display()))?;
+        let entries =
+            fs::read_dir(&dir).map_err(|e| format!("Failed to read {}: {e}", dir.display()))?;
         for entry in entries {
             check_cancelled(state, operation_id)?;
             let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
@@ -693,11 +696,7 @@ fn estimate_transfer_bytes(
     let mut total = 0u64;
     for plan in plans {
         check_cancelled(state, operation_id)?;
-        total = total.saturating_add(estimate_path_bytes(
-            &plan.source_path,
-            state,
-            operation_id,
-        )?);
+        total = total.saturating_add(estimate_path_bytes(&plan.source_path, state, operation_id)?);
     }
     Ok(total)
 }
