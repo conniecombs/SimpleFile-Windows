@@ -10,7 +10,7 @@
 **SimpleFile** is a modern, high-performance file manager for Windows built with [Tauri 2](https://v2.tauri.app/), [Rust](https://www.rust-lang.org/), and [Svelte 5](https://svelte.dev/). It replaces the workflows people usually bolt onto Windows File Explorer — dual panes, tabbed browsing, archive tools, advanced search, rich file previews, metadata inspection, checksums, Git integration, and more — in a single, native desktop application.
 
 <p align="center">
-  <img src="docs/assets/screenshots/simplefile-advanced-rename.png" alt="SimpleFile — Advanced Rename with operation controls" width="720" />
+  <img src="docs/assets/screenshots/simplefile-main-window.png" alt="SimpleFile main window with preview pane" width="720" />
 </p>
 
 ---
@@ -36,13 +36,13 @@
 
 ## Screenshots
 
-| Advanced Rename | File Comparison |
+| Main Window | Advanced Rename |
 | :---: | :---: |
-| ![Advanced rename preview with operation controls](docs/assets/screenshots/simplefile-advanced-rename.png) | ![Side-by-side text file comparison showing changed and added lines](docs/assets/screenshots/simplefile-file-compare.png) |
+| ![Main window with preview pane](docs/assets/screenshots/simplefile-main-window.png) | ![Advanced rename template preview](docs/assets/screenshots/simplefile-advanced-rename.png) |
 
-| Configurable Columns |
-| :---: |
-| ![Configurable file list columns](docs/assets/screenshots/simplefile-configurable-columns.png) |
+| File Comparison | File List Settings |
+| :---: | :---: |
+| ![Side-by-side text file comparison showing a changed line](docs/assets/screenshots/simplefile-file-compare.png) | ![File List settings showing configurable visible columns](docs/assets/screenshots/simplefile-configurable-columns.png) |
 
 ---
 
