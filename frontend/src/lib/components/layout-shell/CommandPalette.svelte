@@ -44,6 +44,7 @@ import { state as globalState } from '../../../vanilla-js/runtime/state.svelte';
     { id: 'color-label', label: 'Set Color Label', action: () => document.dispatchEvent(new CustomEvent('simplefile:set-color-label')) },
     { id: 'folder-metrics', label: 'Calculate Folder Metrics', action: () => document.dispatchEvent(new CustomEvent('simplefile:folder-metrics')) },
     { id: 'disk-cleanup', label: 'Analyze Cleanup', action: () => document.dispatchEvent(new CustomEvent('simplefile:disk-cleanup')) },
+    { id: 'duplicate-checker', label: 'Duplicate Checker', action: () => document.dispatchEvent(new CustomEvent('simplefile:duplicate-checker')) },
     { id: 'settings', label: 'Settings', action: () => document.dispatchEvent(new CustomEvent('simplefile:open-settings')) },
     { id: 'keyboard-help', label: 'Keyboard Shortcuts', action: () => document.dispatchEvent(new CustomEvent('simplefile:keyboard-help')) },
     { 

@@ -15,7 +15,10 @@
     event.preventDefault();
     document.dispatchEvent(new CustomEvent('simplefile:quick-look-open', {
       bubbles: true,
-      detail: { path: quickLookUi.path },
+      detail: {
+        isDir: quickLookUi.isFolder,
+        path: quickLookUi.path,
+      },
     }));
   }
 
@@ -49,7 +52,9 @@
   <QuickLookModal
     title={quickLookUi.title}
     preview={quickLookUi.preview}
+    folder={quickLookUi.folder}
     info={quickLookUi.info}
+    openLabel={quickLookUi.openLabel}
     onClose={handleClose}
     onOpen={handleOpen}
   />

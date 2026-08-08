@@ -50,6 +50,9 @@ assertContains('frontend/src/lib/app/localState.svelte.ts', [
 assertContains('frontend/src/lib/app/core.ts', [
   'function closePreviewPaneFlow',
   'currentQuickLookPath !== quickLookPath',
+  'function loadQuickLookFolderDetails',
+  "openLabel: 'Open Folder'",
+  'patchQuickLookFolder',
   '<thead>',
   "diff-${escapeHtml(row.kind)}",
 ], 'Stage 8 preview and comparison wiring');
@@ -58,7 +61,16 @@ assertContains('frontend/src/lib/app/setup.ts', [
   "document.addEventListener('simplefile:quick-look', handleQuickLook);",
   "document.addEventListener('simplefile:preview-close', handlePreviewClose);",
   "addShortcut('quickLook.toggle', 'Space'",
+  'detail.isDir',
+  'openEntryPath(path, true',
 ], 'Stage 8 setup inspection events');
+
+assertContains('frontend/src/lib/components/quick-look/QuickLookModal.svelte', [
+  'QuickLookFolderSummary',
+  'Folder summary',
+  'Folder contents',
+  'folder.truncated',
+], 'Stage 8 folder Quick Look rendering');
 
 assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte', [
   "id: 'quick-look'",

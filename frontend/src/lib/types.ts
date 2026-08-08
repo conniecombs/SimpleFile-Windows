@@ -131,6 +131,31 @@ export interface CleanupResult {
   duplicates: DuplicateGroup[];
 }
 
+export interface DuplicateCheckFile {
+  path: PathString;
+  name: string;
+  size: number;
+  modified: string;
+}
+
+export interface DuplicateCheckGroup {
+  id: string;
+  hash: string;
+  size: number;
+  wasted_bytes: number;
+  files: DuplicateCheckFile[];
+}
+
+export interface DuplicateCheckResult {
+  groups: DuplicateCheckGroup[];
+  scanned_files: number;
+  candidate_files: number;
+  hashed_files: number;
+  skipped_files: number;
+  errors: string[];
+  total_reclaimable_bytes: number;
+}
+
 export interface GitStatus {
   is_repo: boolean;
   branch: Nullable<string>;
@@ -340,6 +365,8 @@ export interface TauriCommandMap {
   compare_files: CommandContract<{ pathA: PathString; pathB: PathString }, FileComparison>;
   disk_cleanup: CommandContract<{ directory: PathString; sizeThreshold?: number }, CleanupResult>;
   cancel_disk_cleanup: CommandContract<NoArgs, void>;
+  duplicate_check: CommandContract<{ directory: PathString; minSize?: number; partialHashBytes?: number }, DuplicateCheckResult>;
+  cancel_duplicate_check: CommandContract<NoArgs, void>;
   get_git_status: CommandContract<{ path: PathString }, GitStatus>;
   compute_checksum: CommandContract<{ path: PathString }, Checksums>;
   get_image_metadata: CommandContract<{ path: PathString }, ImageMetadata>;

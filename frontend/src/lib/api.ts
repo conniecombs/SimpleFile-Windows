@@ -11,6 +11,7 @@ import type {
   DirectoryListing,
   DirectoryListingChunk,
   DriveInfo,
+  DuplicateCheckResult,
   DuplicateGroup,
   FileChangeEvent,
   FileComparison,
@@ -347,6 +348,18 @@ export function diskCleanup(directory: PathString, sizeThreshold?: number): Prom
 
 export function cancelDiskCleanup(): Promise<void> {
   return invokeCommand('cancel_disk_cleanup');
+}
+
+export function duplicateCheck(
+  directory: PathString,
+  minSize?: number,
+  partialHashBytes?: number,
+): Promise<DuplicateCheckResult> {
+  return invokeCommand('duplicate_check', { directory, minSize, partialHashBytes });
+}
+
+export function cancelDuplicateCheck(): Promise<void> {
+  return invokeCommand('cancel_duplicate_check');
 }
 
 export function getGitStatus(path: PathString): Promise<GitStatus> {

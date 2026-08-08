@@ -179,6 +179,34 @@ pub struct CleanupResult {
     pub duplicates: Vec<DuplicateGroup>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DuplicateCheckFile {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    pub modified: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DuplicateCheckGroup {
+    pub id: String,
+    pub hash: String,
+    pub size: u64,
+    pub wasted_bytes: u64,
+    pub files: Vec<DuplicateCheckFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DuplicateCheckResult {
+    pub groups: Vec<DuplicateCheckGroup>,
+    pub scanned_files: u64,
+    pub candidate_files: u64,
+    pub hashed_files: u64,
+    pub skipped_files: u64,
+    pub errors: Vec<String>,
+    pub total_reclaimable_bytes: u64,
+}
+
 // ============================================================================
 // Git Types
 // ============================================================================

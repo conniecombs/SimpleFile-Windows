@@ -1,9 +1,15 @@
 import { mount, unmount } from 'svelte';
 
 import QuickLookModal from './quick-look/QuickLookModal.svelte';
-import type { QuickLookPreview } from './quick-look/QuickLookModal.svelte';
+import type {
+  QuickLookFolderSummary,
+  QuickLookPreview,
+} from './quick-look/QuickLookModal.svelte';
 
 export type QuickLookProps = {
+  folder?: QuickLookFolderSummary | null;
+  info?: string;
+  openLabel?: string;
   preview?: QuickLookPreview | null;
   title?: string;
 };

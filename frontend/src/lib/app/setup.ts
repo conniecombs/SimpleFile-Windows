@@ -102,10 +102,11 @@ import { isAdvancedRenameVisible } from './advancedRenameUi.svelte';
 import { closeAboutUi, isAboutVisible } from './aboutUi.svelte';
 import { isKeyboardHelpVisible } from './keyboardHelpUi.svelte';
 import { isQuickLookVisible, closeQuickLookUi } from './quickLookUi.svelte';
+import { closeDuplicateCheckerUi, isDuplicateCheckerVisible } from './duplicateCheckerUi.svelte';
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow, confirmCreateArchiveFlow } from "./archive.js";
 import { isArchiveViewerVisible, isCreateArchiveVisible, closeCreateArchiveUi } from './archiveUi.svelte';
 import { requestSearchFocus } from './searchUi.svelte';
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
 import { cancelModalUi, isSettingsModalOpen } from './modalUi.svelte';
 import { dismissProgressUi, progressUi } from './progressUi.svelte';
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
@@ -117,6 +118,14 @@ type OpenEntryDetail = {
   pane?: PaneId;
   path?: PathString;
   segment?: { path?: PathString };
+};
+
+type DuplicateCheckerPathDetail = {
+  path?: PathString;
+};
+
+type DuplicateCheckerDeleteDetail = {
+  paths?: PathString[];
 };
 
 type ItemSelectionDetail = {
@@ -416,6 +425,8 @@ export function initApp() {
         void showFolderMetricsFlow();
       } else if (command === 'disk-cleanup') {
         void showDiskCleanupFlow();
+      } else if (command === 'duplicate-checker') {
+        void showDuplicateCheckerFlow();
       } else if (command === 'view-toggle') {
         appState.isGridView = !appState.isGridView;
         appState.settings = { ...appState.settings, defaultView: appState.isGridView ? 'grid' : 'list' };
@@ -635,6 +646,39 @@ export function initApp() {
       void showDiskCleanupFlow();
     };
 
+    const handleDuplicateChecker = () => {
+      void showDuplicateCheckerFlow();
+    };
+
+    const handleDuplicateCheckerClose = () => {
+      closeDuplicateCheckerUi();
+    };
+
+    const handleDuplicateCheckerPathAction = (
+      event: Event,
+      action: (path: PathString) => Promise<unknown>,
+    ) => {
+      const path = detailOf<DuplicateCheckerPathDetail>(event).path;
+      if (path) void action(path);
+    };
+
+    const handleDuplicateCheckerDelete = (event: Event) => {
+      const paths = detailOf<DuplicateCheckerDeleteDetail>(event).paths || [];
+      void deleteDuplicateCheckerSelection(paths);
+    };
+
+    const handleDuplicateCheckerOpen = (event: Event) => {
+      handleDuplicateCheckerPathAction(event, openDuplicateCheckerPath);
+    };
+
+    const handleDuplicateCheckerPreview = (event: Event) => {
+      handleDuplicateCheckerPathAction(event, previewDuplicateCheckerPath);
+    };
+
+    const handleDuplicateCheckerReveal = (event: Event) => {
+      handleDuplicateCheckerPathAction(event, revealDuplicateCheckerPath);
+    };
+
     const handleFileListContextMenu = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       const fileList = target?.closest('#file-list, #secondary-file-list');
@@ -832,9 +876,15 @@ export function initApp() {
     };
 
     const handleQuickLookOpen = (event: Event) => {
-      const path = (event as CustomEvent<{ path?: string }>).detail?.path
-        || localState.currentQuickLookPath;
-      if (path) openFile(path).catch(showError);
+      const detail = (event as CustomEvent<{ isDir?: boolean; path?: PathString }>).detail || {};
+      const path = detail.path || localState.currentQuickLookPath;
+      if (!path) return;
+      if (detail.isDir) {
+        closeQuickLookFlow();
+        void openEntryPath(path, true, appState.activePane === 'secondary' ? 'secondary' : 'primary');
+        return;
+      }
+      openFile(path).catch(showError);
     };
 
     const handleModalPointerDown = (_event: MouseEvent) => {
@@ -908,6 +958,10 @@ export function initApp() {
     const closeVisibleOverlay = () => {
       if (isQuickLookVisible()) {
         closeQuickLookFlow();
+        return true;
+      }
+      if (isDuplicateCheckerVisible()) {
+        closeDuplicateCheckerUi();
         return true;
       }
       if (isArchiveViewerVisible()) {
@@ -1295,6 +1349,12 @@ export function initApp() {
     document.addEventListener('simplefile:set-color-label', handleSetColorLabel);
     document.addEventListener('simplefile:folder-metrics', handleFolderMetrics);
     document.addEventListener('simplefile:disk-cleanup', handleDiskCleanup);
+    document.addEventListener('simplefile:duplicate-checker', handleDuplicateChecker);
+    document.addEventListener('simplefile:duplicate-checker-close', handleDuplicateCheckerClose);
+    document.addEventListener('simplefile:duplicate-checker-delete', handleDuplicateCheckerDelete);
+    document.addEventListener('simplefile:duplicate-checker-open', handleDuplicateCheckerOpen);
+    document.addEventListener('simplefile:duplicate-checker-preview', handleDuplicateCheckerPreview);
+    document.addEventListener('simplefile:duplicate-checker-reveal', handleDuplicateCheckerReveal);
     document.addEventListener('contextmenu', handleFileListContextMenu);
     document.addEventListener('click', handleContextMenuClick);
     document.addEventListener('click', handleSettingsClick);
@@ -1370,6 +1430,12 @@ export function initApp() {
       document.removeEventListener('simplefile:set-color-label', handleSetColorLabel);
       document.removeEventListener('simplefile:folder-metrics', handleFolderMetrics);
       document.removeEventListener('simplefile:disk-cleanup', handleDiskCleanup);
+      document.removeEventListener('simplefile:duplicate-checker', handleDuplicateChecker);
+      document.removeEventListener('simplefile:duplicate-checker-close', handleDuplicateCheckerClose);
+      document.removeEventListener('simplefile:duplicate-checker-delete', handleDuplicateCheckerDelete);
+      document.removeEventListener('simplefile:duplicate-checker-open', handleDuplicateCheckerOpen);
+      document.removeEventListener('simplefile:duplicate-checker-preview', handleDuplicateCheckerPreview);
+      document.removeEventListener('simplefile:duplicate-checker-reveal', handleDuplicateCheckerReveal);
       document.removeEventListener('contextmenu', handleFileListContextMenu);
       document.removeEventListener('click', handleContextMenuClick);
       document.removeEventListener('click', handleSettingsClick);

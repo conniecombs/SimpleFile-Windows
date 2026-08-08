@@ -23,10 +23,12 @@ import {
     createDirectory,
     createFile,
     createTag,
+    cancelDuplicateCheck,
     deleteEntry,
     deleteSmartFolder,
     discardRarInstall,
     diskCleanup,
+    duplicateCheck,
     extractArchive,
     getAllFileTags,
     getAllTags,
@@ -52,6 +54,7 @@ import {
     openTerminal,
     readFilePreview,
     renameEntry,
+    revealInFolder,
     searchFiles,
     selectDirectory,
     cancelSearch,
@@ -114,6 +117,7 @@ import {
     ClipboardAction,
     CleanupResult,
     ConflictAction,
+    DuplicateCheckFile,
     DriveInfo,
     FileEntry,
     NativeFileDropEventPayload,
@@ -150,7 +154,21 @@ import {
   closeKeyboardHelpUi,
   openKeyboardHelpUi,
 } from './keyboardHelpUi.svelte';
-import { closeQuickLookUi, openQuickLookUi } from './quickLookUi.svelte';
+import {
+  closeQuickLookUi,
+  openQuickLookUi,
+  patchQuickLookFolder,
+  updateQuickLookInfo,
+} from './quickLookUi.svelte';
+import {
+  closeDuplicateCheckerUi,
+  duplicateCheckerUi,
+  openDuplicateCheckerUi,
+  removeDuplicateCheckerPaths,
+  selectedDuplicatePaths,
+  setDuplicateCheckerDeleting,
+} from './duplicateCheckerUi.svelte';
+import type { QuickLookFolderSummary } from '../components/quick-look/QuickLookModal.svelte';
 
 const defaultColorLabels = [
     { color: '#ef4444', name: 'Red' },
@@ -547,6 +565,174 @@ const defaultColorLabels = [
       showError(error);
     } finally {
       appState.cleanupInProgress = false;
+    }
+  }
+
+  const DUPLICATE_CHECK_OPERATION_ID = 'duplicate_check';
+  const DEFAULT_DUPLICATE_PARTIAL_HASH_BYTES = 1024 * 1024;
+
+  function duplicateCheckerOptionsFromDialog() {
+    const minSizeInput = document.getElementById('duplicate-min-size-kb') as HTMLInputElement | null;
+    const minSizeValue = Number(minSizeInput?.value || 0);
+    const includeEmpty = Boolean((document.getElementById('duplicate-include-empty') as HTMLInputElement | null)?.checked);
+    const defaultPartialHashMb = DEFAULT_DUPLICATE_PARTIAL_HASH_BYTES / 1024 / 1024;
+    const partialHashMb = Number((document.getElementById('duplicate-partial-hash-mb') as HTMLInputElement | null)?.value || defaultPartialHashMb);
+    const minSize = includeEmpty
+      ? 0
+      : Math.max(1, Math.round((Number.isFinite(minSizeValue) ? minSizeValue : 1) * 1024));
+    const partialHashBytes = Math.max(
+      4096,
+      Math.round((Number.isFinite(partialHashMb) ? partialHashMb : 1) * 1024 * 1024),
+    );
+    return { minSize, partialHashBytes };
+  }
+
+  export async function showDuplicateCheckerFlow() {
+    const duplicatePath = pathForPane();
+    if (!duplicatePath || appState.cleanupInProgress) return;
+
+    const optionsResult = await showHtmlDialog({
+      bodyHtml: `
+        <div class="form-group">
+          <label class="form-label" for="duplicate-min-size-kb">Minimum file size (KB)</label>
+          <input id="duplicate-min-size-kb" class="form-input input-full" type="number" min="0" step="1" value="0">
+        </div>
+        <label class="tag-option" for="duplicate-include-empty">
+          <input id="duplicate-include-empty" type="checkbox">
+          <span>Include empty files</span>
+        </label>
+        <div class="form-group">
+          <label class="form-label" for="duplicate-partial-hash-mb">Partial hash window (MB)</label>
+          <input id="duplicate-partial-hash-mb" class="form-input input-full" type="number" min="1" max="16" step="1" value="1">
+        </div>
+      `,
+      confirmText: 'Find Duplicates',
+      onConfirm: duplicateCheckerOptionsFromDialog,
+      title: 'Duplicate Checker',
+    });
+    if (optionsResult === false) return;
+
+    const { minSize, partialHashBytes } = optionsResult as { minSize: number; partialHashBytes: number };
+    appState.cleanupInProgress = true;
+    showProgressFlow('Finding Duplicates', duplicatePath, 2, DUPLICATE_CHECK_OPERATION_ID, {
+      onCancel: () => cancelDuplicateCheck(),
+      detailLine: 'Scanning files',
+    });
+
+    try {
+      const result = await duplicateCheck(duplicatePath, minSize, partialHashBytes);
+      updateProgressFlow(100, duplicatePath, { detailLine: 'Duplicate scan complete' });
+      openDuplicateCheckerUi(duplicatePath, result, minSize);
+    } catch (error) {
+      if (!isCancellationError(error)) showError(error);
+    } finally {
+      appState.cleanupInProgress = false;
+      window.setTimeout(() => {
+        if (progressUi.operationId === DUPLICATE_CHECK_OPERATION_ID) hideProgressFlow();
+      }, 180);
+    }
+  }
+
+  function duplicateFileByPath(path: PathString): DuplicateCheckFile | null {
+    for (const group of duplicateCheckerUi.groups) {
+      const file = group.files.find((candidate) => candidate.path === path);
+      if (file) return file;
+    }
+    return null;
+  }
+
+  function duplicateFileEntry(file: DuplicateCheckFile): FileEntry {
+    const dotIndex = file.name.lastIndexOf('.');
+    return {
+      extension: dotIndex > 0 ? file.name.slice(dotIndex + 1) : '',
+      is_dir: false,
+      is_symlink: false,
+      modified: file.modified || '',
+      name: file.name || basename(file.path),
+      path: file.path,
+      size: Number(file.size || 0),
+    };
+  }
+
+  export async function previewDuplicateCheckerPath(path: PathString) {
+    const file = duplicateFileByPath(path);
+    if (!file) {
+      showError('That duplicate result is no longer available.');
+      return;
+    }
+
+    try {
+      const entry = duplicateFileEntry(file);
+      const preview = await readFilePreview(path, 1024 * 1024);
+      openQuickLookUi({
+        info: `${formatFileSize(file.size)} · ${file.modified || '-'}`,
+        isFolder: false,
+        openLabel: 'Open with Default App',
+        path,
+        preview,
+        title: entry.name,
+      });
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  export async function openDuplicateCheckerPath(path: PathString) {
+    await openEntryPath(path, false, appState.activePane as PaneId);
+  }
+
+  export async function revealDuplicateCheckerPath(path: PathString) {
+    try {
+      await revealInFolder(path);
+    } catch (error) {
+      showError(error);
+    }
+  }
+
+  export async function deleteDuplicateCheckerSelection(paths: PathString[] = selectedDuplicatePaths()) {
+    if (paths.length === 0 || duplicateCheckerUi.deleting) return;
+
+    const confirmed = await showHtmlDialog({
+      bodyHtml: `
+        <div class="preflight-summary preflight-summary--danger">
+          <dl class="preflight-detail-list">
+            <div><dt>Action</dt><dd>Move to Trash</dd></div>
+            <div><dt>Items</dt><dd>${paths.length}</dd></div>
+          </dl>
+          ${operationPreviewList(paths)}
+        </div>
+      `,
+      confirmText: 'Move to Trash',
+      title: 'Move Duplicate Files',
+    });
+    if (confirmed === false) return;
+
+    setDuplicateCheckerDeleting(true);
+    try {
+      await deletePathsWithOperationLog(paths, true);
+      removeDuplicateCheckerPaths(paths);
+      showSuccess(`Moved ${paths.length} duplicate file${paths.length === 1 ? '' : 's'} to Trash`);
+      await refreshCurrentDirectory();
+      if (appState.dualPaneEnabled) await refreshSecondaryPane();
+    } catch (error) {
+      if (typeof error === 'string' && error.startsWith('TRASH_UNAVAILABLE')) {
+        const confirmedPermanentDelete = await confirmPermanentDeleteFallback(paths);
+        if (confirmedPermanentDelete) {
+          try {
+            await deletePathsWithOperationLog(paths, false);
+            removeDuplicateCheckerPaths(paths);
+            showSuccess(`Deleted ${paths.length} duplicate file${paths.length === 1 ? '' : 's'}`);
+            await refreshCurrentDirectory();
+            if (appState.dualPaneEnabled) await refreshSecondaryPane();
+          } catch (deleteError) {
+            showError(deleteError);
+          }
+        }
+      } else {
+        showError(error);
+      }
+    } finally {
+      setDuplicateCheckerDeleting(false);
     }
   }
 
@@ -2566,6 +2752,94 @@ const defaultColorLabels = [
 
 
 
+  const QUICK_LOOK_FOLDER_ENTRY_LIMIT = 50;
+
+  function createLoadingQuickLookFolder(): QuickLookFolderSummary {
+    return {
+      entries: [],
+      error: null,
+      loading: true,
+      metricsError: null,
+      metricsLoading: true,
+      recursiveCount: null,
+      recursiveSize: null,
+      totalEntries: null,
+      truncated: false,
+    };
+  }
+
+  function itemCountText(value: number | null | undefined) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue) || numericValue < 0) return 'Items unavailable';
+    const count = Math.trunc(numericValue);
+    return `${count.toLocaleString()} item${count === 1 ? '' : 's'}`;
+  }
+
+  function quickLookFolderInfo(entry: FileEntry, folder: QuickLookFolderSummary) {
+    const directItems = folder.loading
+      ? 'Loading contents'
+      : itemCountText(folder.totalEntries ?? folder.entries.length);
+    const size = folder.metricsLoading
+      ? 'Scanning size'
+      : folder.recursiveSize === null
+        ? 'Size unavailable'
+        : formatFileSize(folder.recursiveSize, false) || '0 B';
+    return `${fileType(entry)} - ${directItems} - ${size}`;
+  }
+
+  function patchCurrentQuickLookFolder(
+    quickLookPath: PathString,
+    entry: FileEntry,
+    updates: Partial<QuickLookFolderSummary>,
+  ) {
+    if (localState.currentQuickLookPath !== quickLookPath) return;
+    const folder = patchQuickLookFolder(updates);
+    if (!folder) return;
+    updateQuickLookInfo(quickLookFolderInfo(entry, folder));
+  }
+
+  function loadQuickLookFolderDetails(entry: FileEntry, quickLookPath: PathString) {
+    void getActiveFileSystem().listDirectory(entry.path).then((listing) => {
+      const entries = listing.entries.slice(0, QUICK_LOOK_FOLDER_ENTRY_LIMIT);
+      patchCurrentQuickLookFolder(quickLookPath, entry, {
+        entries,
+        error: null,
+        loading: false,
+        totalEntries: listing.entries.length,
+        truncated: listing.entries.length > entries.length,
+      });
+    }).catch((error) => {
+      patchCurrentQuickLookFolder(quickLookPath, entry, {
+        error: error instanceof Error ? error.message : String(error),
+        loading: false,
+        totalEntries: 0,
+        truncated: false,
+      });
+    });
+
+    void Promise.allSettled([
+      calculateFolderSize(entry.path),
+      countFolderItems(entry.path),
+    ]).then(([sizeResult, countResult]) => {
+      const size = sizeResult.status === 'fulfilled'
+        ? Number(sizeResult.value || 0)
+        : null;
+      const count = countResult.status === 'fulfilled'
+        ? Number(countResult.value || 0)
+        : null;
+      const metricsError = sizeResult.status === 'rejected' || countResult.status === 'rejected'
+        ? 'Some recursive metrics could not be calculated.'
+        : null;
+
+      patchCurrentQuickLookFolder(quickLookPath, entry, {
+        metricsError,
+        metricsLoading: false,
+        recursiveCount: count,
+        recursiveSize: size,
+      });
+    });
+  }
+
   export function closeQuickLookFlow() {
     closeQuickLookUi();
     localState.currentQuickLookPath = null;
@@ -2581,10 +2855,29 @@ const defaultColorLabels = [
     const quickLookPath = entry.path;
     localState.currentQuickLookPath = quickLookPath;
     try {
-      const preview = entry.is_dir ? null : await getActiveFileSystem().readFilePreview(entry.path, 2_000_000);
+      if (entry.is_dir) {
+        const folder = createLoadingQuickLookFolder();
+        openQuickLookUi({
+          folder,
+          info: quickLookFolderInfo(entry, folder),
+          isFolder: true,
+          openLabel: 'Open Folder',
+          path: quickLookPath,
+          preview: null,
+          title: entry.name,
+        });
+        loadQuickLookFolderDetails(entry, quickLookPath);
+        await Promise.resolve();
+        document.getElementById('quicklook-close')?.focus();
+        return;
+      }
+
+      const preview = await getActiveFileSystem().readFilePreview(entry.path, 2_000_000);
       if (localState.currentQuickLookPath !== quickLookPath) return;
       openQuickLookUi({
         info: `${fileType(entry)} - ${formatFileSize(entry.size, entry.is_dir) || 'Folder'}`,
+        isFolder: false,
+        openLabel: 'Open with Default App',
         path: quickLookPath,
         preview,
         title: entry.name,
@@ -3154,6 +3447,8 @@ const defaultColorLabels = [
       await showFolderMetricsFlow();
     } else if (commandId === 'ctx-cleanup') {
       await showDiskCleanupFlow();
+    } else if (commandId === 'ctx-duplicates') {
+      await showDuplicateCheckerFlow();
     } else if (commandId === 'ctx-rename') {
       await renameSelectedFlow();
     } else if (commandId === 'ctx-advanced-rename') {

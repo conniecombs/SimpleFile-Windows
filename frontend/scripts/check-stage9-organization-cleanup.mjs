@@ -45,6 +45,7 @@ assertContains('frontend/src/lib/app/core.ts', [
   'calculateFolderSize',
   'countFolderItems',
   'diskCleanup',
+  'duplicateCheck',
   'getAllTags',
   'getAllFileTags',
   'createTag',
@@ -53,21 +54,26 @@ assertContains('frontend/src/lib/app/core.ts', [
   'async function showSetColorLabelFlow',
   'async function showFolderMetricsFlow',
   'async function showDiskCleanupFlow',
+  'async function showDuplicateCheckerFlow',
   "commandId === 'ctx-color-label'",
   "commandId === 'ctx-folder-metrics'",
   "commandId === 'ctx-cleanup'",
+  "commandId === 'ctx-duplicates'",
 ], 'Stage 9 organization/cleanup flow wiring');
 
 assertContains('frontend/src/lib/app/setup.ts', [
   "document.addEventListener('simplefile:set-color-label', handleSetColorLabel);",
   "document.addEventListener('simplefile:folder-metrics', handleFolderMetrics);",
   "document.addEventListener('simplefile:disk-cleanup', handleDiskCleanup);",
+  "document.addEventListener('simplefile:duplicate-checker', handleDuplicateChecker);",
+  "document.addEventListener('simplefile:duplicate-checker-delete', handleDuplicateCheckerDelete);",
 ], 'Stage 9 organization/cleanup setup events');
 
 assertContains('frontend/src/lib/components/context-menus/ContextMenu.svelte', [
   "id: 'ctx-color-label'",
   "id: 'ctx-folder-metrics'",
   "id: 'ctx-cleanup'",
+  "id: 'ctx-duplicates'",
 ], 'Stage 9 context menu actions');
 
 assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte', [
@@ -77,15 +83,19 @@ assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte',
   "simplefile:folder-metrics",
   "id: 'disk-cleanup'",
   "simplefile:disk-cleanup",
+  "id: 'duplicate-checker'",
+  "simplefile:duplicate-checker",
 ], 'Stage 9 command palette actions');
 
 assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
   "'color-label'",
   "'folder-metrics'",
   "'disk-cleanup'",
+  "'duplicate-checker'",
   'id="btn-color-label"',
   'id="btn-folder-metrics"',
   'id="btn-disk-cleanup"',
+  'id="btn-duplicate-checker"',
 ], 'Stage 9 toolbar actions');
 
 assertContains('frontend/src/lib/components/file-list/FileList.svelte', [
@@ -113,10 +123,12 @@ assertContains('frontend/src/lib/tauri.ts', [
   'function devCalculateFolderSize',
   'function devCountFolderItems',
   'function devDiskCleanup',
+  'function devDuplicateCheck',
   'function createDevTag',
   "case 'calculate_folder_size':",
   "case 'count_folder_items':",
   "case 'disk_cleanup':",
+  "case 'duplicate_check':",
   "case 'get_all_file_tags':",
   "case 'create_tag':",
   "case 'set_tags_for_path':",
@@ -131,6 +143,8 @@ assertContains('frontend/src/css/modules/modal.css', [
   '.cleanup-summary',
   '.cleanup-hash',
   '.cleanup-path-list',
+  '.duplicate-checker-modal',
+  '.duplicate-file-row',
   '.tags-selector',
   '.tag-option',
   '.tag-swatch',

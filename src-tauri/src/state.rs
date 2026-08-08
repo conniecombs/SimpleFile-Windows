@@ -32,6 +32,9 @@ pub struct AppState {
     /// Cancellation flag for the in-progress disk cleanup scan.
     /// Set to `true` to abort; reset to `false` at the start of each new scan.
     pub(crate) disk_cleanup_cancel: Arc<AtomicBool>,
+    /// Cancellation flag for the in-progress duplicate checker scan.
+    /// Set to `true` to abort; reset to `false` at the start of each new scan.
+    pub(crate) duplicate_check_cancel: Arc<AtomicBool>,
 }
 
 impl Default for AppState {
@@ -49,6 +52,7 @@ impl Default for AppState {
             folder_item_count_cancel: Arc::new(AtomicBool::new(false)),
             folder_item_count_generation: AtomicU64::new(0),
             disk_cleanup_cancel: Arc::new(AtomicBool::new(false)),
+            duplicate_check_cancel: Arc::new(AtomicBool::new(false)),
         }
     }
 }
@@ -101,5 +105,10 @@ impl AppState {
     /// Signal any in-progress disk cleanup scan to stop.
     pub(crate) fn cancel_disk_cleanup(&self) {
         self.disk_cleanup_cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Signal any in-progress duplicate checker scan to stop.
+    pub(crate) fn cancel_duplicate_check(&self) {
+        self.duplicate_check_cancel.store(true, Ordering::Relaxed);
     }
 }

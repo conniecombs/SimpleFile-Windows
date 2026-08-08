@@ -8,6 +8,7 @@ import type {
   Checksums,
   CleanupResult,
   DirectoryListing,
+  DuplicateCheckResult,
   DriveInfo,
   FileEntry,
   FilePreview,
@@ -694,6 +695,55 @@ function devDiskCleanup(directory: string, sizeThreshold?: number): CleanupResul
   return { duplicates, large_files };
 }
 
+function devDuplicateCheck(
+  directory: string,
+  minSize?: number,
+  partialHashBytes?: number,
+): DuplicateCheckResult {
+  void partialHashBytes;
+  const minimumSize = Number(minSize ?? 1);
+  const files = collectDevFiles(directory)
+    .filter((entry) => Number(entry.size || 0) >= minimumSize);
+  const byContent = new Map<string, FileEntry[]>();
+
+  for (const entry of files) {
+    const content = devTextFileContent(entry.name);
+    const key = `${entry.size}:${content}`;
+    byContent.set(key, [...(byContent.get(key) ?? []), entry]);
+  }
+
+  const groups = [...byContent.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => {
+      const sorted = [...group].sort((a, b) => a.path.localeCompare(b.path));
+      const hash = devHexDigest(`sha256:${devTextFileContent(sorted[0].name)}`, 64);
+      const size = Number(sorted[0].size || 0);
+      return {
+        files: sorted.map((entry) => ({
+          modified: entry.modified,
+          name: entry.name,
+          path: entry.path,
+          size: Number(entry.size || 0),
+        })),
+        hash,
+        id: `${size}-${hash.slice(0, 16)}`,
+        size,
+        wasted_bytes: size * Math.max(0, sorted.length - 1),
+      };
+    })
+    .sort((a, b) => b.wasted_bytes - a.wasted_bytes || (a.files[0]?.path || '').localeCompare(b.files[0]?.path || ''));
+
+  return {
+    candidate_files: files.length,
+    errors: [],
+    groups,
+    hashed_files: files.length,
+    scanned_files: collectDevFiles(directory).length,
+    skipped_files: 0,
+    total_reclaimable_bytes: groups.reduce((total, group) => total + group.wasted_bytes, 0),
+  };
+}
+
 function cloneDevTag(tag: DevTag): DevTag {
   return { ...tag };
 }
@@ -1081,6 +1131,12 @@ async function invokeDevCommand<Name extends TauriCommandName>(
       return devDiskCleanup(directory, sizeThreshold) as CommandResult<Name>;
     }
     case 'cancel_disk_cleanup':
+      return undefined as CommandResult<Name>;
+    case 'duplicate_check': {
+      const { directory, minSize, partialHashBytes } = args as { directory: string; minSize?: number; partialHashBytes?: number };
+      return devDuplicateCheck(directory, minSize, partialHashBytes) as CommandResult<Name>;
+    }
+    case 'cancel_duplicate_check':
       return undefined as CommandResult<Name>;
     case 'get_all_file_tags':
       return getAllDevFileTags() as CommandResult<Name>;

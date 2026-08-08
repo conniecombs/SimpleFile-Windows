@@ -3,6 +3,7 @@
   import AdvancedRenameModal from './AdvancedRenameModal.svelte';
   import ArchiveViewerModal from './ArchiveViewerModal.svelte';
   import CreateArchiveModal from './CreateArchiveModal.svelte';
+  import DuplicateCheckerModal from './DuplicateCheckerModal.svelte';
   import GenericModal from './GenericModal.svelte';
   import KeyboardHelpModal from './KeyboardHelpModal.svelte';
   import ProgressModal from './ProgressModal.svelte';
@@ -42,6 +43,7 @@
     <ArchiveViewerModal />
     <CreateArchiveModal />
     <QuickLookOverlay />
+    <DuplicateCheckerModal />
     <AdvancedRenameModal />
     <KeyboardHelpModal />
     <AboutModal />

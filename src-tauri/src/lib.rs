@@ -114,6 +114,8 @@ pub fn run() {
             compare::compare_files,
             cleanup::disk_cleanup,
             cleanup::cancel_disk_cleanup,
+            cleanup::duplicate_check,
+            cleanup::cancel_duplicate_check,
             metadata::get_image_metadata,
             metadata::get_file_metadata,
             show_main_window,

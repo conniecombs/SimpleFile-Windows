@@ -48,6 +48,7 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
       { kind: 'item', id: 'ctx-color-label', label: 'Color Label...', disabled: selectionCount === 0 },
       { kind: 'item', id: 'ctx-folder-metrics', label: 'Calculate Folder Metrics', disabled: !hasFolderSelection },
       { kind: 'item', id: 'ctx-cleanup', label: 'Analyze Cleanup Here' },
+      { kind: 'item', id: 'ctx-duplicates', label: 'Find Duplicates Here' },
       { kind: 'divider' },
       { kind: 'item', id: 'ctx-rename', label: 'Rename', disabled: selectionCount !== 1 },
       { kind: 'item', id: 'ctx-advanced-rename', label: 'Advanced Rename...', disabled: selectionCount === 0 },
