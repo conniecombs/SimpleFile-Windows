@@ -601,6 +601,8 @@
 /* ── Duplicate Checker ────────────────────────────────────────────────────── */
 
 .duplicate-checker-overlay {
+    /* Keep row-level Quick Look previews above duplicate results; the duplicate
+       workflow closes any stale Quick Look before a fresh scan opens results. */
     z-index: 2500;
 }
 

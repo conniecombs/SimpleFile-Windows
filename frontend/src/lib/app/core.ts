@@ -591,6 +591,8 @@ const defaultColorLabels = [
     const duplicatePath = pathForPane();
     if (!duplicatePath || appState.cleanupInProgress) return;
 
+    closeQuickLookUi();
+
     const optionsResult = await showHtmlDialog({
       bodyHtml: `
         <div class="form-group">

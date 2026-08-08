@@ -55,6 +55,7 @@ assertContains('frontend/src/lib/app/core.ts', [
   'async function showFolderMetricsFlow',
   'async function showDiskCleanupFlow',
   'async function showDuplicateCheckerFlow',
+  'closeQuickLookUi();',
   "commandId === 'ctx-color-label'",
   "commandId === 'ctx-folder-metrics'",
   "commandId === 'ctx-cleanup'",
