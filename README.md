@@ -150,6 +150,14 @@ or rely on its nightly schedule, before cutting a release.
 `-- .github/workflows/              CI, release, and installer smoke automation
 ```
 
+Current frontend layout:
+
+- `frontend/src/main.ts` is the shipping Svelte bootstrap.
+- `frontend/src/lib/components/` contains Svelte UI components.
+- `frontend/src/lib/app/` owns workflow orchestration.
+- `frontend/src/vanilla-js/runtime/` contains typed runtime helpers that are
+  still shared by the Svelte app.
+
 Key backend modules:
 
 - `src-tauri/src/fs_ops.rs` handles filesystem operations.
