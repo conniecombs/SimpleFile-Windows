@@ -7,7 +7,10 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%2010+-0078D4?logo=windows)
 ![License](https://img.shields.io/badge/license-proprietary-444444)
 
-**SimpleFile** is a modern, high-performance file manager for Windows built with [Tauri 2](https://v2.tauri.app/), [Rust](https://www.rust-lang.org/), and [Svelte 5](https://svelte.dev/). It replaces the workflows people usually bolt onto Windows File Explorer — dual panes, tabbed browsing, archive tools, advanced search, rich file previews, metadata inspection, checksums, Git integration, and more — in a single, native desktop application.
+**SimpleFile** is a modern, high-performance file manager for **Windows 10+ (x64)**.  
+It is built with [Tauri 2](https://v2.tauri.app/), [Rust](https://www.rust-lang.org/), and [Svelte 5](https://svelte.dev/).
+
+If Windows File Explorer feels limited for power workflows — dual panes, tabs per pane, batch rename, archives, search, previews, checksums, Git status, cleanup tools — SimpleFile puts those tools in one native desktop app.
 
 <p align="center">
   <img src="docs/assets/screenshots/simplefile-main-window.png" alt="SimpleFile main window with preview pane" width="720" />
@@ -17,20 +20,39 @@
 
 ## Table of Contents
 
+- [Why SimpleFile](#why-simplefile)
 - [Screenshots](#screenshots)
 - [Features](#features)
 - [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Keyboard Shortcuts](#keyboard-shortcuts)
+- [Settings](#settings)
 - [Development](#development)
-  - [Prerequisites](#prerequisites)
-  - [Quick Start](#quick-start)
-  - [Available Scripts](#available-scripts)
 - [Project Structure](#project-structure)
 - [Architecture](#architecture)
 - [Verification & Testing](#verification--testing)
 - [Release & Packaging](#release--packaging)
 - [Documentation](#documentation)
 - [Security](#security)
+- [Scope of This Branch](#scope-of-this-branch)
+- [Support](#support)
 - [License](#license)
+
+---
+
+## Why SimpleFile
+
+| Goal | What you get |
+| --- | --- |
+| Work faster on two folders | Dual-pane mode with independent tabs, history, and selection per pane |
+| Stay in one window | Tabbed browsing, breadcrumbs, tree view, Quick Access, bookmarks, recents |
+| Move files safely | Progress with bytes/rate/ETA, cancel, conflict options, undo/redo |
+| Inspect before you open | Preview pane + spacebar Quick Look for images, media, code, PDF, Markdown |
+| Clean and organize | Advanced rename, tags/labels, smart folders, duplicates, disk cleanup |
+| Stay Windows-native | Drive list, mapped network shares, Recycle Bin, Open With, terminal launch |
+| Ship with confidence | NSIS + MSI installers, signed auto-updater, CI and installer smoke tests |
+
+**Current release:** `1.1.0` (see [docs/RELEASE_1.1.0.md](docs/RELEASE_1.1.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md)).
 
 ---
 
@@ -42,115 +64,248 @@
 
 | File Comparison | File List Settings |
 | :---: | :---: |
-| ![Side-by-side text file comparison showing a changed line](docs/assets/screenshots/simplefile-file-compare.png) | ![File List settings showing configurable visible columns](docs/assets/screenshots/simplefile-configurable-columns.png) |
+| ![Side-by-side text file comparison](docs/assets/screenshots/simplefile-file-compare.png) | ![Configurable visible columns](docs/assets/screenshots/simplefile-configurable-columns.png) |
 
 ---
 
 ## Features
 
-### Navigation & Browsing
+### Navigation & browsing
 
-- **Dual-pane mode** — two independent file browsers side by side
-- **Tabbed interface** — open multiple directories in tabs within each pane
-- **Breadcrumb bar** — click any segment to jump up the path hierarchy
-- **Tree view sidebar** — hierarchical folder navigation
-- **Path bar editing** — click-to-edit address bar with path autocomplete
-- **Quick Access & bookmarks** — pin frequently used folders for instant access
-- **Recent locations** — quickly return to previously visited directories
-- **Back / forward history** — full navigation stack with `Alt+Left` / `Alt+Right`
-- **Type-ahead selection** — start typing to jump to matching files
+- **Dual-pane mode** — two independent browsers side by side (`F6`)
+- **Per-pane tabs** — each pane keeps its own tab set, active tab, and navigation state
+- **Breadcrumb bar** — jump to any parent segment of the current path
+- **Tree view sidebar** — hierarchical folder navigation with optional auto-collapse
+- **Editable path bar** — click to type a path, with path autocomplete
+- **Quick Access & bookmarks** — pin folders you use constantly
+- **Recent locations** — return to places you visited recently
+- **Back / forward history** — per-pane history via `Alt+Left` / `Alt+Right`
+- **Type-ahead selection** — start typing a name to jump to matching items
+- **Marquee (rubber-band) selection** — drag to multi-select in list or grid
+- **Huge-folder virtualization** — list/grid stay responsive in very large directories
+- **Live folder watching** — directory contents refresh when the filesystem changes
 
-### File Operations
+### File operations
 
-- **Copy, move, cut, paste** with real-time progress tracking and cancellation
-- **Delete to Recycle Bin** or permanent delete
-- **Advanced rename** — batch rename with pattern matching and live preview
-- **Create** new files and folders
+- **Copy, cut, paste, move** with transfer manager operation IDs
+- **Real-time progress** — bytes completed/total, rate, ETA, and cancelling state
+- **Delete to Recycle Bin** or permanent delete (`Delete` / `Shift+Delete`)
+- **Conflict handling** — skip, replace, keep both, or refuse overwrite when needed
+- **Create file / folder** — `Ctrl+N` / `Ctrl+Shift+N`
+- **Rename** single items (`F2`) and **Advanced Rename** for batch patterns
 - **Drag and drop** between panes, tabs, and external applications
-- **Undo / redo** with full operation history
-- **Conflict resolution** — skip, replace, or keep both when names collide
-- **Copy path** / **Copy as path** to clipboard
+- **Undo / redo** for create, rename, copy, and move (`Ctrl+Z` / `Ctrl+Y`)
+- **Clipboard history** — re-use recent copy/cut sets (`Ctrl+Shift+V`)
+- **Copy full path** to the system clipboard (`Ctrl+Shift+C`)
+- **Cross-pane transfer** — copy or move selection to the other pane (`Ctrl+Alt+C` / `Ctrl+Alt+M`)
 
-### Windows Drives
+### Advanced rename
+
+- Batch rename with live preview
+- Template tokens, regex remove/replace, whitespace cleanup, separator conversion
+- Extension transforms and name sanitization
+- Optional recursive targeting into selected folders
+- Warnings for duplicates and invalid names before you commit
+
+### Windows drives & network
 
 - Native drive list with volume labels, drive types, and free-space indicators
-- Mapped network share names with offline/stale status detection
-- Drive refresh and reconnect flow
+- Mapped network share names with offline / stale status detection
+- Drive refresh and reconnect flow when a share is unavailable
+- Status bar drive-space meter for the active location
 
-### Search
+### Search & smart folders
 
-- **Quick filter** — instant filename filtering in the current directory
-- **Recursive search** — deep search through subdirectories
-- **Content search** — full-text search inside files
-- **Advanced filters** — filter by size, date, and directory depth
-- **Cancellable result batches** — search stays responsive on large trees
-- **Smart folders** — save search criteria as persistent virtual folders
+- **Quick filter** — instant filename filter in the current directory
+- **Recursive search** through subfolders
+- **Content search** inside file contents
+- Filters for size, date, depth, and hidden files
+- Cancellable, batched results so large trees stay usable
+- **Smart folders** — save search criteria as reusable virtual folders
 
 ### Archives
 
-- List, create, and extract **ZIP**, **TAR**, **TAR.GZ / TGZ**, and **RAR** archives
-- Extraction path validation and error handling
-- Optional RAR tooling install from Settings
+- List, create, and extract **ZIP**, **TAR**, **TAR.GZ / TGZ**, and **RAR**
+- Extraction path validation so unpack stays inside the chosen destination
+- Optional RAR tooling install from **Settings → Tools**
 
-### Inspection & Preview
+### Preview, inspection & comparison
 
-- **Preview pane** with support for:
-  - Images (PNG, JPG, GIF, SVG, WebP, BMP, ICO, TIFF)
-  - Video (MP4, WebM, AVI, MOV, MKV, FLV, WMV, OGG)
-  - Audio (MP3, WAV, FLAC, OGG, AAC, WMA, M4A, AIFF)
-  - Code & text with syntax highlighting via [highlight.js](https://highlightjs.org/) (40+ languages)
-  - PDF documents
-  - Markdown (rendered via [marked](https://marked.js.org/) with HTML sanitization)
-  - Font files (TTF, OTF, WOFF, WOFF2)
-- **Quick Look** — spacebar preview overlay (macOS-inspired)
-- **Properties panel** — file size, type, created/modified dates, attributes
-- **Folder sizes** and recursive item counts
-- **Image EXIF metadata** extraction
-- **PDF, audio, video, and Office file metadata**
-- **Checksums** — MD5, SHA-1, and SHA-256 for file integrity verification
-- **File comparison** — side-by-side text diff with change highlighting
+**Preview pane / Quick Look (`Space`) support includes:**
 
-### Organization & Customization
+| Kind | Formats / notes |
+| --- | --- |
+| Images | PNG, JPG, GIF, SVG, WebP, BMP, ICO, TIFF (+ EXIF where available) |
+| Video | MP4, WebM, AVI, MOV, MKV, FLV, WMV, OGG |
+| Audio | MP3, WAV, FLAC, OGG, AAC, WMA, M4A, AIFF |
+| Code & text | Syntax highlighting via [highlight.js](https://highlightjs.org/) (40+ languages) |
+| Documents | PDF preview; Markdown rendered with [marked](https://marked.js.org/) and HTML sanitization |
+| Fonts | TTF, OTF, WOFF, WOFF2 |
 
-- **Color labels / tags** — categorize files with color-coded tags
-- **Configurable columns** — choose and resize columns in list view (persisted)
-- **List and grid views** — switch between detailed list and icon grid
-- **Dark, light, and system themes** — follows Windows appearance or set manually
-- **Saved workspace layout** — window size, pane configuration, and view preferences persist across sessions
-- **Custom startup location** — choose where SimpleFile opens
-- **Remappable keyboard shortcuts**
+**Also available:**
 
-### Developer Tools
+- Properties panel — size, type, timestamps, attributes
+- Folder size and recursive item counts (optional, cached for responsiveness)
+- Metadata for PDF, audio, video, and Office package props
+- Checksums — **MD5**, **SHA-1**, **SHA-256**
+- **Compare Files** — side-by-side text diff for two selected UTF-8 files
 
-- **Git integration** — branch name, status counts, per-file status indicators
-- **Git pull / push** directly from the file manager
-- **Open in terminal** — launch PowerShell, Command Prompt, Git Bash, or Windows Terminal
-- **Elevated PowerShell** launch
-- **Open With** — choose which application opens a file
+### Organization & views
 
-### System Integration
+- Color **labels / tags** on files and folders
+- Configurable list columns (Size, Items, Modified, Type) with Explorer-style resize handles
+- List and grid views with adjustable default icon size
+- Dark and light themes
+- Show/hide hidden files
+- Optional folder size calculation and Git status in the list
+- Workspace layout persistence (panes, tabs, view mode, and related UI state)
 
-- Built-in **auto-updater** with signed update verification
-- **Duplicate file finder** — identify and manage duplicate files
-- **Disk cleanup utilities**
-- **System tray** integration
-- **Start with Windows** option
-- Custom frameless window with native window shadows
+### Developer-friendly tools
+
+- **Git integration** — branch name, status counts, per-file indicators; pull/push from the app
+- **Open in terminal** — PowerShell, Command Prompt, Git Bash, or Windows Terminal (`F4`)
+- Elevated PowerShell launch when you need admin shell access
+- **Open With** for choosing an application per file
+- **Command palette** (`Ctrl+Shift+P`) for quick actions
+
+### Cleanup & maintenance
+
+- **Duplicate file finder** with progress and cancellation
+- **Disk cleanup** helpers for large/old clutter workflows
+- Built-in **auto-updater** with signed update verification (after first manual install)
+
+### Productivity surfaces
+
+- Context menus for files, folders, and column headers
+- Keyboard help overlay (`F1` or `Ctrl+?`)
+- Toasts for operation feedback
+- About dialog with live app version metadata
 
 ---
 
 ## Installation
 
-Download the latest Windows installer from [**GitHub Releases**](https://github.com/conniecombs/SimpleFile-Windows/releases).
+### End users
 
-| Installer | Use Case |
+Download the latest Windows installer from **[GitHub Releases](https://github.com/conniecombs/SimpleFile-Windows/releases)**.
+
+| Installer | Best for |
 | --- | --- |
-| `SimpleFile_1.1.0_x64-setup.exe` | **Recommended** — NSIS installer for standard installation |
-| `SimpleFile_1.1.0_x64_en-US.msi` | MSI package for enterprise / GPO deployment |
+| `SimpleFile_1.1.0_x64-setup.exe` | **Recommended** — NSIS per-user install |
+| `SimpleFile_1.1.0_x64_en-US.msi` | Enterprise / GPO-style MSI deployment |
 
-After the first manual install, subsequent updates can be checked and applied from **Settings → Updates** within the app.
+**Requirements:** Windows 10 or later, x64.
 
-> **Requirements:** Windows 10 or later (x64).
+After the first manual install, check for later versions from **Settings → Updates**.
+
+### What the release ships
+
+- Windows x64 NSIS setup executable
+- Windows x64 MSI package
+- Signed updater artifacts and `latest.json` (production releases)
+
+---
+
+## Getting Started
+
+1. Install SimpleFile and open it.
+2. Browse with the **sidebar** (drives, Quick Access, bookmarks, recents, smart folders) or the **tree**.
+3. Press **`F6`** for dual-pane when you need source and destination side by side.
+4. Use **`Ctrl+T`** for a new tab on the active pane; each pane keeps its own tabs.
+5. Press **`Space`** for Quick Look, or open the preview pane for persistent inspection.
+6. Open **Settings** to set theme, start location, columns, shortcuts, Git, RAR tools, and updates.
+
+### Suggested first customizations
+
+| Preference | Where |
+| --- | --- |
+| Theme & default list/grid | Settings → Appearance |
+| Visible columns, hidden files, folder sizes, Git | Settings → File List |
+| Home / last used / custom start path | Settings → Navigation |
+| Confirm delete & Recycle Bin default | Settings → Behavior |
+| Remap shortcuts | Settings → Shortcuts |
+| Git & RAR tooling | Settings → Tools |
+| Check for app updates | Settings → Updates |
+
+---
+
+## Keyboard Shortcuts
+
+Defaults are remappable under **Settings → Shortcuts**. Press **`F1`** (or **`Ctrl+?`**) inside the app for the live help sheet.
+
+### Navigation
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+L` / `Alt+D` | Focus path bar |
+| `Enter` (in path bar) | Go to entered path |
+| `Alt+Up` / `Backspace` | Parent folder |
+| `Alt+Left` / `Alt+Right` | Back / forward |
+| `F5` | Refresh active pane |
+| Arrow keys | Move selection |
+| `Shift` + arrows / `Home` / `End` | Extend selection |
+| `Home` / `End` | First / last item |
+| Type-ahead | Jump to matching name (no modifiers) |
+
+### File operations
+
+| Shortcut | Action |
+| --- | --- |
+| `Enter` | Open selected item |
+| `F2` | Rename |
+| `Delete` | Move to Recycle Bin |
+| `Shift+Delete` | Permanent delete |
+| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste |
+| `Ctrl+Shift+C` | Copy full path(s) |
+| `Ctrl+Shift+V` | Clipboard history |
+| `Ctrl+A` | Select all |
+| `Ctrl+N` | New file |
+| `Ctrl+Shift+N` | New folder |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Y` / `Ctrl+Shift+Z` | Redo |
+
+### Tabs & dual pane
+
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+T` | New tab (active pane) |
+| `Ctrl+W` | Close active tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
+| `F6` | Toggle dual pane |
+| `Tab` | Switch active pane (when dual pane is on) |
+| `Alt+1` / `Alt+2` | Focus left / right pane |
+| `Ctrl+Shift+Left` / `Right` | Focus left / right pane |
+| `Ctrl+Alt+C` / `Ctrl+Alt+M` | Copy / move selection to other pane |
+
+### View & tools
+
+| Shortcut | Action |
+| --- | --- |
+| `Space` | Quick Look |
+| `Ctrl+F` | Focus search / filter |
+| `Ctrl+Shift+P` | Command palette |
+| `F4` | Open terminal here |
+| `F1` / `Ctrl+?` | Keyboard shortcuts help |
+| `Escape` | Close surface, clear filter, or clear selection |
+
+---
+
+## Settings
+
+Settings are organized into searchable sections:
+
+| Section | What it controls |
+| --- | --- |
+| **Appearance** | Dark/light theme, default list or grid, icon size |
+| **File List** | Visible columns, hidden files, folder sizes, Git integration |
+| **Navigation** | Start location (Home / Last used / Custom path), open folders in new tab, auto-collapse tree, recent locations |
+| **Behavior** | Confirm before delete, use Recycle Bin by default |
+| **Shortcuts** | View, remap, and reset keyboard bindings |
+| **Tools** | Git tooling status, optional RAR install helpers |
+| **Updates** | Current version, check/install updates |
+| **About** | App info and project links |
+
+Workspace layout (dual pane, active pane, tabs per pane, view mode, and related chrome) is restored across sessions where possible.
 
 ---
 
@@ -160,269 +315,258 @@ After the first manual install, subsequent updates can be checked and applied fr
 
 | Tool | Version | Purpose |
 | --- | --- | --- |
-| [Node.js](https://nodejs.org/) | 24+ | Frontend tooling and build scripts |
+| [Node.js](https://nodejs.org/) | **24+** | Frontend tooling and repo scripts |
 | [Rust](https://rustup.rs/) | Stable | Backend compilation |
-| [Tauri CLI v2](https://v2.tauri.app/start/create-project/) | 2.x | Desktop app bundling (installed via npm) |
-| Windows SDK (`rc.exe` on PATH) | — | Resource stamping for Rust tests |
-| [WiX Toolset](https://wixtoolset.org/) | — | Only needed for local MSI validation |
+| Tauri CLI v2 | via frontend npm deps | Desktop packaging |
+| Windows SDK (`rc.exe` on `PATH`) | — | Resource stamping for Rust/Tauri tests |
+| [WiX Toolset](https://wixtoolset.org/) | Optional | Local MSI validation |
 
-### Quick Start
+### Quick start
 
 ```powershell
-# 1. Clone the repository
+# 1. Clone
 git clone https://github.com/conniecombs/SimpleFile-Windows.git
 cd SimpleFile-Windows
 
 # 2. Install frontend dependencies
 npm ci --prefix frontend
 
-# 3. Run in development mode (hot-reload)
+# 3. Development app (Tauri + hot rebuild of frontend assets)
 npm run dev
 
-# 4. Run all quality checks
+# 4. Quality gates used by contributors and CI
 npm run check
+npm run check:rust
 ```
 
-### Available Scripts
+Frontend-only Vite dev (without the full desktop shell) is available as:
 
-All scripts are run from the **repository root** via `npm run <script>`.
+```powershell
+npm --prefix frontend run dev
+```
+
+### Root scripts
+
+Run from the **repository root** with `npm run <script>`.
 
 | Script | Description |
 | --- | --- |
-| `dev` | Start the Tauri development server with hot-reload |
-| `build` | Build the frontend for production (`vite build`) |
-| `check` | Run all frontend migration checks, API parity, behavior guards, Svelte type checks, smoke settings UI, and frontend build |
-| `check:rust` | Rust formatting (`cargo fmt`), tests, and Clippy with warnings denied |
-| `check:security` | Rust dependency audit via `cargo-audit` |
-| `check:release` | Combined frontend + Rust + security gate — full release-quality validation |
-| `build:tauri:local` | Build unsigned NSIS and MSI installers locally |
-| `release:build` | Complete local release build: install frontend dependencies, run release checks, build installers, smoke artifacts, and list outputs |
-| `release:local` | Run release checks then build local installers |
-| `smoke:settings` | Startup and settings persistence smoke test |
-| `smoke:release` | Built executable startup smoke test |
-| `smoke:msi` | MSI artifact extraction and launch smoke test |
-| `smoke:installer` | NSIS install, launch, and uninstall smoke test |
+| `dev` | Start Tauri development (`tauri dev`) |
+| `build` | Production frontend build (`vite build` → `frontend/dist`) |
+| `check` | Full frontend gate: migration/API/behavior guards, Svelte check, settings UI smoke, production build |
+| `check:frontend` | Same as frontend package `check` |
+| `check:js` | JavaScript syntax scan for shared scripts |
+| `check:invokes` | Frontend invoke wrappers must match Rust commands |
+| `check:tauri-surface` | Renderer Tauri access stays on the typed boundary |
+| `check:updater` | Updater config and release wiring stay valid |
+| `check:workflows` | GitHub workflow sanity checks |
+| `check:provider-surface` | Guards out-of-scope provider/mount surfaces |
+| `check:windows-assets` | Packaging assets remain Windows-correct |
+| `check:rust` | `cargo fmt --check`, tests, Clippy (`-D warnings`) |
+| `check:security` | Rust dependency audit (`cargo-audit`) |
+| `check:release` | `check` + `check:rust` + `check:security` |
+| `build:tauri:local` | Local unsigned NSIS + MSI via `tauri.local.conf.json` |
+| `release:build` | Full local release pipeline: deps, checks, installers, smokes, artifact list |
+| `release:local` | `check:release` then local Tauri bundle |
+| `smoke:settings` | Startup + settings persistence smoke |
+| `smoke:settings-ui` | Settings UI structural smoke (frontend) |
+| `smoke:release` | Built executable launch smoke |
+| `smoke:msi` | MSI extract/launch smoke |
+| `smoke:installer` | NSIS install → launch → uninstall smoke |
 
 ---
 
 ## Project Structure
 
-```
+```text
 SimpleFile-Windows/
-├── frontend/                        Svelte 5 + Vite + TypeScript frontend
-│   ├── index.html                   HTML entry point
-│   ├── package.json                 Frontend dependencies and scripts
-│   ├── svelte.config.js             Svelte compiler configuration
-│   ├── vite.config.ts               Vite bundler configuration
-│   ├── tsconfig.json                TypeScript configuration
-│   ├── src/
-│   │   ├── main.ts                  Svelte app bootstrap
-│   │   ├── App.svelte               Root Svelte component
-│   │   ├── css/                     Stylesheets and theme definitions
-│   │   ├── lib/
-│   │   │   ├── api.ts               Typed frontend → backend API wrapper
-│   │   │   ├── tauri.ts             Tauri IPC boundary and browser-dev fallback
-│   │   │   ├── types.ts             Shared TypeScript type definitions
-│   │   │   ├── app/                 Workflow orchestration and business logic
-│   │   │   └── components/          Svelte UI components
-│   │   └── vanilla-js/runtime/      Shared typed runtime helpers
-│   ├── scripts/                     Frontend migration and guard checks
-│   └── public/                      Static assets
-│
-├── src-tauri/                       Rust backend (Tauri 2)
-│   ├── Cargo.toml                   Rust dependencies and metadata
-│   ├── tauri.conf.json              Production Tauri configuration
-│   ├── tauri.local.conf.json        Local build configuration (unsigned)
-│   ├── capabilities/default.json    Tauri v2 permission grants
-│   ├── icons/                       Application icons (PNG, ICO)
+├── frontend/                     Svelte 5 + Vite + TypeScript UI
+│   ├── index.html
+│   ├── package.json
+│   ├── svelte.config.js
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   ├── public/                   Static assets (favicon, etc.)
+│   ├── scripts/                  Migration, parity, and behavior guard checks
+│   ├── dist/                     Production frontend build output
 │   └── src/
-│       ├── main.rs                  App entry point and Tauri builder
-│       ├── lib.rs                   Command registration and plugin setup
-│       ├── models.rs                IPC data models and structs
-│       ├── state.rs                 Application state management
-│       ├── fs_ops.rs                Filesystem operations (copy, move, delete, rename)
-│       ├── progress.rs              Cancellable copy/move with progress events
-│       ├── dir_list.rs              Directory listing and sorting
-│       ├── drives.rs                Windows drive and network share metadata
-│       ├── search.rs                Recursive file and content search
-│       ├── smart_folders.rs         Saved search / smart folder persistence
-│       ├── archive.rs               ZIP, TAR, GZ, and RAR archive handling
-│       ├── rar_installer.rs         Optional RAR tooling installer
-│       ├── preview.rs               File preview content loading
-│       ├── metadata.rs              File metadata, EXIF, PDF info, audio tags
-│       ├── checksum.rs              MD5, SHA-1, SHA-256 hashing
-│       ├── compare.rs               Side-by-side text file comparison
-│       ├── cleanup.rs               Disk cleanup and duplicate detection
-│       ├── git.rs                   Git status, branch info, pull/push
-│       ├── tags.rs                  Color label / tag management
-│       ├── terminal.rs              Terminal launcher (PowerShell, CMD, etc.)
-│       ├── open_with.rs             "Open With" application handling
-│       ├── updater.rs               App version and update commands
-│       ├── watcher.rs               Filesystem change watcher (notify crate)
-│       ├── native_accel.rs          Native keyboard accelerators
-│       ├── db.rs                    SQLite-backed persistence (rusqlite)
-│       └── utils.rs                 Shared utility functions
+│       ├── main.ts               App bootstrap
+│       ├── App.svelte            Root component
+│       ├── css/                  Themes and component styles
+│       ├── lib/
+│       │   ├── api.ts            Typed frontend → Rust API wrappers
+│       │   ├── tauri.ts          IPC boundary + browser-dev fallback
+│       │   ├── types.ts          Shared TypeScript models
+│       │   ├── app/              Workflows, setup, modal/UI state
+│       │   ├── components/       Svelte UI components
+│       │   └── …                 Navigation, transfers, search, selection, etc.
+│       └── vanilla-js/runtime/   Shared typed runtime helpers
 │
-├── scripts/                         Repository-level tooling
-│   ├── cargo-audit-release.mjs      Rust dependency security audit
-│   ├── check-tauri-invokes.mjs      Ensures frontend invokes match Rust commands
-│   ├── check-provider-surface.mjs   Guards against out-of-scope provider code
-│   ├── check-windows-assets.mjs     Validates Windows packaging assets
-│   ├── release.mjs                  Release automation helper
-│   ├── smoke-nsis-install.ps1       NSIS installer smoke test
-│   ├── smoke-msi-artifact.ps1       MSI artifact smoke test
-│   ├── smoke-release-startup.ps1    Release binary smoke test
-│   └── smoke-settings-startup.mjs   Settings persistence smoke test
+├── src-tauri/                    Rust backend (Tauri 2)
+│   ├── Cargo.toml / Cargo.lock
+│   ├── tauri.conf.json           Production Tauri config
+│   ├── tauri.local.conf.json     Local unsigned packaging config
+│   ├── capabilities/             Tauri v2 permission grants
+│   ├── icons/                    App icons
+│   └── src/
+│       ├── main.rs / lib.rs      Entry + command registration
+│       ├── models.rs / state.rs  IPC models and app state
+│       ├── fs_ops.rs             Create, rename, copy, move, delete, sizes
+│       ├── progress.rs           Cancellable copy/move + progress events
+│       ├── dir_list.rs           Directory listing / sorting helpers
+│       ├── drives.rs             Windows drives & mapped shares
+│       ├── search.rs             Recursive + content search
+│       ├── smart_folders.rs      Saved smart folder criteria
+│       ├── archive.rs            ZIP / TAR / GZ / RAR
+│       ├── rar_installer.rs      Optional RAR tooling install
+│       ├── preview.rs            Open, reveal, preview, thumbnails
+│       ├── metadata.rs           EXIF, PDF, audio/video/Office metadata
+│       ├── checksum.rs           MD5 / SHA-1 / SHA-256
+│       ├── compare.rs            Text file comparison
+│       ├── cleanup.rs            Disk cleanup + duplicate detection
+│       ├── git.rs                Status, branch, pull, push
+│       ├── tags.rs               Color labels / tags
+│       ├── terminal.rs           Terminal / admin PowerShell launch
+│       ├── open_with.rs          Open With handling
+│       ├── updater.rs            Version + update commands
+│       ├── watcher.rs            Filesystem change notifications
+│       ├── native_accel.rs       Native keyboard accelerators
+│       ├── db.rs                 SQLite-backed settings/persistence
+│       └── utils.rs              Shared helpers
 │
-├── docs/                            Documentation
-│   ├── CHANGELOG.md                 Release changelog
-│   ├── ROADMAP.md                   Feature roadmap
-│   ├── CONTRIBUTING.md              Contribution guidelines
-│   ├── CODE_OF_CONDUCT.md           Code of conduct
-│   ├── SECURITY.md                  Security policy and reporting
-│   ├── SUPPORT.md                   Support guide
-│   ├── UPDATER_RELEASE.md           Updater release process
-│   ├── RELEASE_1.1.0.md             v1.1.0 release notes
-│   └── assets/screenshots/          Application screenshots
-│
-├── .github/
-│   ├── workflows/
-│   │   ├── ci.yml                   CI pipeline (push/PR to main)
-│   │   ├── release.yml              Release build and publish
-│   │   ├── installer-smoke.yml      Installer smoke tests
-│   │   └── dependabot-automerge.yml Dependabot auto-merge
-│   ├── ISSUE_TEMPLATE/              Issue templates
-│   ├── PULL_REQUEST_TEMPLATE.md     PR template
-│   ├── RELEASE.md                   Release checklist
-│   └── dependabot.yml               Dependabot configuration
-│
-├── build_notes/                     Internal build and configuration notes
-├── base_icon.png                    Source application icon (1024×1024)
-├── package.json                     Root npm scripts (dev, build, checks)
-├── LICENSE                          Proprietary license
-└── .gitignore
+├── scripts/                      Repo-level checks, release, and smokes
+├── docs/                         User/dev docs, changelog, screenshots
+├── build_notes/                  Internal hardening / migration notes
+├── .github/workflows/            CI, release, installer smoke, Dependabot
+├── package.json                  Root orchestration scripts
+├── base_icon.png                 Source icon artwork
+└── LICENSE                       Proprietary license
 ```
 
-The shipping frontend starts at `frontend/src/main.ts`, and shared typed runtime helpers live under `frontend/src/vanilla-js/runtime/`.
+**Entry points**
+
+- Shipping UI bootstrap: `frontend/src/main.ts`
+- Desktop shell: `src-tauri` via Tauri 2
+- Frontend dist consumed by Tauri: `frontend/dist` (see `src-tauri/tauri.conf.json`)
 
 ---
 
 ## Architecture
 
-SimpleFile follows a clean **frontend ↔ backend** split via Tauri's IPC bridge:
+SimpleFile uses a strict **frontend ↔ backend** split over Tauri IPC:
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Svelte 5 Frontend                 │
-│                                                     │
-│  Components ──→ App Logic ──→ api.ts ──→ tauri.ts   │
-│                                  │                  │
-│                          Tauri IPC invoke            │
-└──────────────────────────────────┬──────────────────┘
-                                   │
-                                   ▼
-┌─────────────────────────────────────────────────────┐
-│                    Rust Backend                      │
-│                                                     │
-│  lib.rs (command registration)                      │
-│    ├── fs_ops.rs      File operations               │
-│    ├── progress.rs    Async progress + cancellation  │
-│    ├── drives.rs      Windows drive enumeration      │
-│    ├── search.rs      Recursive + content search     │
-│    ├── archive.rs     ZIP/TAR/GZ/RAR handling        │
-│    ├── metadata.rs    EXIF, PDF, audio metadata      │
-│    ├── git.rs         Git status and actions          │
-│    ├── watcher.rs     Live filesystem events          │
-│    └── ...            20+ specialized modules        │
-└─────────────────────────────────────────────────────┘
+```text
+┌──────────────────────────────────────────────────────┐
+│                 Svelte 5 Frontend                    │
+│                                                      │
+│  Components → App workflows → api.ts → tauri.ts      │
+│                              │                       │
+│                     invoke / events                  │
+└──────────────────────────────┬───────────────────────┘
+                               │
+                               ▼
+┌──────────────────────────────────────────────────────┐
+│                   Rust Backend                       │
+│                                                      │
+│  lib.rs command table                                │
+│    fs_ops / progress / drives / search / archive     │
+│    preview / metadata / checksum / compare / cleanup │
+│    git / tags / terminal / updater / watcher / db    │
+└──────────────────────────────────────────────────────┘
 ```
 
-**Key design decisions:**
+### Design rules that matter in practice
 
-- **No `__TAURI__` global** — all Tauri access is routed through `frontend/src/lib/tauri.ts`, with a browser-dev fallback for frontend-only development.
-- **Typed API boundary** — `api.ts` provides a fully typed wrapper over every Rust command, enforced by automated parity checks.
-- **Vanilla CSS theming** — light, dark, and system themes controlled via CSS custom properties.
-- **Async progress** — long-running file operations emit progress events to the frontend via Tauri event channels, with full cancellation support.
+- **No `__TAURI__` global** — renderer access goes through `frontend/src/lib/tauri.ts`, with a browser-dev mock path for UI work without the shell.
+- **Typed API surface** — `api.ts` wraps commands; automated checks keep invokes aligned with `generate_handler!` in `lib.rs`.
+- **Transfer safety** — copy/cut/paste/drag/drop/dual-pane transfers share a transfer manager with stable operation IDs, progress events, cancel, and conflict resolution.
+- **HTML safety** — modal bodies and Markdown preview sanitize untrusted HTML before insertion.
+- **Windows-first filesystem APIs** — drive labels, mapped shares, trash, and process launching stay in dedicated Rust modules.
+- **CSP locked down** — production window CSP defaults to `'self'` for scripts/resources (see `tauri.conf.json`).
 
 ---
 
 ## Verification & Testing
 
-### Automated Quality Gates
+### Quality gates
 
-| Command | What it checks |
+| Command | Covers |
 | --- | --- |
-| `npm run check` | Frontend migration guards, API parity, behavior bridges, Svelte type-checking, settings UI smoke, and production build |
-| `npm run check:rust` | `cargo fmt`, `cargo test`, and `cargo clippy -D warnings` |
-| `npm run check:security` | Rust dependency audit via `cargo-audit` |
-| `npm run check:release` | All of the above combined — the full release-quality gate |
-| `npm run release:build` | Complete local release build, installer smoke tests, and artifact listing |
+| `npm run check` | Frontend migration/API/behavior guards, huge-folder & marquee checks, transfer/navigation stages, `svelte-check`, settings UI smoke, production build |
+| `npm run check:rust` | Format, unit/integration tests, Clippy with warnings denied |
+| `npm run check:security` | Rust dependency audit |
+| `npm run check:release` | All of the above — release-quality gate |
+| `npm run release:build` | Local release build + installer smokes + artifact listing |
 
-### Smoke Tests
+### Smoke tests
 
-| Command | What it validates |
+| Command | Validates |
 | --- | --- |
-| `npm run smoke:settings` | App startup and settings persistence round-trip |
-| `npm run smoke:release` | Built release executable launches successfully |
-| `npm run smoke:msi` | MSI artifact extracts and launches correctly |
-| `npm run smoke:installer` | Full NSIS install → launch → uninstall cycle |
+| `npm run smoke:settings` | Startup and settings persistence |
+| `npm run smoke:settings-ui` | Settings UI structure/wiring |
+| `npm run smoke:release` | Built release executable launches |
+| `npm run smoke:msi` | MSI artifact extract/launch |
+| `npm run smoke:installer` | Full NSIS install → launch → uninstall |
 
-### Project Boundary Guards
+### Architectural guards
 
-The `check` pipeline also enforces architectural invariants:
+The `check` pipeline also enforces project invariants:
 
-- Out-of-scope provider and mount-management surfaces are excluded from this branch
-- All renderer Tauri access is channeled through `frontend/src/lib/tauri.ts`
-- The global `__TAURI__` bridge is disabled
-- Modal HTML paths sanitize content before insertion
-- Packaging assets and bundle targets remain Windows-only
-- Tauri command registrations stay aligned with frontend typed wrappers
+- Out-of-scope provider/mount management surfaces stay excluded
+- Renderer Tauri access is only through `frontend/src/lib/tauri.ts`
+- Global `__TAURI__` bridge stays disabled
+- Modal/Markdown HTML paths sanitize before insertion
+- Packaging assets and bundle targets stay Windows-only
+- Registered Rust commands stay aligned with typed frontend wrappers
 
-> **Note:** Full installer smoke tests are intentionally excluded from the PR pipeline because packaging is slow. Run the **Installer Smoke** workflow manually or rely on its nightly schedule before cutting a release.
+> **Note:** Full installer packaging is intentionally slow. PR CI focuses on fast gates; run the **Installer Smoke** workflow (nightly or manual) or `npm run release:build` before cutting a release.
 
 ---
 
 ## Release & Packaging
 
-### Bundle Targets
+### Bundle targets
 
-SimpleFile produces two Windows installer formats:
-
-| Format | File | Notes |
+| Format | Artifact pattern | Notes |
 | --- | --- | --- |
-| NSIS | `SimpleFile_<version>_x64-setup.exe` | Per-user install, recommended for end users |
-| MSI | `SimpleFile_<version>_x64_en-US.msi` | Per-machine install for enterprise deployment |
+| NSIS | `SimpleFile_<version>_x64-setup.exe` | Per-user install; recommended for most users |
+| MSI | `SimpleFile_<version>_x64_en-US.msi` | Per-machine style deployment |
 
-### Auto-Updater
+### Config files
 
-Production builds include signed updater artifacts (`latest.json` + `.sig` files). After the first manual install, the app checks for and applies updates via the built-in updater (Settings → Updates).
-
-### Build Configurations
-
-| Config File | Purpose |
+| File | Role |
 | --- | --- |
-| `src-tauri/tauri.conf.json` | **Production** — enables signing, updater artifacts, and full bundle targets |
-| `src-tauri/tauri.local.conf.json` | **Local development** — same bundle targets with signing disabled |
+| `src-tauri/tauri.conf.json` | Production config: NSIS + MSI, updater artifacts enabled |
+| `src-tauri/tauri.local.conf.json` | Local packaging without updater signing secrets |
 
-### Release Workflow
+### Auto-updater
 
-For an on-demand GitHub-hosted release candidate build, run the [Release build workflow](.github/workflows/release-build.yml) from the Actions tab. It runs `npm run release:build`, uploads the Windows executable and installer artifacts, and does not publish a GitHub Release.
+Production builds publish signed updater metadata to:
 
-The [release workflow](.github/workflows/release.yml) is triggered by pushing a `v*` tag or manual dispatch:
+`https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json`
 
-1. **Validate** — ensures the tag version matches `tauri.conf.json` and `Cargo.toml`
-2. **Quality gates** — runs the full `check:release` pipeline
-3. **Build** — compiles Windows x64 NSIS + MSI installers with signed updater artifacts
-4. **Publish** — creates a GitHub Release (draft by default) with all assets attached
+Users install the first release manually, then use **Settings → Updates**.  
+Operational details: [docs/UPDATER_RELEASE.md](docs/UPDATER_RELEASE.md).
 
-### Version Management
+### Release workflows
 
-Use the version update script to synchronize versions across all config files:
+| Workflow | Purpose |
+| --- | --- |
+| [CI](.github/workflows/ci.yml) | Push/PR quality gates |
+| [Release build](.github/workflows/release-build.yml) | On-demand `npm run release:build`; uploads artifacts; does **not** publish a GitHub Release |
+| [Release](.github/workflows/release.yml) | Tag `v*` or manual dispatch: validate version, run `check:release`, build signed installers, publish draft GitHub Release |
+| [Installer Smoke](.github/workflows/installer-smoke.yml) | Nightly/manual installer validation |
 
-```powershell
-# Updates package.json, tauri.conf.json, and Cargo.toml simultaneously
-powershell -File scripts/update_version.ps1 -Version "1.2.0"
-```
+### Versioning
+
+Keep these in sync when bumping a release:
+
+- `src-tauri/tauri.conf.json` → `version`
+- `src-tauri/Cargo.toml` → package `version` (and committed `Cargo.lock`)
+- README version badge
+- `docs/CHANGELOG.md` (and release notes as needed)
+
+Checklist: [.github/RELEASE.md](.github/RELEASE.md).
 
 ---
 
@@ -430,54 +574,76 @@ powershell -File scripts/update_version.ps1 -Version "1.2.0"
 
 | Document | Description |
 | --- | --- |
-| [Changelog](docs/CHANGELOG.md) | Version history and release notes |
-| [v1.1.0 Release Notes](docs/RELEASE_1.1.0.md) | Detailed notes for the current release |
-| [Roadmap](docs/ROADMAP.md) | Planned features and milestones |
-| [Contributing](docs/CONTRIBUTING.md) | How to contribute to SimpleFile |
+| [Changelog](docs/CHANGELOG.md) | Version history |
+| [v1.1.0 Release Notes](docs/RELEASE_1.1.0.md) | Current public release notes |
+| [Roadmap](docs/ROADMAP.md) | Near-term priorities and non-goals |
+| [Contributing](docs/CONTRIBUTING.md) | How to work on this repo |
 | [Code of Conduct](docs/CODE_OF_CONDUCT.md) | Community standards |
-| [Support](docs/SUPPORT.md) | How to get help |
-| [Security Policy](docs/SECURITY.md) | Vulnerability reporting and security checklist |
-| [Updater Release Guide](docs/UPDATER_RELEASE.md) | How to publish signed updates |
+| [Support](docs/SUPPORT.md) | What to include when reporting issues |
+| [Security Policy](docs/SECURITY.md) | Vulnerability reporting and sensitive-file rules |
+| [Updater Release Guide](docs/UPDATER_RELEASE.md) | Publishing signed updates |
 | [Release Checklist](.github/RELEASE.md) | Step-by-step release process |
 
----
-
-## Keyboard Shortcuts
-
-| Shortcut | Action |
-| --- | --- |
-| `Ctrl+C` / `Ctrl+X` / `Ctrl+V` | Copy / Cut / Paste |
-| `Ctrl+Z` | Undo last operation |
-| `Delete` | Move to Recycle Bin |
-| `Shift+Delete` | Permanent delete |
-| `F2` | Rename selected item |
-| `Ctrl+A` | Select all |
-| `Ctrl+T` | New tab |
-| `Ctrl+W` | Close tab |
-| `Ctrl+N` | New window |
-| `Ctrl+F` | Search / Find |
-| `Ctrl+L` | Focus address bar |
-| `Alt+Left` / `Alt+Right` | Navigate back / forward |
-| `Ctrl+Shift+N` | New folder |
-| `F5` | Refresh |
-| `Ctrl+H` | Toggle hidden files |
-| `Space` | Quick Look preview |
-
-> Shortcuts are remappable from **Settings → Keyboard Shortcuts**.
+Additional design/history notes live under `docs/` and `build_notes/` for maintainers.
 
 ---
 
 ## Security
 
-- **Do not commit** signing keys, updater private keys, `.env` files, local secrets, personal settings exports, or logs containing private paths.
-- HTML content injected into modals and the markdown preview pane is sanitized via [sanitize-html](https://www.npmjs.com/package/sanitize-html) to prevent XSS.
-- The Content Security Policy restricts script and resource loading to `'self'` only.
-- See [docs/SECURITY.md](docs/SECURITY.md) for the full vulnerability reporting policy and release security checklist.
+- **Do not commit** signing keys, updater private keys, `.env` files, local secrets, personal settings exports, or logs with private paths.
+- Modal HTML and Markdown preview content are sanitized before insertion ([sanitize-html](https://www.npmjs.com/package/sanitize-html)).
+- Content Security Policy restricts script/resource loading to the app origin.
+- Archive extraction re-validates destination paths; TAR extraction skips symlink/special entries that could escape the target tree.
+- Report vulnerabilities as described in [docs/SECURITY.md](docs/SECURITY.md).
+
+Sensitive paths ignored by the repo include `.secrets/`, `src-tauri/.secrets/`, `*.key`, `.env`, and `.env.*`.
+
+---
+
+## Scope of This Branch
+
+This repository targets a **Windows-only local file manager**.
+
+### In scope
+
+- Local disks, removable media, and mapped network drives
+- Dual pane, per-pane tabs, search, smart folders, previews, metadata
+- Archives, Git status/actions, cleanup tools
+- NSIS/MSI packaging and signed updater metadata
+
+### Out of scope (for this branch)
+
+- App-managed cloud provider integrations
+- Provider-backed mount management
+- Linux/macOS desktop packaging targets
+
+See [docs/ROADMAP.md](docs/ROADMAP.md) for active priorities.
+
+---
+
+## Support
+
+Before opening an issue:
+
+1. Confirm you are on a Windows release or a build from this repo’s Windows-focused `main` branch.
+2. Note SimpleFile version from **Settings → About** (or the About dialog).
+3. Capture whether the problem is in dev, an unpacked build, NSIS, or MSI.
+4. For installers, run `npm run smoke:installer` / `npm run smoke:msi` when possible.
+5. Redact personal paths from logs and screenshots.
+
+More detail: [docs/SUPPORT.md](docs/SUPPORT.md).
+
+Startup diagnostics on Windows may be written to:
+
+`%LOCALAPPDATA%\SimpleFile\startup.log`
 
 ---
 
 ## License
 
-SimpleFile is **proprietary software**. Copyright © 2024–2026 conniecombs. All rights reserved.
+SimpleFile is **proprietary software**.  
+Copyright © 2024–2026 conniecombs. All rights reserved.
 
-See [LICENSE](LICENSE) for full terms. Third-party dependencies remain under their own respective licenses.
+Access to this repository or possession of a copy does **not** grant permission to use, copy, modify, redistribute, sublicense, host, resell, or create derivative works without prior written permission.
+
+See [LICENSE](LICENSE) for full terms. Third-party libraries remain under their own licenses.
