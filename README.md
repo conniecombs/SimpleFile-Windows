@@ -401,6 +401,7 @@ SimpleFile-Windows/
 │       │   ├── components/       Svelte UI components
 │       │   └── …                 Navigation, transfers, search, selection, etc.
 │       └── vanilla-js/runtime/   Shared typed runtime helpers
+│                                 (path: frontend/src/vanilla-js/runtime/)
 │
 ├── src-tauri/                    Rust backend (Tauri 2)
 │   ├── Cargo.toml / Cargo.lock
@@ -446,6 +447,7 @@ SimpleFile-Windows/
 **Entry points**
 
 - Shipping UI bootstrap: `frontend/src/main.ts`
+- Shared typed runtime helpers: `frontend/src/vanilla-js/runtime/`
 - Desktop shell: `src-tauri` via Tauri 2
 - Frontend dist consumed by Tauri: `frontend/dist` (see `src-tauri/tauri.conf.json`)
 
