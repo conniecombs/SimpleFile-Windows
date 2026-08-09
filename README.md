@@ -615,7 +615,7 @@ This repository targets a **Windows-only local file manager**.
 
 ### Out of scope (for this branch)
 
-- App-managed cloud provider integrations
+- App-managed provider integrations
 - Provider-backed mount management
 - Linux/macOS desktop packaging targets
 
