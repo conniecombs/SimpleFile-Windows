@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createServer as createNetServer } from 'node:net';
 
 import { createServer } from 'vite';
 
@@ -34,32 +33,24 @@ function waitForProcessExit(childProcess, { timeoutMs = 5000 } = {}) {
   });
 }
 
-async function removeDirectoryWithRetries(path, { attempts = 8 } = {}) {
+async function removeDirectoryWithRetries(path, { attempts = 8, softOnFailure = false } = {}) {
+  if (!path) return;
+
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       rmSync(path, { force: true, recursive: true });
       return;
     } catch (error) {
-      if (attempt === attempts) throw error;
-      await delay(150 * attempt);
+      if (attempt === attempts) {
+        if (softOnFailure) {
+          console.warn(`Could not remove temp directory ${path}: ${error instanceof Error ? error.message : error}`);
+          return;
+        }
+        throw error;
+      }
+      await delay(200 * attempt);
     }
   }
-}
-
-function getFreePort() {
-  return new Promise((resolvePort, rejectPort) => {
-    const server = createNetServer();
-    server.once('error', rejectPort);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      if (!address || typeof address === 'string') {
-        server.close(() => rejectPort(new Error('Could not allocate a local port.')));
-        return;
-      }
-
-      server.close(() => resolvePort(address.port));
-    });
-  });
 }
 
 function browserCandidates() {
@@ -102,16 +93,21 @@ function findBrowserExecutable() {
   return browserCandidates().find((candidate) => candidate && existsSync(candidate));
 }
 
-async function fetchJson(url, { timeoutMs = 8000 } = {}) {
+async function fetchJson(url, { timeoutMs = 8000, isAlive } = {}) {
   const expiresAt = Date.now() + timeoutMs;
   let lastError;
 
   while (Date.now() < expiresAt) {
+    if (typeof isAlive === 'function' && !isAlive()) {
+      throw lastError || new Error(`Process died while fetching ${url}`);
+    }
+
     try {
       const response = await fetch(url);
       if (response.ok) {
         return await response.json();
       }
+      lastError = new Error(`HTTP ${response.status} for ${url}`);
     } catch (error) {
       lastError = error;
     }
@@ -122,17 +118,157 @@ async function fetchJson(url, { timeoutMs = 8000 } = {}) {
   throw lastError || new Error(`Timed out fetching ${url}`);
 }
 
-async function fetchPageTarget(debugPort, { timeoutMs = 8000 } = {}) {
+function browserLaunchArgs(userDataDir) {
+  const args = [
+    // Let Chromium pick a free port and write it to DevToolsActivePort.
+    '--remote-debugging-port=0',
+    '--remote-allow-origins=*',
+    '--headless=new',
+    '--disable-background-networking',
+    '--disable-extensions',
+    '--disable-gpu',
+    '--disable-dev-shm-usage',
+    '--no-default-browser-check',
+    '--no-first-run',
+    `--user-data-dir=${userDataDir}`,
+    'about:blank',
+  ];
+
+  // GitHub-hosted Linux runners often require these for headless Chromium.
+  if (process.platform === 'linux') {
+    args.unshift('--no-sandbox', '--disable-setuid-sandbox');
+  }
+
+  return args;
+}
+
+function isBrowserProcessAlive(browserProcess) {
+  return Boolean(
+    browserProcess
+    && browserProcess.exitCode === null
+    && browserProcess.signalCode === null
+    && !browserProcess.killed,
+  );
+}
+
+async function waitForDebugPort(userDataDir, browserProcess, { timeoutMs = 15000 } = {}) {
+  const activePortFile = join(userDataDir, 'DevToolsActivePort');
   const expiresAt = Date.now() + timeoutMs;
+  let lastError;
 
   while (Date.now() < expiresAt) {
-    const targets = await fetchJson(`http://127.0.0.1:${debugPort}/json/list`, { timeoutMs: 1000 });
-    const pageTarget = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl);
-    if (pageTarget) return pageTarget;
+    if (!isBrowserProcessAlive(browserProcess)) {
+      throw lastError || new Error('Browser exited before publishing a DevTools port.');
+    }
+
+    try {
+      if (existsSync(activePortFile)) {
+        const [portLine] = readFileSync(activePortFile, 'utf8').split(/\r?\n/);
+        const debugPort = Number.parseInt(portLine, 10);
+        if (Number.isInteger(debugPort) && debugPort > 0) {
+          return debugPort;
+        }
+        lastError = new Error(`Invalid DevToolsActivePort contents: ${portLine}`);
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
     await delay(100);
   }
 
-  throw new Error('Could not find a debuggable browser page target.');
+  throw lastError || new Error('Timed out waiting for DevToolsActivePort.');
+}
+
+async function launchBrowserWithCdp(browserExecutable, { attempts = 3 } = {}) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const userDataDir = mkdtempSync(join(tmpdir(), 'simplefile-settings-ui-'));
+    let browserProcess;
+    let stderr = '';
+
+    try {
+      browserProcess = spawn(browserExecutable, browserLaunchArgs(userDataDir), {
+        stdio: ['ignore', 'ignore', 'pipe'],
+      });
+
+      browserProcess.stderr?.setEncoding('utf8');
+      browserProcess.stderr?.on('data', (chunk) => {
+        stderr += chunk;
+        if (stderr.length > 4000) {
+          stderr = stderr.slice(-4000);
+        }
+      });
+
+      browserProcess.once('exit', (code, signal) => {
+        if (code !== null && code !== 0) {
+          console.warn(`Browser exited early with code ${code} (attempt ${attempt}/${attempts}).`);
+        } else if (signal) {
+          console.warn(`Browser exited early from signal ${signal} (attempt ${attempt}/${attempts}).`);
+        }
+      });
+
+      const debugPort = await waitForDebugPort(userDataDir, browserProcess);
+      const browserVersion = await fetchJson(`http://127.0.0.1:${debugPort}/json/version`, {
+        timeoutMs: 12000,
+        isAlive: () => isBrowserProcessAlive(browserProcess),
+      });
+      assert.ok(browserVersion.webSocketDebuggerUrl, 'Could not find the browser DevTools endpoint.');
+
+      return {
+        browserProcess,
+        browserVersion,
+        debugPort,
+        userDataDir,
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const stderrNote = typeof stderr === 'string' && stderr.trim()
+        ? ` Browser stderr: ${stderr.trim().slice(-800)}`
+        : '';
+      lastError = new Error(`${detail}${stderrNote}`);
+      if (browserProcess && isBrowserProcessAlive(browserProcess)) {
+        browserProcess.kill();
+        await waitForProcessExit(browserProcess, { timeoutMs: 3000 });
+      }
+      // Browser may still hold profile locks briefly after kill.
+      await delay(150);
+      await removeDirectoryWithRetries(userDataDir, { softOnFailure: true });
+      if (attempt < attempts) {
+        console.warn(`Browser CDP launch attempt ${attempt}/${attempts} failed: ${lastError.message}`);
+        await delay(300 * attempt);
+      }
+    }
+  }
+
+  throw lastError || new Error('Could not launch a browser with CDP enabled.');
+}
+
+async function fetchPageTarget(debugPort, { timeoutMs = 12000, isAlive } = {}) {
+  const expiresAt = Date.now() + timeoutMs;
+  let lastError;
+
+  while (Date.now() < expiresAt) {
+    if (typeof isAlive === 'function' && !isAlive()) {
+      throw lastError || new Error('Browser exited before a page target was available.');
+    }
+
+    try {
+      const targets = await fetchJson(`http://127.0.0.1:${debugPort}/json/list`, {
+        timeoutMs: 1000,
+        isAlive,
+      });
+      const pageTarget = targets.find((target) => target.type === 'page' && target.webSocketDebuggerUrl);
+      if (pageTarget) return pageTarget;
+    } catch (error) {
+      lastError = error;
+    }
+
+    await delay(100);
+  }
+
+  throw lastError || new Error('Could not find a debuggable browser page target.');
 }
 
 function connectCdp(webSocketUrl) {
@@ -250,15 +386,16 @@ async function runSettingsUiSmoke() {
     server: {
       host: '127.0.0.1',
       port: 0,
+      strictPort: false,
     },
   });
 
-  const debugPort = await getFreePort();
-  const userDataDir = mkdtempSync(join(tmpdir(), 'simplefile-settings-ui-'));
   let shuttingDown = false;
   let browserCdp;
   let browserProcess;
   let page;
+  let userDataDir;
+  let debugPort;
 
   try {
     await viteServer.listen();
@@ -266,19 +403,10 @@ async function runSettingsUiSmoke() {
     assert.ok(address && typeof address !== 'string', 'Vite did not expose a local HTTP port.');
     const appUrl = `http://127.0.0.1:${address.port}/`;
 
-    browserProcess = spawn(browserExecutable, [
-      '--headless=new',
-      '--disable-background-networking',
-      '--disable-extensions',
-      '--disable-gpu',
-      '--no-default-browser-check',
-      '--no-first-run',
-      `--remote-debugging-port=${debugPort}`,
-      `--user-data-dir=${userDataDir}`,
-      'about:blank',
-    ], {
-      stdio: 'ignore',
-    });
+    const launched = await launchBrowserWithCdp(browserExecutable);
+    browserProcess = launched.browserProcess;
+    userDataDir = launched.userDataDir;
+    debugPort = launched.debugPort;
 
     browserProcess.once('exit', (code, signal) => {
       if (shuttingDown) return;
@@ -289,12 +417,12 @@ async function runSettingsUiSmoke() {
       }
     });
 
-    const browserVersion = await fetchJson(`http://127.0.0.1:${debugPort}/json/version`);
-    assert.ok(browserVersion.webSocketDebuggerUrl, 'Could not find the browser DevTools endpoint.');
-    browserCdp = connectCdp(browserVersion.webSocketDebuggerUrl);
+    browserCdp = connectCdp(launched.browserVersion.webSocketDebuggerUrl);
     await browserCdp.open();
 
-    const pageTarget = await fetchPageTarget(debugPort);
+    const pageTarget = await fetchPageTarget(debugPort, {
+      isAlive: () => isBrowserProcessAlive(browserProcess),
+    });
     page = connectCdp(pageTarget.webSocketDebuggerUrl);
     await page.open();
     await page.send('Runtime.enable');
@@ -558,7 +686,10 @@ async function runSettingsUiSmoke() {
       }
     }
     await viteServer.close();
-    await removeDirectoryWithRetries(userDataDir);
+    if (userDataDir) {
+      await delay(150);
+      await removeDirectoryWithRetries(userDataDir, { softOnFailure: true });
+    }
   }
 }
 
