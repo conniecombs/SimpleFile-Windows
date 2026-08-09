@@ -1,8 +1,6 @@
 <script lang="ts">
 import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   import { searchUi } from '../../app/searchUi.svelte';
-  import BreadcrumbTrail from '../breadcrumb/BreadcrumbTrail.svelte';
-  import type { BreadcrumbSegment } from '../breadcrumb/BreadcrumbTrail.svelte';
 
   type ToolbarCommand =
     | 'back'
@@ -46,21 +44,6 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   let hasFolderSelection = $derived.by(() => {
     const selectedPaths = new Set(activeSelection);
     return activeEntries.some((entry: any) => selectedPaths.has(entry.path) && entry.is_dir);
-  });
-
-  let pathSegments = $derived.by(() => {
-    if (!appState.currentPath) return [];
-    const parts = appState.currentPath.split(/[/\\]/).filter(Boolean);
-    let currentAccumulated = '';
-    return parts.map((part: string, index: number) => {
-      const isDrive = index === 0 && part.endsWith(':');
-      currentAccumulated += index === 0 ? (isDrive ? part + '\\' : part) : '\\' + part;
-      return {
-        label: part,
-        path: currentAccumulated,
-        current: index === parts.length - 1
-      } as BreadcrumbSegment;
-    });
   });
 
   const SEARCH_CANCEL_EVENT = 'simplefile:search-cancel';
@@ -161,27 +144,6 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
 </script>
 
 <header class="toolbar" role="toolbar" aria-label="Navigation and actions">
-  <div class="toolbar-nav" role="group" aria-label="Navigation">
-    <button class="toolbar-btn" id="btn-back" title="Go Back" aria-label="Go back" disabled={appState.historyIndex <= 0} onclick={(event) => emitToolbarCommand(event, 'back')}>
-      <span class="icon" aria-hidden="true">◀</span>
-    </button>
-    <button class="toolbar-btn" id="btn-forward" title="Go Forward" aria-label="Go forward" disabled={appState.historyIndex >= appState.history.length - 1} onclick={(event) => emitToolbarCommand(event, 'forward')}>
-      <span class="icon" aria-hidden="true">▶</span>
-    </button>
-    <button class="toolbar-btn" id="btn-up" title="Go Up" aria-label="Go to parent folder" onclick={(event) => emitToolbarCommand(event, 'up')}>
-      <span class="icon" aria-hidden="true">▲</span>
-    </button>
-    <button class="toolbar-btn" id="btn-refresh" title="Refresh" aria-label="Refresh current folder" onclick={(event) => emitToolbarCommand(event, 'refresh')}>
-      <span class="icon" aria-hidden="true">🔄</span>
-    </button>
-  </div>
-
-  <div class="path-bar" id="path-bar" role="navigation" aria-label="Breadcrumb navigation">
-    <BreadcrumbTrail segments={pathSegments} />
-    <input type="text" id="path-input" class="path-input" placeholder="Enter path..." autocomplete="off" />
-    <div class="path-autocomplete" id="path-autocomplete" role="listbox" aria-label="Path suggestions" style="display:none;"></div>
-  </div>
-
   <div class="search-bar" role="search">
     <input
       bind:this={searchInputElement}

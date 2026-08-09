@@ -61,8 +61,6 @@ assertNotContains('frontend/src/lib/app/core.ts', [
 ], 'stale core file manager behavior');
 
 assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
-  'disabled={appState.historyIndex <= 0}',
-  'disabled={appState.historyIndex >= appState.history.length - 1}',
   'aria-pressed={appState.isGridView}',
   "id=\"btn-new-file\"",
   "id=\"btn-rename\"",
@@ -77,6 +75,12 @@ assertContains('frontend/src/lib/components/layout-shell/ToolbarShell.svelte', [
 
 assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
   'class:dual-pane={appState.dualPaneEnabled}',
+  'id="btn-primary-back"',
+  'id="btn-secondary-back"',
+  "disabled={paneHistoryIndex('primary') <= 0}",
+  "disabled={paneHistoryIndex('secondary') <= 0}",
+  'id="primary-path-input"',
+  'id="secondary-path-input"',
   'class:visible={appState.showPreviewPane}',
   'aria-label="Close preview pane"',
 ], 'stateful pane visibility');

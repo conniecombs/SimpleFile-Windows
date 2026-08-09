@@ -5,10 +5,6 @@
   import SidebarShell from './SidebarShell.svelte';
   import ToolbarShell from './ToolbarShell.svelte';
   import CommandPalette from './CommandPalette.svelte';
-
-  import TabsBar from '../tabs/TabsBar.svelte';
-import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
-
   const SIDEBAR_MIN_WIDTH = 150;
   const SIDEBAR_MAX_WIDTH = 600;
 
@@ -104,12 +100,6 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
 ></button>
 
 <main class="main-content">
-  <div class="tab-bar" id="tab-bar" role="tablist" aria-label="Open folders">
-    <div class="tabs-container" id="tabs-container">
-      <TabsBar tabs={appState.tabs} activeTabId={appState.activeTabId} />
-    </div>
-  </div>
-
   <ToolbarShell />
   <ContentShell />
 

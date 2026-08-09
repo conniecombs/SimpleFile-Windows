@@ -5,6 +5,9 @@
   import FileListHeader from './FileListHeader.svelte';
   import FileList from '../file-list/FileList.svelte';
   import SearchResultsHeader from '../search-chrome/SearchResultsHeader.svelte';
+  import TabsBar from '../tabs/TabsBar.svelte';
+
+  type PaneId = 'primary' | 'secondary';
 
   const PANE_MIN_PERCENT = 20;
   const PANE_MAX_PERCENT = 80;
@@ -12,8 +15,9 @@
   let contentArea: HTMLDivElement | undefined = $state();
   let panePrimary: HTMLDivElement | undefined = $state();
   let paneSecondary: HTMLDivElement | undefined = $state();
+  let primaryPathInput: HTMLInputElement | undefined = $state();
   let secondaryPathInput: HTMLInputElement | undefined = $state();
-  let secondaryPathEditing = $state(false);
+  let editingPathPane: PaneId | null = $state(null);
   let paneResizing = $state(false);
   let panePercent = $state(50);
   let cleanupPaneResize: (() => void) | undefined;
@@ -25,19 +29,23 @@
     ),
   );
 
-  let secondaryPathSegments = $derived.by(() => {
-    if (!appState.secondaryPath) return [];
-    const parts = appState.secondaryPath.split(/[/\\]/).filter(Boolean);
+  function pathSegments(path: string) {
+    if (!path) return [];
+    const parts = path.split(/[/\\]/).filter(Boolean);
     let currentAccumulated = '';
     return parts.map((part: string, index: number) => {
       const isDrive = index === 0 && part.endsWith(':');
       currentAccumulated += index === 0 ? (isDrive ? `${part}\\` : part) : `\\${part}`;
       return {
+        current: index === parts.length - 1,
         label: part,
         path: currentAccumulated,
       };
     });
-  });
+  }
+
+  let primaryPathSegments = $derived.by(() => pathSegments(appState.currentPath));
+  let secondaryPathSegments = $derived.by(() => pathSegments(appState.secondaryPath));
 
   function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -91,35 +99,55 @@
     }
   }
 
-  function emitSecondaryCommand(event: Event, command: string, path = '') {
-    event.currentTarget?.dispatchEvent(new CustomEvent('simplefile:secondary-pane-command', {
+  function panePath(pane: PaneId) {
+    return pane === 'secondary' ? appState.secondaryPath : appState.currentPath;
+  }
+
+  function paneHistoryIndex(pane: PaneId) {
+    return pane === 'secondary' ? appState.secondaryHistoryIndex : appState.historyIndex;
+  }
+
+  function paneHistoryLength(pane: PaneId) {
+    return pane === 'secondary' ? appState.secondaryHistory.length : appState.history.length;
+  }
+
+  function inputForPane(pane: PaneId) {
+    return pane === 'secondary' ? secondaryPathInput : primaryPathInput;
+  }
+
+  function emitPaneCommand(event: Event, pane: PaneId, command: string, path = '') {
+    event.currentTarget?.dispatchEvent(new CustomEvent('simplefile:pane-command', {
       bubbles: true,
-      detail: { command, path },
+      detail: { command, pane, path },
     }));
   }
 
-  function beginSecondaryPathEdit(event?: Event) {
+  function beginPanePathEdit(event: Event | undefined, pane: PaneId) {
     event?.preventDefault();
-    secondaryPathEditing = true;
+    editingPathPane = pane;
     requestAnimationFrame(() => {
-      if (!secondaryPathInput) return;
-      secondaryPathInput.value = appState.secondaryPath || '';
-      secondaryPathInput.focus();
-      secondaryPathInput.select();
+      const input = inputForPane(pane);
+      if (!input) return;
+      input.value = panePath(pane) || '';
+      input.focus();
+      input.select();
     });
   }
 
-  function endSecondaryPathEdit(resetValue = false) {
-    if (resetValue && secondaryPathInput) {
-      secondaryPathInput.value = appState.secondaryPath || '';
+  function endPanePathEdit(pane: PaneId, resetValue = false) {
+    const input = inputForPane(pane);
+    if (resetValue && input) {
+      input.value = panePath(pane) || '';
     }
-    secondaryPathEditing = false;
+    if (editingPathPane === pane) {
+      editingPathPane = null;
+    }
   }
 
-  function handleSecondaryPathKeydown(event: KeyboardEvent) {
+  function handlePanePathKeydown(event: KeyboardEvent, pane: PaneId) {
     if (event.key === 'Escape') {
       event.preventDefault();
-      endSecondaryPathEdit(true);
+      endPanePathEdit(pane, true);
       return;
     }
 
@@ -128,8 +156,8 @@
     const path = target.value.trim();
     if (!path) return;
     event.preventDefault();
-    emitSecondaryCommand(event, 'navigate', path);
-    endSecondaryPathEdit();
+    emitPaneCommand(event, pane, 'navigate', path);
+    endPanePathEdit(pane);
   }
 
   function beginPaneResize(event: MouseEvent) {
@@ -201,6 +229,69 @@
       }
     }}
   >
+    <div class="pane-tab-bar" id="primary-tab-bar" role="tablist" aria-label="Left pane tabs">
+      <div class="tabs-container" id="primary-tabs-container">
+        <TabsBar tabs={appState.tabs} activeTabId={appState.activeTabId} pane="primary" />
+      </div>
+    </div>
+    <div class="pane-header" id="primary-pane-header">
+      <div class="pane-nav-buttons">
+        <button class="toolbar-btn pane-nav-btn" id="btn-primary-back" title="Go Back" aria-label="Go back in left pane" disabled={paneHistoryIndex('primary') <= 0} onclick={(event) => emitPaneCommand(event, 'primary', 'back')}>
+          <span class="icon" aria-hidden="true">◀</span>
+        </button>
+        <button class="toolbar-btn pane-nav-btn" id="btn-primary-forward" title="Go Forward" aria-label="Go forward in left pane" disabled={paneHistoryIndex('primary') >= paneHistoryLength('primary') - 1} onclick={(event) => emitPaneCommand(event, 'primary', 'forward')}>
+          <span class="icon" aria-hidden="true">▶</span>
+        </button>
+        <button class="toolbar-btn pane-nav-btn" id="btn-primary-up" title="Go Up" aria-label="Go to parent folder in left pane" disabled={!panePath('primary')} onclick={(event) => emitPaneCommand(event, 'primary', 'up')}>
+          <span class="icon" aria-hidden="true">▲</span>
+        </button>
+      </div>
+      <div
+        class:editing={editingPathPane === 'primary'}
+        class="pane-path-bar"
+        id="primary-path-bar"
+        role="navigation"
+        aria-label="Primary path"
+      >
+        <div class="breadcrumb" id="primary-breadcrumb" role="list">
+          {#each primaryPathSegments as segment, index}
+            <span role="listitem">
+              <button
+                class={`breadcrumb-segment${segment.current ? ' current' : ''}`}
+                type="button"
+                aria-current={segment.current ? 'page' : 'false'}
+                onclick={(event) => emitPaneCommand(event, 'primary', 'navigate', segment.path)}
+              >
+                {segment.label}
+              </button>
+            </span>
+            {#if index < primaryPathSegments.length - 1}
+              <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            {/if}
+          {/each}
+        </div>
+        <button
+          class="pane-path-edit-btn"
+          id="btn-primary-edit-path"
+          type="button"
+          title="Edit left pane path"
+          aria-label="Edit left pane path"
+          onclick={(event) => beginPanePathEdit(event, 'primary')}
+        >
+          <span class="icon" aria-hidden="true">&#9998;</span>
+        </button>
+        <input
+          bind:this={primaryPathInput}
+          type="text"
+          id="primary-path-input"
+          class="path-input"
+          placeholder="Enter path..."
+          value={appState.currentPath}
+          onblur={() => endPanePathEdit('primary')}
+          onkeydown={(event) => handlePanePathKeydown(event, 'primary')}
+        />
+      </div>
+    </div>
     <div class="file-container">
       <FileListHeader pane="primary" />
       {#if appState.searchMode}
@@ -259,20 +350,25 @@
       }
     }}
   >
+    <div class="pane-tab-bar" id="secondary-tab-bar" role="tablist" aria-label="Right pane tabs">
+      <div class="tabs-container" id="secondary-tabs-container">
+        <TabsBar tabs={appState.secondaryTabs || []} activeTabId={appState.secondaryActiveTabId} pane="secondary" />
+      </div>
+    </div>
     <div class="pane-header">
       <div class="pane-nav-buttons">
-        <button class="toolbar-btn pane-nav-btn" id="btn-secondary-back" title="Go Back" aria-label="Go back in secondary pane" disabled={appState.secondaryHistoryIndex <= 0} onclick={(event) => emitSecondaryCommand(event, 'back')}>
+        <button class="toolbar-btn pane-nav-btn" id="btn-secondary-back" title="Go Back" aria-label="Go back in right pane" disabled={paneHistoryIndex('secondary') <= 0} onclick={(event) => emitPaneCommand(event, 'secondary', 'back')}>
           <span class="icon" aria-hidden="true">◀</span>
         </button>
-        <button class="toolbar-btn pane-nav-btn" id="btn-secondary-forward" title="Go Forward" aria-label="Go forward in secondary pane" disabled={appState.secondaryHistoryIndex >= appState.secondaryHistory.length - 1} onclick={(event) => emitSecondaryCommand(event, 'forward')}>
+        <button class="toolbar-btn pane-nav-btn" id="btn-secondary-forward" title="Go Forward" aria-label="Go forward in right pane" disabled={paneHistoryIndex('secondary') >= paneHistoryLength('secondary') - 1} onclick={(event) => emitPaneCommand(event, 'secondary', 'forward')}>
           <span class="icon" aria-hidden="true">▶</span>
         </button>
-        <button class="toolbar-btn pane-nav-btn" id="btn-secondary-up" title="Go Up" aria-label="Go to parent folder in secondary pane" disabled={!appState.secondaryPath} onclick={(event) => emitSecondaryCommand(event, 'up')}>
+        <button class="toolbar-btn pane-nav-btn" id="btn-secondary-up" title="Go Up" aria-label="Go to parent folder in right pane" disabled={!panePath('secondary')} onclick={(event) => emitPaneCommand(event, 'secondary', 'up')}>
           <span class="icon" aria-hidden="true">▲</span>
         </button>
       </div>
       <div
-        class:editing={secondaryPathEditing}
+        class:editing={editingPathPane === 'secondary'}
         class="pane-path-bar"
         id="secondary-path-bar"
         role="navigation"
@@ -281,7 +377,12 @@
         <div class="breadcrumb" id="secondary-breadcrumb" role="list">
           {#each secondaryPathSegments as segment, index}
             <span role="listitem">
-              <button class="breadcrumb-segment" type="button" onclick={(event) => emitSecondaryCommand(event, 'navigate', segment.path)}>
+              <button
+                class={`breadcrumb-segment${segment.current ? ' current' : ''}`}
+                type="button"
+                aria-current={segment.current ? 'page' : 'false'}
+                onclick={(event) => emitPaneCommand(event, 'secondary', 'navigate', segment.path)}
+              >
                 {segment.label}
               </button>
             </span>
@@ -294,9 +395,9 @@
           class="pane-path-edit-btn"
           id="btn-secondary-edit-path"
           type="button"
-          title="Edit secondary path"
-          aria-label="Edit secondary path"
-          onclick={beginSecondaryPathEdit}
+          title="Edit right pane path"
+          aria-label="Edit right pane path"
+          onclick={(event) => beginPanePathEdit(event, 'secondary')}
         >
           <span class="icon" aria-hidden="true">&#9998;</span>
         </button>
@@ -307,8 +408,8 @@
           class="path-input"
           placeholder="Enter path..."
           value={appState.secondaryPath}
-          onblur={() => endSecondaryPathEdit()}
-          onkeydown={handleSecondaryPathKeydown}
+          onblur={() => endPanePathEdit('secondary')}
+          onkeydown={(event) => handlePanePathKeydown(event, 'secondary')}
         />
       </div>
     </div>

@@ -155,7 +155,7 @@ assertCount('frontend/src/vanilla-js/runtime/state.svelte.ts', /fileTags:\s*\{\}
 
 assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
   'id="btn-secondary-edit-path"',
-  'aria-label="Edit secondary path"',
+  'aria-label="Edit right pane path"',
   '&#9998;',
 ], 'secondary path edit button');
 

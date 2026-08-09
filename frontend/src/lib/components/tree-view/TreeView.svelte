@@ -15,8 +15,10 @@
   };
 
   let {
+    pane = 'primary',
     roots = [],
   }: {
+    pane?: 'primary' | 'secondary';
     roots?: TreeViewNode[];
   } = $props();
 
@@ -45,6 +47,7 @@
         hasChildren: node.hasChildren,
         isDir: true,
         isExpanded: node.isExpanded,
+        pane,
         path: node.path,
         ...detail,
       },

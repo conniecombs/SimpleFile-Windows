@@ -35,10 +35,11 @@ function assertNotContains(file, values, label = 'retired value') {
   }
 }
 
-assertContains('frontend/src/lib/components/layout-shell/AppShell.svelte', [
+assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
   "import TabsBar from '../tabs/TabsBar.svelte';",
-  '<TabsBar tabs={appState.tabs} activeTabId={appState.activeTabId} />',
-], 'live tabs bar');
+  '<TabsBar tabs={appState.tabs} activeTabId={appState.activeTabId} pane="primary" />',
+  '<TabsBar tabs={appState.secondaryTabs || []} activeTabId={appState.secondaryActiveTabId} pane="secondary" />',
+], 'live pane-local tabs bars');
 
 assertContains('frontend/src/lib/components/layout-shell/CommandPalette.svelte', [
   'simplefile:toolbar-command',

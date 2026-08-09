@@ -7,9 +7,11 @@
 
   let {
     activeTabId = null,
+    pane = 'primary',
     tabs = [],
   }: {
     activeTabId?: string | null;
+    pane?: 'primary' | 'secondary';
     tabs?: TabView[];
   } = $props();
 
@@ -29,7 +31,10 @@
   function emitTabEvent(type: string, event: MouseEvent | KeyboardEvent, detail = {}) {
     event.currentTarget?.dispatchEvent(new CustomEvent(type, {
       bubbles: true,
-      detail,
+      detail: {
+        pane,
+        ...detail,
+      },
     }));
   }
 
@@ -87,6 +92,7 @@
   <div
     class={`tab${isActive(tab) ? ' active' : ''}`}
     data-tab-id={tab.id}
+    data-tab-pane={pane}
     role="tab"
     aria-selected={isActive(tab)}
     tabindex={isActive(tab) ? 0 : -1}
@@ -100,6 +106,7 @@
       type="button"
       class="tab-close"
       data-tab-id={tab.id}
+      data-tab-pane={pane}
       title="Close Tab"
       aria-label="Close tab"
       onclick={(event) => handleCloseClick(event, tab)}

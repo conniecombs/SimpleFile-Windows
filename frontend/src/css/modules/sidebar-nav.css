@@ -13,6 +13,38 @@
     flex-shrink: 0; /* Prevent collapsing */
 }
 
+.sidebar-target-switch {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+}
+
+.sidebar-target-switch button {
+    height: 28px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.sidebar-target-switch button:hover,
+.sidebar-target-switch button:focus-visible {
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
+}
+
+.sidebar-target-switch button.active {
+    background: var(--bg-selected);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
 .quick-access-section {
     flex: 1;
     min-height: 0;

@@ -48,6 +48,8 @@ const initialState = {
   folderSizes: new Map(),
   tabs: [],
   activeTabId: null,
+  secondaryTabs: [],
+  secondaryActiveTabId: null,
   bookmarks: [],
   recentLocations: [],
   drives: [],
@@ -129,6 +131,7 @@ function cloneInitialState(stateToClone: SimpleFileAppState): SimpleFileAppState
       columnWidths: { ...stateToClone.settings.columnWidths },
     },
     tabs: [...stateToClone.tabs],
+    secondaryTabs: [...stateToClone.secondaryTabs],
     bookmarks: [...stateToClone.bookmarks],
     recentLocations: [...stateToClone.recentLocations],
     drives: [...stateToClone.drives],
@@ -286,6 +289,8 @@ export interface WorkspaceLayoutState {
   secondaryHistory: PathString[];
   secondaryHistoryIndex: number;
   secondaryPath: PathString;
+  secondaryActiveTabId: string | null;
+  secondaryTabs: FileTab[];
   tabs: FileTab[];
   visibleColumns: ColumnId[];
 }
@@ -350,6 +355,7 @@ function readWorkspaceLayout(): WorkspaceLayoutState | null {
 
   const parsed = JSON.parse(saved) as Partial<WorkspaceLayoutState>;
   const tabs = sanitizeTabs(parsed.tabs);
+  const secondaryTabs = sanitizeTabs(parsed.secondaryTabs);
   const secondaryHistory = sanitizeHistory(parsed.secondaryHistory);
   const secondaryPath = isPathString(parsed.secondaryPath) ? parsed.secondaryPath : '';
   const primaryPath = isPathString(parsed.primaryPath) ? parsed.primaryPath : '';
@@ -357,6 +363,10 @@ function readWorkspaceLayout(): WorkspaceLayoutState | null {
     && tabs.some((tab) => tab.id === parsed.activeTabId)
     ? parsed.activeTabId
     : tabs[0]?.id ?? null;
+  const secondaryActiveTabId = typeof parsed.secondaryActiveTabId === 'string'
+    && secondaryTabs.some((tab) => tab.id === parsed.secondaryActiveTabId)
+    ? parsed.secondaryActiveTabId
+    : secondaryTabs[0]?.id ?? null;
 
   return {
     activePane: parsed.activePane === 'secondary' ? 'secondary' : 'primary',
@@ -370,6 +380,8 @@ function readWorkspaceLayout(): WorkspaceLayoutState | null {
     secondaryHistory,
     secondaryHistoryIndex: sanitizeHistoryIndex(parsed.secondaryHistoryIndex, secondaryHistory),
     secondaryPath,
+    secondaryActiveTabId,
+    secondaryTabs,
     tabs,
     visibleColumns: sanitizeVisibleColumns(parsed.visibleColumns, state.settings.visibleColumns),
   };
@@ -388,6 +400,11 @@ export function currentWorkspaceLayout(): WorkspaceLayoutState {
     secondaryHistory: [...state.secondaryHistory],
     secondaryHistoryIndex: state.secondaryHistoryIndex,
     secondaryPath: state.secondaryPath,
+    secondaryActiveTabId: state.secondaryActiveTabId,
+    secondaryTabs: state.secondaryTabs.map((tab) => ({
+      ...tab,
+      history: [...(tab.history || [])],
+    })),
     tabs: state.tabs.map((tab) => ({
       ...tab,
       history: [...(tab.history || [])],
@@ -412,6 +429,8 @@ export function loadWorkspaceLayout() {
 
     state.tabs = layout.tabs;
     state.activeTabId = layout.activeTabId;
+    state.secondaryTabs = layout.secondaryTabs;
+    state.secondaryActiveTabId = layout.secondaryActiveTabId;
     state.dualPaneEnabled = layout.dualPaneEnabled;
     state.secondaryPath = layout.secondaryPath;
     state.secondaryHistory = layout.secondaryHistory;

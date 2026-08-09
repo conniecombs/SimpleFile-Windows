@@ -13,6 +13,12 @@ import { state as globalState } from '../../../vanilla-js/runtime/state.svelte';
     action: () => void;
   };
 
+  function currentPanePath() {
+    return globalState.activePane === 'secondary' && globalState.dualPaneEnabled
+      ? globalState.secondaryPath || globalState.currentPath || '.'
+      : globalState.currentPath || '.';
+  }
+
   function dispatchToolbarCommand(command: string) {
     document.dispatchEvent(new CustomEvent('simplefile:toolbar-command', {
       detail: { command },
@@ -52,7 +58,7 @@ import { state as globalState } from '../../../vanilla-js/runtime/state.svelte';
       label: 'Git: Pull (Current Directory)', 
       action: async () => {
         try {
-          const currentDir = globalState.tabs.find((t: any) => t.id === globalState.activeTabId)?.path || '.';
+          const currentDir = currentPanePath();
           const out = await gitPull(currentDir);
           const toast = new CustomEvent('simplefile:toast', { detail: { message: `Git Pull Success:\n${out}`, type: 'success' }});
           document.dispatchEvent(toast);
@@ -67,7 +73,7 @@ import { state as globalState } from '../../../vanilla-js/runtime/state.svelte';
       label: 'Git: Push (Current Directory)', 
       action: async () => {
         try {
-          const currentDir = globalState.tabs.find((t: any) => t.id === globalState.activeTabId)?.path || '.';
+          const currentDir = currentPanePath();
           const out = await gitPush(currentDir);
           const toast = new CustomEvent('simplefile:toast', { detail: { message: `Git Push Success:\n${out}`, type: 'success' }});
           document.dispatchEvent(toast);

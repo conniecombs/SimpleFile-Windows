@@ -8,8 +8,10 @@
 
   let {
     locations = [],
+    pane = 'primary',
   }: {
     locations?: QuickAccessItem[];
+    pane?: 'primary' | 'secondary';
   } = $props();
 </script>
 
@@ -22,9 +24,9 @@
     tabindex="0"
     onclick={(e) => {
       if (location.action) {
-        e.currentTarget.dispatchEvent(new CustomEvent('simplefile:toolbar-command', { bubbles: true, detail: { command: location.action } }));
+        e.currentTarget.dispatchEvent(new CustomEvent('simplefile:toolbar-command', { bubbles: true, detail: { command: location.action, pane } }));
       } else if (location.path) {
-        e.currentTarget.dispatchEvent(new CustomEvent('simplefile:tree-node-open', { bubbles: true, detail: { isDir: true, path: location.path } }));
+        e.currentTarget.dispatchEvent(new CustomEvent('simplefile:tree-node-open', { bubbles: true, detail: { isDir: true, pane, path: location.path } }));
       }
     }}
     onkeydown={(e) => {

@@ -811,23 +811,50 @@ const defaultColorLabels = [
     updateStatusBar();
   }
 
-  export function syncActiveTab() {
-    if (!appState.currentPath) return;
+  export function normalizePane(pane: PaneId = appState.activePane as PaneId) {
+    return pane === 'secondary' && appState.dualPaneEnabled ? 'secondary' : 'primary';
+  }
 
-    const activeTabId = appState.activeTabId || `tab-${Date.now()}`;
+  export function tabsForPane(pane: PaneId = appState.activePane as PaneId) {
+    return pane === 'secondary' ? (appState.secondaryTabs || []) : appState.tabs;
+  }
+
+  export function activeTabIdForPane(pane: PaneId = appState.activePane as PaneId) {
+    return pane === 'secondary' ? appState.secondaryActiveTabId : appState.activeTabId;
+  }
+
+  function setTabsForPane(pane: PaneId, tabs: FileTab[]) {
+    if (pane === 'secondary') appState.secondaryTabs = tabs;
+    else appState.tabs = tabs;
+  }
+
+  function setActiveTabIdForPane(pane: PaneId, tabId: string | null) {
+    if (pane === 'secondary') appState.secondaryActiveTabId = tabId;
+    else appState.activeTabId = tabId;
+  }
+
+  export function syncActiveTab(pane: PaneId = 'primary') {
+    const targetPane = pane === 'secondary' ? 'secondary' : 'primary';
+    const currentPath = pathForPane(targetPane);
+    if (!currentPath) return;
+
+    const activeTabId = activeTabIdForPane(targetPane) || `tab-${targetPane}-${Date.now()}`;
+    const history = targetPane === 'secondary' ? appState.secondaryHistory : appState.history;
+    const historyIndex = targetPane === 'secondary' ? appState.secondaryHistoryIndex : appState.historyIndex;
     const tab: FileTab = {
       id: activeTabId,
-      path: appState.currentPath,
-      title: basename(appState.currentPath),
-      history: [...appState.history],
-      historyIndex: appState.historyIndex,
+      path: currentPath,
+      title: basename(currentPath),
+      history: [...history],
+      historyIndex,
     };
 
-    const existingIndex = appState.tabs.findIndex((candidate: FileTab) => candidate.id === activeTabId);
-    appState.tabs = existingIndex >= 0
-      ? appState.tabs.map((candidate: FileTab) => candidate.id === activeTabId ? tab : candidate)
-      : [...appState.tabs, tab];
-    appState.activeTabId = activeTabId;
+    const tabs = tabsForPane(targetPane);
+    const existingIndex = tabs.findIndex((candidate: FileTab) => candidate.id === activeTabId);
+    setTabsForPane(targetPane, existingIndex >= 0
+      ? tabs.map((candidate: FileTab) => candidate.id === activeTabId ? tab : candidate)
+      : [...tabs, tab]);
+    setActiveTabIdForPane(targetPane, activeTabId);
     saveTabs();
   }
 
@@ -841,57 +868,77 @@ const defaultColorLabels = [
     };
   }
 
-  export async function openNewTab(path: PathString = appState.currentPath || appState.homePath) {
-    if (!path) return;
-    const tab = createTabState(path);
-    appState.tabs = [...appState.tabs, tab];
-    appState.activeTabId = tab.id;
-    appState.history = [...tab.history];
-    appState.historyIndex = tab.historyIndex;
+  export async function openNewTab(path?: PathString, pane: PaneId = appState.activePane as PaneId) {
+    const targetPane = normalizePane(pane);
+    const targetPath = path || pathForPane(targetPane) || appState.homePath || appState.currentPath;
+    if (!targetPath) return;
+    const tab = createTabState(targetPath);
+    setTabsForPane(targetPane, [...tabsForPane(targetPane), tab]);
+    setActiveTabIdForPane(targetPane, tab.id);
+    if (targetPane === 'secondary') {
+      appState.secondaryHistory = [...tab.history];
+      appState.secondaryHistoryIndex = tab.historyIndex;
+    } else {
+      appState.history = [...tab.history];
+      appState.historyIndex = tab.historyIndex;
+    }
     saveTabs();
-    await loadDirectory(path, 'replace-current');
+    if (targetPane === 'secondary') await loadSecondaryDirectory(targetPath, 'replace-current');
+    else await loadDirectory(targetPath, 'replace-current');
     window.setTimeout(() => {
-      document.querySelector<HTMLElement>(`[data-tab-id="${tab.id}"]`)?.focus();
+      document.querySelector<HTMLElement>(`[data-tab-pane="${targetPane}"][data-tab-id="${tab.id}"]`)?.focus();
     }, 0);
   }
 
-  export async function switchToTab(tabId: string) {
-    const tab = appState.tabs.find((candidate: { id: string }) => candidate.id === tabId);
+  export async function switchToTab(tabId: string, pane: PaneId = appState.activePane as PaneId) {
+    const targetPane = normalizePane(pane);
+    const tab = tabsForPane(targetPane).find((candidate: { id: string }) => candidate.id === tabId);
     if (!tab) return;
-    appState.activeTabId = tab.id;
-    appState.history = [...(tab.history || [tab.path])];
-    appState.historyIndex = typeof tab.historyIndex === 'number' ? tab.historyIndex : appState.history.length - 1;
-    await loadDirectory(tab.path, 'none');
+    setActiveTabIdForPane(targetPane, tab.id);
+    const history = [...(tab.history || [tab.path])];
+    const historyIndex = typeof tab.historyIndex === 'number' ? tab.historyIndex : history.length - 1;
+    if (targetPane === 'secondary') {
+      appState.secondaryHistory = history;
+      appState.secondaryHistoryIndex = historyIndex;
+      await loadSecondaryDirectory(tab.path, 'none');
+    } else {
+      appState.history = history;
+      appState.historyIndex = historyIndex;
+      await loadDirectory(tab.path, 'none');
+    }
   }
 
-  export async function closeTab(tabId: string) {
-    const closingIndex = appState.tabs.findIndex((tab: { id: string }) => tab.id === tabId);
+  export async function closeTab(tabId: string, pane: PaneId = appState.activePane as PaneId) {
+    const targetPane = normalizePane(pane);
+    const tabs = tabsForPane(targetPane);
+    const closingIndex = tabs.findIndex((tab: { id: string }) => tab.id === tabId);
     if (closingIndex < 0) return;
 
-    const remainingTabs = appState.tabs.filter((tab: { id: string }) => tab.id !== tabId);
+    const remainingTabs = tabs.filter((tab: { id: string }) => tab.id !== tabId);
     if (remainingTabs.length === 0) {
-      appState.tabs = [];
-      await openNewTab(appState.homePath || appState.currentPath);
+      setTabsForPane(targetPane, []);
+      await openNewTab(appState.homePath || pathForPane(targetPane) || appState.currentPath, targetPane);
       return;
     }
 
-    appState.tabs = remainingTabs;
-    if (appState.activeTabId !== tabId) {
+    setTabsForPane(targetPane, remainingTabs);
+    if (activeTabIdForPane(targetPane) !== tabId) {
       saveTabs();
       return;
     }
 
     const nextTab = remainingTabs[Math.min(closingIndex, remainingTabs.length - 1)];
     saveTabs();
-    await switchToTab(nextTab.id);
+    await switchToTab(nextTab.id, targetPane);
   }
 
-  export function moveTabFocus(tabId: string, direction: number) {
-    const tabs = appState.tabs;
+  export function moveTabFocus(tabId: string, direction: number, pane: PaneId = appState.activePane as PaneId) {
+    const targetPane = normalizePane(pane);
+    const tabs = tabsForPane(targetPane);
     const index = tabs.findIndex((tab: { id: string }) => tab.id === tabId);
     if (index < 0 || tabs.length === 0) return;
     const next = tabs[(index + direction + tabs.length) % tabs.length];
-    document.querySelector<HTMLElement>(`[data-tab-id="${next.id}"]`)?.focus();
+    document.querySelector<HTMLElement>(`[data-tab-pane="${targetPane}"][data-tab-id="${next.id}"]`)?.focus();
   }
 
   export function recordHistory(path: PathString, mode: HistoryMode) {
@@ -1735,7 +1782,7 @@ const defaultColorLabels = [
       applyEntryFilters();
       startDirectoryWatch(listing.path);
       addRecentLocation(listing.path);
-      syncActiveTab();
+      syncActiveTab('primary');
       void updatePreviewPane();
     } catch (e) {
       const drive = findDriveForPath(path);
@@ -1794,6 +1841,7 @@ const defaultColorLabels = [
       if (activate) appState.activePane = 'secondary';
       recordSecondaryHistory(listing.path, historyMode);
       applySecondaryEntryFilters();
+      syncActiveTab('secondary');
     } catch (error) {
       const drive = findDriveForPath(path);
       if (drive && String(drive.drive_type || '').toLowerCase() === 'network') {
@@ -1830,6 +1878,15 @@ const defaultColorLabels = [
     if (nextIndex < 0 || nextIndex >= appState.secondaryHistory.length) return;
     appState.secondaryHistoryIndex = nextIndex;
     await loadSecondaryDirectory(appState.secondaryHistory[nextIndex], 'none');
+  }
+
+  export async function loadDirectoryForPane(
+    path: PathString,
+    pane: PaneId = appState.activePane as PaneId,
+    historyMode: HistoryMode = 'push',
+  ) {
+    if (normalizePane(pane) === 'secondary') await loadSecondaryDirectory(path, historyMode);
+    else await loadDirectory(path, historyMode);
   }
 
   export async function refreshTransferSurfaces() {
@@ -1891,10 +1948,9 @@ const defaultColorLabels = [
     if (nextIndex < 0 || nextIndex >= appState.history.length) return;
     appState.historyIndex = nextIndex;
     await loadDirectory(appState.history[nextIndex], 'none');
-    syncActiveTab();
   }
 
-  export async function navigateSpecial(command: string) {
+  export async function navigateSpecial(command: string, pane: PaneId = appState.activePane as PaneId) {
     const specialFolders: Record<string, string> = {
       navigateDesktop: 'Desktop',
       navigateDocuments: 'Documents',
@@ -1903,13 +1959,13 @@ const defaultColorLabels = [
     };
 
     if (command === 'navigateHome') {
-      await loadDirectory(appState.homePath);
+      await loadDirectoryForPane(appState.homePath, pane);
       return;
     }
 
     const folder = specialFolders[command];
     if (folder) {
-      await loadDirectory(joinPath(appState.homePath, folder));
+      await loadDirectoryForPane(joinPath(appState.homePath, folder), pane);
     }
   }
 
@@ -2573,8 +2629,9 @@ const defaultColorLabels = [
     }
   }
 
-  export async function openEntryPath(path: PathString, isDirectory?: boolean, pane: PaneId = 'primary') {
-    const entry = pane === 'secondary' ? findSecondaryEntry(path) : findEntry(path);
+  export async function openEntryPath(path: PathString, isDirectory?: boolean, pane: PaneId = appState.activePane as PaneId) {
+    const targetPane = normalizePane(pane);
+    const entry = targetPane === 'secondary' ? findSecondaryEntry(path) : findEntry(path);
     let shouldNavigate = isDirectory ?? entry?.is_dir;
 
     // Drive roots from the tree are always directories.
@@ -2582,7 +2639,7 @@ const defaultColorLabels = [
     if (drive && pathsEqual(drive.path, path)) {
       shouldNavigate = true;
       if (String(drive.drive_type || '').toLowerCase() === 'network') {
-        const handled = await offerNetworkDriveReconnect(drive, path, pane);
+        const handled = await offerNetworkDriveReconnect(drive, path, targetPane);
         if (handled) return;
       }
     }
@@ -2600,8 +2657,7 @@ const defaultColorLabels = [
     }
 
     if (shouldNavigate) {
-      if (pane === 'secondary') await loadSecondaryDirectory(path);
-      else await loadDirectory(path);
+      await loadDirectoryForPane(path, targetPane);
       return;
     }
 

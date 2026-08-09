@@ -72,10 +72,10 @@ assertContains('frontend/src/lib/app/setup.ts', [
   'activatePane',
   'copyOrMoveToOtherPane',
   "document.addEventListener('simplefile:activate-pane', handleActivatePane);",
-  'const handleSecondaryPaneCommand',
+  'const handlePaneCommand',
   'const handleFileChange',
-  "document.addEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
-  "document.removeEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);",
+  "document.addEventListener('simplefile:pane-command', handlePaneCommand);",
+  "document.removeEventListener('simplefile:pane-command', handlePaneCommand);",
   'onFileChange(handleFileChange)',
   "window.addEventListener('pagehide', handlePageHideFlush)",
   "window.addEventListener('beforeunload', handlePageHideFlush)",
@@ -92,32 +92,75 @@ assertContains('frontend/src/vanilla-js/runtime/state.svelte.ts', [
   'clearLegacyTabKeys',
   'LEGACY_TABS_KEY',
   'dualPaneEnabled',
+  'secondaryActiveTabId',
   'secondaryPath',
+  'secondaryTabs',
   'previewVisible',
   'visibleColumns',
   'columnWidths',
 ], 'Stage 11 persisted workspace layout state');
 
 assertContains('frontend/src/lib/components/layout-shell/ContentShell.svelte', [
+  'primaryPathSegments',
   'secondaryPathSegments',
-  'secondaryPathEditing',
-  'beginSecondaryPathEdit',
-  'simplefile:secondary-pane-command',
-  'handleSecondaryPathKeydown',
-  'class:editing={secondaryPathEditing}',
+  'editingPathPane',
+  'beginPanePathEdit',
+  'simplefile:pane-command',
+  'handlePanePathKeydown',
+  'id="primary-tab-bar"',
+  'id="secondary-tab-bar"',
+  'id="primary-path-bar"',
+  'id="primary-path-input"',
+  'class:editing={editingPathPane === \'primary\'}',
+  'class:editing={editingPathPane === \'secondary\'}',
   'bind:this={secondaryPathInput}',
+  'id="btn-primary-edit-path"',
   'id="btn-secondary-edit-path"',
-  'disabled={appState.secondaryHistoryIndex <= 0}',
-  'disabled={appState.secondaryHistoryIndex >= appState.secondaryHistory.length - 1}',
+  "disabled={paneHistoryIndex('primary') <= 0}",
+  "disabled={paneHistoryIndex('secondary') <= 0}",
+  'pane="primary"',
+  'pane="secondary"',
+  'appState.secondaryTabs',
   'id="secondary-breadcrumb"',
   'id="secondary-path-input"',
-  'onkeydown={handleSecondaryPathKeydown}',
-], 'Stage 11 secondary pane controls');
+  "onkeydown={(event) => handlePanePathKeydown(event, 'secondary')}",
+], 'Stage 11 pane-local tab and path controls');
 
 assertContains('frontend/src/css/modules/dual-pane.css', [
   '.pane-path-edit-btn',
   '.pane-path-bar.editing .pane-path-edit-btn',
-], 'Stage 11 secondary path edit styles');
+], 'Stage 11 pane path edit styles');
+
+assertContains('frontend/src/css/modules/tabs.css', [
+  '.pane-tab-bar',
+], 'Stage 11 pane tab bar styles');
+
+assertContains('frontend/src/lib/components/tabs/TabsBar.svelte', [
+  "pane = 'primary'",
+  'data-tab-pane={pane}',
+  'detail: {',
+  'pane,',
+], 'Stage 11 pane-aware tab events');
+
+assertContains('frontend/src/lib/components/layout-shell/SidebarShell.svelte', [
+  'sidebarTargetPane',
+  'sidebar-target-switch',
+  "setSidebarTargetPane('primary')",
+  "setSidebarTargetPane('secondary')",
+  'pane={sidebarTargetPane}',
+], 'Stage 11 sidebar pane target controls');
+
+assertContains('frontend/src/lib/components/tree-view/TreeView.svelte', [
+  "pane = 'primary'",
+  'pane?: \'primary\' | \'secondary\'',
+  'pane,',
+], 'Stage 11 tree pane target events');
+
+assertContains('frontend/src/lib/components/places/QuickAccessList.svelte', [
+  "pane = 'primary'",
+  'command: location.action, pane',
+  'isDir: true, pane, path: location.path',
+], 'Stage 11 quick access pane target events');
 
 assertContains('frontend/src/lib/components/file-list/FileListItems.svelte', [
   "pane = 'primary'",

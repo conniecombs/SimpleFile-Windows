@@ -3,13 +3,15 @@
    Tab bar, individual tabs, close buttons, and the new-tab button.
    ============================================================================ */
 
-.tab-bar {
+.tab-bar,
+.pane-tab-bar {
     display: flex;
     align-items: center;
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--border-color);
     height: var(--tab-height);
     padding: 0 4px;
+    flex-shrink: 0;
 }
 
 .tabs-container {

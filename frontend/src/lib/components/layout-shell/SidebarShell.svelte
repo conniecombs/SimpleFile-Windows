@@ -44,6 +44,7 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   import QuickAccessList from '../places/QuickAccessList.svelte';
   import SmartFoldersList from '../places/SmartFoldersList.svelte';
 
+  type PaneId = 'primary' | 'secondary';
 
   function driveIcon(drive: Pick<DriveInfo, 'drive_type'>) {
     switch ((drive.drive_type || '').toLowerCase()) {
@@ -98,16 +99,32 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
     ].filter(Boolean).join('\n');
   }
 
+  let sidebarTargetPane = $derived<PaneId>(
+    appState.dualPaneEnabled && appState.activePane === 'secondary' ? 'secondary' : 'primary',
+  );
+
+  function panePath() {
+    return sidebarTargetPane === 'secondary' ? appState.secondaryPath : appState.currentPath;
+  }
+
+  function setSidebarTargetPane(pane: PaneId) {
+    document.dispatchEvent(new CustomEvent('simplefile:activate-pane', {
+      bubbles: true,
+      detail: { pane },
+    }));
+  }
+
   function toTreeNode(node: any): TreeViewNode {
     const path = node.path;
     const children = appState.treeData?.get(path) || [];
     const isExpanded = appState.treeExpanded?.has(path) || false;
+    const activePath = panePath();
 
     return {
       children: children.map(toTreeNode),
       hasChildren: Boolean(node.has_children ?? node.hasChildren),
       icon: node.icon || '\u{1f4c1}',
-      isActive: appState.currentPath === path,
+      isActive: activePath === path,
       isExpanded,
       isLoaded: appState.treeData?.has(path) || false,
       name: node.name || path,
@@ -116,13 +133,14 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
   }
 
   let treeRoots = $derived.by(() => {
+    const activePath = panePath();
     return (appState.drives || []).map((drive: DriveInfo) => ({
       badge: driveBadge(drive),
       children: (appState.treeData?.get(drive.path) || []).map(toTreeNode),
       description: driveDescription(drive),
       hasChildren: driveStatus(drive) === 'available',
       icon: driveIcon(drive),
-      isActive: appState.currentPath === drive.path || appState.currentPath?.startsWith(drive.path),
+      isActive: activePath === drive.path || activePath?.startsWith(drive.path),
       isExpanded: appState.treeExpanded?.has(drive.path) || false,
       isLoaded: appState.treeData?.has(drive.path) || false,
       name: drive.name || drive.path,
@@ -148,6 +166,25 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
       <span class="icon" aria-hidden="true">⚙️</span>
     </button>
   </div>
+
+  {#if appState.dualPaneEnabled}
+    <div class="sidebar-target-switch" role="group" aria-label="Sidebar navigation target">
+      <button
+        type="button"
+        class:active={sidebarTargetPane === 'primary'}
+        aria-pressed={sidebarTargetPane === 'primary'}
+        title="Navigate left pane"
+        onclick={() => setSidebarTargetPane('primary')}
+      >Left</button>
+      <button
+        type="button"
+        class:active={sidebarTargetPane === 'secondary'}
+        aria-pressed={sidebarTargetPane === 'secondary'}
+        title="Navigate right pane"
+        onclick={() => setSidebarTargetPane('secondary')}
+      >Right</button>
+    </div>
+  {/if}
 
   <div class="sidebar-section smart-folders-section">
     <SmartFoldersList 
@@ -193,7 +230,7 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
         aria-label="Quick access locations"
         hidden={quickAccessCollapsed}
       >
-        <QuickAccessList locations={quickAccessLocations} />
+        <QuickAccessList locations={quickAccessLocations} pane={sidebarTargetPane} />
       </div>
 
       <div class="quick-access-group" id="my-pc-section">
@@ -228,7 +265,7 @@ import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
           </div>
         </div>
         <div class="tree-view-container" id="my-pc-tree-container" hidden={myPcCollapsed}>
-          <TreeView roots={treeRoots} />
+          <TreeView roots={treeRoots} pane={sidebarTargetPane} />
         </div>
       </div>
 

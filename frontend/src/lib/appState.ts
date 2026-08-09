@@ -157,6 +157,8 @@ export interface SimpleFileAppState {
   folderSizes: Map<PathString, number>;
   tabs: FileTab[];
   activeTabId: string | null;
+  secondaryTabs: FileTab[];
+  secondaryActiveTabId: string | null;
   bookmarks: Bookmark[];
   recentLocations: RecentLocation[];
   drives: DriveInfo[];
@@ -260,6 +262,8 @@ export function createInitialAppState(): SimpleFileAppState {
     folderSizes: new Map(),
     tabs: [],
     activeTabId: null,
+    secondaryTabs: [],
+    secondaryActiveTabId: null,
     bookmarks: [],
     recentLocations: [],
     drives: [],

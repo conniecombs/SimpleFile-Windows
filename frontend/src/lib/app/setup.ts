@@ -106,7 +106,7 @@ import { closeDuplicateCheckerUi, isDuplicateCheckerVisible } from './duplicateC
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow, confirmCreateArchiveFlow } from "./archive.js";
 import { isArchiveViewerVisible, isCreateArchiveVisible, closeCreateArchiveUi } from './archiveUi.svelte';
 import { requestSearchFocus } from './searchUi.svelte';
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, loadDirectoryForPane, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, tabsForPane, activeTabIdForPane, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
 import { cancelModalUi, isSettingsModalOpen } from './modalUi.svelte';
 import { dismissProgressUi, progressUi } from './progressUi.svelte';
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
@@ -139,10 +139,12 @@ type ItemSelectionDetail = {
 
 type ToolbarCommandDetail = {
   command?: string;
+  pane?: PaneId;
 };
 
-type SecondaryPaneCommandDetail = {
+type PaneCommandDetail = {
   command?: string;
+  pane?: PaneId;
   path?: PathString;
 };
 
@@ -186,6 +188,7 @@ type SmartFoldersChangedDetail = {
 
 type TabIdDetail = {
   direction?: number;
+  pane?: PaneId;
   tabId?: string;
 };
 
@@ -226,9 +229,11 @@ export function initApp() {
       'historyIndex',
       'iconSize',
       'isGridView',
+      'secondaryActiveTabId',
       'secondaryHistory',
       'secondaryHistoryIndex',
       'secondaryPath',
+      'secondaryTabs',
       'settings',
       'showPreviewPane',
       'tabs',
@@ -345,7 +350,7 @@ export function initApp() {
       const alwaysDir = e.type === 'simplefile:tree-node-open' || e.type === 'simplefile:breadcrumb-navigate';
       const isDir = detail.isDir ?? alwaysDir;
 
-      void openEntryPath(path, isDir, detail.pane || 'primary');
+      void openEntryPath(path, isDir, detail.pane || appState.activePane as PaneId);
     };
 
     const handleItemSelection = (e: Event) => {
@@ -388,15 +393,17 @@ export function initApp() {
     };
 
     const handleToolbarCommand = (e: Event) => {
-      const command = detailOf<ToolbarCommandDetail>(e).command;
+      const detail = detailOf<ToolbarCommandDetail>(e);
+      const command = detail.command;
+      const targetPane = detail.pane || appState.activePane as PaneId;
       if (!command) return;
-      if (command === 'back') void navigateHistory(-1);
-      else if (command === 'forward') void navigateHistory(1);
+      if (command === 'back') void (targetPane === 'secondary' ? navigateSecondaryHistory(-1) : navigateHistory(-1));
+      else if (command === 'forward') void (targetPane === 'secondary' ? navigateSecondaryHistory(1) : navigateHistory(1));
       else if (command === 'up') {
-        const parent = getParentPath(appState.currentPath);
-        if (parent) void loadDirectory(parent);
+        const parent = getParentPath(pathForPane(targetPane));
+        if (parent) void loadDirectoryForPane(parent, targetPane);
       } else if (command === 'refresh') {
-        void refreshCurrentDirectory();
+        void (targetPane === 'secondary' ? refreshSecondaryPane() : refreshCurrentDirectory());
       } else if (command === 'new-folder') {
         void createFolderFlow();
       } else if (command === 'new-file') {
@@ -443,24 +450,25 @@ export function initApp() {
       } else if (command === 'dual-pane') {
         toggleDualPane();
       } else if (command === 'terminal') {
-        openTerminal(pathForPane()).catch(showError);
+        openTerminal(pathForPane(targetPane)).catch(showError);
       } else if (command.startsWith?.('navigate')) {
-        void navigateSpecial(command);
+        void navigateSpecial(command, targetPane);
       }
     };
 
-    const handleSecondaryPaneCommand = (e: Event) => {
-      const detail = detailOf<SecondaryPaneCommandDetail>(e);
+    const handlePaneCommand = (e: Event) => {
+      const detail = detailOf<PaneCommandDetail>(e);
       const command = detail.command;
+      const pane = detail.pane === 'secondary' ? 'secondary' : 'primary';
       if (command === 'back') {
-        void navigateSecondaryHistory(-1);
+        void (pane === 'secondary' ? navigateSecondaryHistory(-1) : navigateHistory(-1));
       } else if (command === 'forward') {
-        void navigateSecondaryHistory(1);
+        void (pane === 'secondary' ? navigateSecondaryHistory(1) : navigateHistory(1));
       } else if (command === 'up') {
-        const parent = getParentPath(appState.secondaryPath);
-        if (parent) void loadSecondaryDirectory(parent);
+        const parent = getParentPath(pathForPane(pane));
+        if (parent) void loadDirectoryForPane(parent, pane);
       } else if (command === 'navigate' && detail.path) {
-        void loadSecondaryDirectory(detail.path);
+        void loadDirectoryForPane(detail.path, pane);
       }
     };
 
@@ -577,25 +585,28 @@ export function initApp() {
       }
     };
 
-    const handleTabNew = () => {
-      void openNewTab();
+    const handleTabNew = (e: Event) => {
+      const pane = detailOf<TabIdDetail>(e).pane || appState.activePane as PaneId;
+      void openNewTab(undefined, pane);
     };
 
     const handleTabSwitch = (e: Event) => {
-      const tabId = detailOf<TabIdDetail>(e).tabId;
-      if (tabId) void switchToTab(tabId);
+      const detail = detailOf<TabIdDetail>(e);
+      const tabId = detail.tabId;
+      if (tabId) void switchToTab(tabId, detail.pane || appState.activePane as PaneId);
     };
 
     const handleTabClose = (e: Event) => {
-      const tabId = detailOf<TabIdDetail>(e).tabId;
-      if (tabId) void closeTab(tabId);
+      const detail = detailOf<TabIdDetail>(e);
+      const tabId = detail.tabId;
+      if (tabId) void closeTab(tabId, detail.pane || appState.activePane as PaneId);
     };
 
     const handleTabFocusMove = (e: Event) => {
       const detail = detailOf<TabIdDetail>(e);
       const tabId = detail.tabId;
       const direction = Number(detail.direction || 0);
-      if (tabId && direction) moveTabFocus(tabId, direction);
+      if (tabId && direction) moveTabFocus(tabId, direction, detail.pane || appState.activePane as PaneId);
     };
 
     const handleProperties = () => {
@@ -892,24 +903,15 @@ export function initApp() {
     };
 
     const closePathBarEditor = () => {
-      const pathBar = document.getElementById('path-bar');
-      if (!pathBar?.classList.contains('editing')) return false;
-      pathBar.classList.remove('editing');
-      const autocomplete = document.getElementById('path-autocomplete') as HTMLElement | null;
-      if (autocomplete) autocomplete.style.display = 'none';
+      const input = document.querySelector<HTMLInputElement>('.pane-path-bar.editing .path-input');
+      if (!input) return false;
+      input.blur();
       return true;
     };
 
     const focusPathBar = () => {
-      const pathBar = document.getElementById('path-bar');
-      const input = document.getElementById('path-input') as HTMLInputElement | null;
-      if (!input) return;
-      pathBar?.classList.add('editing');
-      input.value = appState.currentPath || '';
-      window.setTimeout(() => {
-        input.focus();
-        input.select();
-      }, 0);
+      const pane = appState.activePane === 'secondary' && appState.dualPaneEnabled ? 'secondary' : 'primary';
+      document.getElementById(`btn-${pane}-edit-path`)?.click();
     };
 
     const refreshActivePane = () => {
@@ -931,15 +933,18 @@ export function initApp() {
     };
 
     const closeActiveTab = () => {
-      if (appState.activeTabId) void closeTab(appState.activeTabId);
+      const activePane = appState.activePane as PaneId;
+      const activeTabId = activeTabIdForPane(activePane);
+      if (activeTabId) void closeTab(activeTabId, activePane);
     };
 
     const switchActiveTabBy = (delta: number) => {
-      const tabs = appState.tabs || [];
+      const activePane = appState.activePane as PaneId;
+      const tabs = tabsForPane(activePane);
       if (tabs.length === 0) return;
-      const activeIndex = Math.max(0, tabs.findIndex((tab: { id: string }) => tab.id === appState.activeTabId));
+      const activeIndex = Math.max(0, tabs.findIndex((tab: { id: string }) => tab.id === activeTabIdForPane(activePane)));
       const nextTab = tabs[(activeIndex + delta + tabs.length) % tabs.length];
-      if (nextTab?.id) void switchToTab(nextTab.id);
+      if (nextTab?.id) void switchToTab(nextTab.id, activePane);
     };
 
     const clearQuickFilter = () => {
@@ -1062,10 +1067,12 @@ export function initApp() {
         const target = event.target as HTMLInputElement | null;
         const value = target?.value.trim();
         closePathBarEditor();
-        if (value) void loadDirectory(value);
+        const pane: PaneId = target?.id === 'secondary-path-input' ? 'secondary' : 'primary';
+        if (value) void loadDirectoryForPane(value, pane);
       }, {
         allowInEditable: true,
-        when: (event) => event.target instanceof HTMLInputElement && event.target.id === 'path-input',
+        when: (event) => event.target instanceof HTMLInputElement
+          && (event.target.id === 'primary-path-input' || event.target.id === 'secondary-path-input'),
       });
       addShortcut('path.focus', 'Ctrl+L', focusPathBar, { allowInControls: true, allowInEditable: true });
       addShortcut('path.focus.alt', 'Alt+D', focusPathBar, { allowInControls: true, allowInEditable: true });
@@ -1100,7 +1107,7 @@ export function initApp() {
       addShortcut('file.newFile', 'Ctrl+N', () => void createFileFlow());
       addShortcut('file.newFolder', 'Ctrl+Shift+N', () => void createFolderFlow());
 
-      addShortcut('tabs.new', 'Ctrl+T', () => void openNewTab());
+      addShortcut('tabs.new', 'Ctrl+T', () => void openNewTab(undefined, appState.activePane as PaneId));
       addShortcut('tabs.close', 'Ctrl+W', closeActiveTab);
       addShortcut('tabs.next', 'Ctrl+Tab', () => switchActiveTabBy(1));
       addShortcut('tabs.previous', 'Ctrl+Shift+Tab', () => switchActiveTabBy(-1));
@@ -1312,7 +1319,7 @@ export function initApp() {
     document.addEventListener('simplefile:breadcrumb-navigate', handleOpenEntry);
     document.addEventListener('simplefile:file-list-sort', handleSort);
     document.addEventListener('simplefile:toolbar-command', handleToolbarCommand);
-    document.addEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);
+    document.addEventListener('simplefile:pane-command', handlePaneCommand);
     document.addEventListener('simplefile:activate-pane', handleActivatePane);
     document.addEventListener('simplefile:refresh-drives', handleRefreshDrives);
     document.addEventListener('simplefile:toolbar-icon-size', handleIconSize);
@@ -1393,7 +1400,7 @@ export function initApp() {
       document.removeEventListener('simplefile:breadcrumb-navigate', handleOpenEntry);
       document.removeEventListener('simplefile:file-list-sort', handleSort);
       document.removeEventListener('simplefile:toolbar-command', handleToolbarCommand);
-      document.removeEventListener('simplefile:secondary-pane-command', handleSecondaryPaneCommand);
+      document.removeEventListener('simplefile:pane-command', handlePaneCommand);
       document.removeEventListener('simplefile:activate-pane', handleActivatePane);
       document.removeEventListener('simplefile:refresh-drives', handleRefreshDrives);
       document.removeEventListener('simplefile:toolbar-icon-size', handleIconSize);
