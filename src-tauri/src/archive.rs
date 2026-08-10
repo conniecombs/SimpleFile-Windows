@@ -349,7 +349,7 @@ pub(crate) fn list_archive_directory(path: &str) -> Result<Option<DirectoryListi
     };
 
     let mut entries: Vec<FileEntry> = entries.into_values().collect();
-    entries.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
+    entries.sort_by_cached_key(|e| crate::native_accel::dirs_first_name_key(e.is_dir, &e.name));
 
     Ok(Some(DirectoryListing {
         path: build_virtual_archive_path(&parsed.archive_path, &parsed.inner_path),

@@ -808,7 +808,7 @@ pub async fn list_subdirectories(path: String) -> Result<Vec<TreeNode>, String> 
             }
         }
     }
-    nodes.sort_by_cached_key(|node| node.name.to_lowercase());
+    nodes.sort_by_cached_key(|node| crate::native_accel::case_fold_for_sort(&node.name));
     Ok(nodes)
 }
 

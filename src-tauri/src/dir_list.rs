@@ -85,7 +85,7 @@ pub(crate) fn list_directory_blocking(
     enumerate_directory(&path_buf, &mut on_entry)?;
     flush(&mut pending, &mut all_entries, &mut chunk_index, true)?;
 
-    all_entries.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
+    all_entries.sort_by_cached_key(|e| crate::native_accel::dirs_first_name_key(e.is_dir, &e.name));
 
     Ok(DirectoryListing {
         path: current_path,
@@ -116,7 +116,7 @@ pub(crate) fn list_directory_for_test(path: String) -> Result<DirectoryListing, 
         entries.push(entry);
         Ok(())
     })?;
-    entries.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
+    entries.sort_by_cached_key(|e| crate::native_accel::dirs_first_name_key(e.is_dir, &e.name));
     Ok(DirectoryListing {
         path: current_path,
         parent,

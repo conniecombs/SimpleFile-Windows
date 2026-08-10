@@ -2,23 +2,18 @@ use crate::models::{SearchOptions, SearchResult};
 use crate::utils::validate_existing_path_no_resolve;
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use glob::Pattern;
-use std::fs;
-use tauri::{AppHandle, Emitter};
-use walkdir::WalkDir;
-
-// Additional imports for search enhancements
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
 use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter};
 
-/// Global registry of cancellation flags for in-progress searches. When a search
-/// is started with a non-None `search_id`, a new entry is inserted into this
-/// map. Invoking [`cancel_search`] will set the corresponding flag and
-/// remove it from the map, allowing the search loop to exit early.
+/// Global registry of cancellation flags for in-progress searches.
 static SEARCH_CANCEL_FLAGS: std::sync::LazyLock<Mutex<HashMap<String, Arc<AtomicBool>>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
@@ -33,22 +28,142 @@ fn parse_search_datetime(value: &str) -> Option<DateTime<Local>> {
         })
 }
 
-#[tauri::command]
-pub async fn search_files(
-    options: SearchOptions,
-    app: AppHandle,
-) -> Result<Vec<SearchResult>, String> {
-    let search_path = validate_existing_path_no_resolve(&options.search_path)?;
+fn is_cancelled(flag: &Option<Arc<AtomicBool>>) -> bool {
+    flag.as_ref()
+        .is_some_and(|f| f.load(Ordering::Relaxed))
+}
+
+/// Case-aware name match (substring or glob).
+fn name_matches(
+    name: &str,
+    query: &str,
+    case_sensitive: bool,
+    glob_pattern: &Option<Pattern>,
+) -> bool {
+    if query.is_empty() {
+        return true;
+    }
+
+    let name_to_match = if case_sensitive {
+        name.to_string()
+    } else {
+        crate::native_accel::case_fold_for_sort(name)
+    };
+
+    if let Some(pattern) = glob_pattern {
+        pattern.matches(&name_to_match)
+    } else {
+        name_to_match.contains(query)
+    }
+}
+
+fn entry_metadata(path: &Path) -> (bool, bool, u64, String) {
+    match fs::metadata(path) {
+        Ok(m) => {
+            let file_type = m.file_type();
+            let is_dir = file_type.is_dir();
+            let is_file = file_type.is_file();
+            let modified = m
+                .modified()
+                .ok()
+                .map(|t| {
+                    DateTime::<Local>::from(t)
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                })
+                .unwrap_or_else(|| "-".to_string());
+            (is_dir, is_file, if is_dir { 0 } else { m.len() }, modified)
+        }
+        Err(_) => (false, false, 0, "-".to_string()),
+    }
+}
+
+fn passes_filters(
+    path: &Path,
+    is_dir: bool,
+    is_file: bool,
+    size: u64,
+    extension: &str,
+    options: &SearchOptions,
+    after_dt: &Option<DateTime<Local>>,
+    before_dt: &Option<DateTime<Local>>,
+) -> bool {
+    // Extension filters apply to files only so name-matched folders still appear.
+    if is_file {
+        if let Some(ref types) = options.file_types {
+            if !types.is_empty() {
+                let ext_lower = extension.to_lowercase();
+                if !types.iter().any(|t| t.to_lowercase() == ext_lower) {
+                    return false;
+                }
+            }
+        }
+    }
+
+    if let Some(min) = options.min_size {
+        if !is_dir && size < min {
+            return false;
+        }
+    }
+    if let Some(max) = options.max_size {
+        if !is_dir && size > max {
+            return false;
+        }
+    }
+
+    if let Some(ref after) = after_dt {
+        if let Ok(meta) = fs::metadata(path) {
+            if let Ok(mod_time) = meta.modified() {
+                let dt: DateTime<Local> = mod_time.into();
+                if dt < *after {
+                    return false;
+                }
+            }
+        }
+    }
+    if let Some(ref before) = before_dt {
+        if let Ok(meta) = fs::metadata(path) {
+            if let Ok(mod_time) = meta.modified() {
+                let dt: DateTime<Local> = mod_time.into();
+                if dt > *before {
+                    return false;
+                }
+            }
+        }
+    }
+
+    true
+}
+
+fn content_matches_file(path: &Path, options: &SearchOptions, size: u64) -> bool {
+    if !options.content_search || size >= 2_000_000 {
+        return false;
+    }
+    let Ok(content) = fs::read_to_string(path) else {
+        return false;
+    };
+    if options.case_sensitive {
+        content.contains(&options.query)
+    } else {
+        crate::native_accel::contains_case_insensitive(&content, &options.query)
+    }
+}
+
+/// Breadth-first search so shallow name matches (e.g. sibling folders) appear
+/// before deep recursion into the first child tree. Critical on network / cloud
+/// drives where depth-first WalkDir can stall for a long time.
+fn search_files_bfs(
+    options: &SearchOptions,
+    search_path: &Path,
+    cancel_flag: &Option<Arc<AtomicBool>>,
+    app: &AppHandle,
+) -> Vec<SearchResult> {
     let query = if options.case_sensitive {
         options.query.clone()
     } else {
-        options.query.to_lowercase()
+        crate::native_accel::case_fold_for_sort(&options.query)
     };
-    let glob_query = if options.case_sensitive {
-        options.query.clone()
-    } else {
-        options.query.to_lowercase()
-    };
+    let glob_query = query.clone();
     let glob_pattern = if options.query.contains('*') || options.query.contains('?') {
         Pattern::new(&glob_query).ok()
     } else {
@@ -57,25 +172,6 @@ pub async fn search_files(
 
     let max_results = options.max_results.unwrap_or(1000);
     let max_depth = options.max_depth.unwrap_or(10);
-    let mut results: Vec<SearchResult> = Vec::new();
-    let batch_size = 500;
-    let batch_interval = Duration::from_millis(100);
-
-    // Setup cancellation flag for this search. If the caller provided a
-    // search ID, register an AtomicBool that can be toggled via
-    // [`cancel_search`]. Otherwise no cancellation is possible for this
-    // invocation.
-    let cancel_flag: Option<Arc<AtomicBool>> = if let Some(ref id) = options.search_id {
-        let flag = Arc::new(AtomicBool::new(false));
-        SEARCH_CANCEL_FLAGS.lock().insert(id.clone(), flag.clone());
-        Some(flag)
-    } else {
-        None
-    };
-
-    // Parse optional date filter strings. Accept RFC3339 or ISO 8601
-    // timestamps. If parsing fails, the filter is ignored. The values are
-    // converted into local time for comparison against file metadata.
     let after_dt = options
         .date_after
         .as_deref()
@@ -85,193 +181,267 @@ pub async fn search_files(
         .as_deref()
         .and_then(parse_search_datetime);
 
-    let walker = WalkDir::new(&search_path)
-        .max_depth(max_depth)
-        .follow_links(false)
-        .into_iter()
-        .filter_entry(|e| {
-            if !options.include_hidden {
-                if let Some(name) = e.file_name().to_str() {
-                    if name.starts_with('.') {
-                        return false;
-                    }
-                }
-            }
-            true
-        });
-
-    let mut batch: Vec<SearchResult> = Vec::with_capacity(batch_size);
+    let mut results: Vec<SearchResult> = Vec::new();
+    let mut batch: Vec<SearchResult> = Vec::with_capacity(64);
+    let batch_size = 32;
+    let batch_interval = Duration::from_millis(80);
     let mut last_batch_emit = Instant::now();
 
-    for entry in walker.filter_map(std::result::Result::ok) {
-        if results.len() >= max_results {
+    // Queue of (directory, depth_of_children). Depth 0 = search root's children.
+    let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::new();
+    queue.push_back((search_path.to_path_buf(), 0));
+
+    while let Some((dir, depth)) = queue.pop_front() {
+        if results.len() >= max_results || is_cancelled(cancel_flag) {
             break;
         }
+        if depth > max_depth {
+            continue;
+        }
 
-        // Check for cancellation: if the flag has been set, abort early
-        if let Some(ref flag) = cancel_flag {
-            if flag.load(Ordering::Relaxed) {
+        let read = match fs::read_dir(&dir) {
+            Ok(rd) => rd,
+            Err(_) => continue,
+        };
+
+        for entry in read.flatten() {
+            if results.len() >= max_results || is_cancelled(cancel_flag) {
                 break;
             }
-        }
-        let path = entry.path();
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-        if path == search_path {
-            continue;
-        }
 
-        let name_to_match = if options.case_sensitive {
-            name.clone()
-        } else {
-            name.to_lowercase()
-        };
-        let name_matches = if let Some(ref pattern) = glob_pattern {
-            pattern.matches(&name_to_match)
-        } else {
-            name_to_match.contains(&query)
-        };
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
 
-        let extension = path
-            .extension()
-            .map(|e| e.to_string_lossy().to_lowercase())
-            .unwrap_or_default();
-        if let Some(ref types) = options.file_types {
-            if !types.is_empty() {
-                let ext_lower = extension.to_lowercase();
-                if !types.iter().any(|t| t.to_lowercase() == ext_lower) {
-                    continue;
-                }
-            }
-        }
-
-        let metadata = entry.metadata();
-        let (is_dir, is_file, size, modified) = match metadata {
-            Ok(m) => {
-                let file_type = m.file_type();
-                let is_dir = file_type.is_dir();
-                let is_file = file_type.is_file();
-                let modified = m
-                    .modified()
-                    .ok()
-                    .and_then(|t| {
-                        DateTime::<Local>::from(t)
-                            .format("%Y-%m-%d %H:%M")
-                            .to_string()
-                            .into()
-                    })
-                    .unwrap_or_else(|| "-".to_string());
-                (is_dir, is_file, if is_dir { 0 } else { m.len() }, modified)
-            }
-            Err(_) => (false, false, 0, "-".to_string()),
-        };
-
-        // Apply size filters
-        if let Some(min) = options.min_size {
-            if !is_dir && size < min {
+            if !options.include_hidden && name.starts_with('.') {
                 continue;
             }
-        }
-        if let Some(max) = options.max_size {
-            if !is_dir && size > max {
-                continue;
-            }
-        }
 
-        // Apply date filters. Use metadata::modified() to obtain SystemTime
-        if let Some(ref after) = after_dt {
-            if let Ok(meta) = fs::metadata(path) {
-                if let Ok(mod_time) = meta.modified() {
-                    let dt: DateTime<Local> = mod_time.into();
-                    if dt < *after {
-                        continue;
-                    }
+            let (is_dir, is_file, size, modified) = match entry.metadata() {
+                Ok(m) => {
+                    let file_type = m.file_type();
+                    let is_dir = file_type.is_dir();
+                    let is_file = file_type.is_file();
+                    // On Windows, junctions/reparse points report as dirs; treat as dirs
+                    // so we can recurse. metadata() may fail for offline cloud placeholders.
+                    let modified = m
+                        .modified()
+                        .ok()
+                        .map(|t| {
+                            DateTime::<Local>::from(t)
+                                .format("%Y-%m-%d %H:%M")
+                                .to_string()
+                        })
+                        .unwrap_or_else(|| "-".to_string());
+                    (is_dir, is_file, if is_dir { 0 } else { m.len() }, modified)
                 }
-            }
-        }
-        if let Some(ref before) = before_dt {
-            if let Ok(meta) = fs::metadata(path) {
-                if let Ok(mod_time) = meta.modified() {
-                    let dt: DateTime<Local> = mod_time.into();
-                    if dt > *before {
-                        continue;
-                    }
+                Err(_) => {
+                    // Fall back to path metadata (helps some cloud providers).
+                    entry_metadata(&path)
                 }
-            }
-        }
+            };
 
-        // Optional content search: if name doesn't match and the caller
-        // requested content search, inspect text files for the query. Limit to
-        // reasonably small files (<2 MiB) to avoid blocking the event loop.
-        let mut content_matches = false;
-        if !name_matches && options.content_search && is_file && size < 2_000_000 {
-            if let Ok(content) = fs::read_to_string(path) {
-                content_matches = if options.case_sensitive {
-                    content.contains(&options.query)
-                } else {
-                    crate::native_accel::contains_case_insensitive(&content, &options.query)
-                };
-            }
-        }
-
-        // Skip entries that match neither name nor content
-        if !name_matches && !content_matches {
-            continue;
-        }
-
-        let result = SearchResult {
-            name,
-            path: path.to_string_lossy().to_string(),
-            is_dir,
-            size,
-            modified,
-            extension,
-            match_type: if name_matches {
-                "name".to_string()
-            } else if content_matches {
-                "content".to_string()
+            let extension = if is_dir {
+                String::new()
             } else {
-                "unknown".to_string()
-            },
-        };
-        batch.push(result.clone());
-        results.push(result);
+                path.extension()
+                    .map(|e| e.to_string_lossy().to_lowercase())
+                    .unwrap_or_default()
+            };
 
-        // Stream batches at a size and cadence that keeps IPC from flooding the UI thread.
-        if batch.len() >= batch_size || last_batch_emit.elapsed() >= batch_interval {
-            let _ = app.emit("search-results-batch", batch.clone());
-            batch.clear();
-            last_batch_emit = Instant::now();
+            // Enqueue directories for BFS before filters that might skip files.
+            if is_dir && depth < max_depth {
+                queue.push_back((path.clone(), depth + 1));
+            }
+
+            if !passes_filters(
+                &path,
+                is_dir,
+                is_file,
+                size,
+                &extension,
+                options,
+                &after_dt,
+                &before_dt,
+            ) {
+                continue;
+            }
+
+            let matched_name =
+                name_matches(&name, &query, options.case_sensitive, &glob_pattern);
+            let matched_content =
+                !matched_name && is_file && content_matches_file(&path, options, size);
+
+            if !matched_name && !matched_content {
+                continue;
+            }
+
+            let result = SearchResult {
+                name,
+                path: path.to_string_lossy().to_string(),
+                is_dir,
+                size,
+                modified,
+                extension,
+                match_type: if matched_name {
+                    "name".to_string()
+                } else {
+                    "content".to_string()
+                },
+            };
+            batch.push(result.clone());
+            results.push(result);
+
+            if batch.len() >= batch_size || last_batch_emit.elapsed() >= batch_interval {
+                let _ = app.emit("search-results-batch", batch.clone());
+                batch.clear();
+                last_batch_emit = Instant::now();
+            }
         }
     }
 
-    // Emit remaining batch
     if !batch.is_empty() {
         let _ = app.emit("search-results-batch", batch);
     }
 
-    // Signal completion
+    results.sort_by_cached_key(|e| crate::native_accel::dirs_first_name_key(e.is_dir, &e.name));
+    results
+}
+
+#[tauri::command]
+pub async fn search_files(
+    options: SearchOptions,
+    app: AppHandle,
+) -> Result<Vec<SearchResult>, String> {
+    let search_path = validate_existing_path_no_resolve(&options.search_path)?;
+    if !search_path.is_dir() {
+        return Err(format!(
+            "Search path is not a directory: {}",
+            options.search_path
+        ));
+    }
+
+    let cancel_flag: Option<Arc<AtomicBool>> = if let Some(ref id) = options.search_id {
+        let flag = Arc::new(AtomicBool::new(false));
+        SEARCH_CANCEL_FLAGS.lock().insert(id.clone(), flag.clone());
+        Some(flag)
+    } else {
+        None
+    };
+
+    let app_for_task = app.clone();
+    let options_for_task = options.clone();
+    let search_path_for_task = search_path.clone();
+    let cancel_for_task = cancel_flag.clone();
+
+    // Run the walk off the async runtime so UI IPC stays responsive.
+    let results = tokio::task::spawn_blocking(move || {
+        search_files_bfs(
+            &options_for_task,
+            &search_path_for_task,
+            &cancel_for_task,
+            &app_for_task,
+        )
+    })
+    .await
+    .map_err(|e| format!("Search task failed: {e}"))?;
+
     let _ = app.emit("search-complete", results.len());
 
-    // Remove cancellation flag after completion so subsequent searches can reuse the same ID
     if let Some(id) = options.search_id {
         SEARCH_CANCEL_FLAGS.lock().remove(&id);
     }
 
-    results.sort_by_cached_key(|e| (!e.is_dir, e.name.to_lowercase()));
-
     Ok(results)
 }
 
-/// Cancel an in-progress search by ID. The frontend should provide the same
-/// searchId that was passed in [`SearchOptions.search_id`]. If the search is
-/// active, its cancellation flag is set and removed from the registry.
+/// Cancel an in-progress search by ID.
 #[tauri::command]
 pub async fn cancel_search(search_id: String) -> Result<(), String> {
     if let Some(flag) = SEARCH_CANCEL_FLAGS.lock().remove(&search_id) {
         flag.store(true, Ordering::Relaxed);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::name_matches;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("simplefile-search-{label}-{nanos}"));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    #[test]
+    fn name_matches_substring_case_insensitive() {
+        assert!(name_matches("2000 Mules (2022)", "2000", false, &None));
+        assert!(name_matches("2000 Mules (2022)", "mules", false, &None));
+        assert!(!name_matches("2000 Mules (2022)", "1999", false, &None));
+        assert!(!name_matches("2000 Mules (2022)", "MULES", true, &None));
+        assert!(name_matches("2000 Mules (2022)", "Mules", true, &None));
+    }
+
+    #[test]
+    fn bfs_finds_sibling_folder_without_deep_dive_first() {
+        let root = unique_temp_dir("bfs");
+        // Deep tree under an early sibling (depth-first walk would stall here on cloud).
+        let deep = root.join("aaa-deep");
+        fs::create_dir_all(deep.join("l1").join("l2").join("l3")).unwrap();
+        fs::write(deep.join("l1").join("l2").join("l3").join("nested.txt"), b"x").unwrap();
+
+        let target = root.join("2000 Mules (2022)");
+        fs::create_dir_all(&target).unwrap();
+        fs::write(target.join("movie.mkv"), b"data").unwrap();
+        fs::create_dir_all(root.join("Gator Bait (1974)")).unwrap();
+
+        let mut found = Vec::new();
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back((root.clone(), 0usize));
+        let query = crate::native_accel::case_fold_for_sort("2000");
+        while let Some((dir, depth)) = queue.pop_front() {
+            if depth > 1 {
+                continue;
+            }
+            for entry in fs::read_dir(&dir).unwrap().flatten() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let path = entry.path();
+                let is_dir = path.is_dir();
+                // BFS: enqueue children, then continue siblings at this depth.
+                if is_dir && depth < 1 {
+                    queue.push_back((path, depth + 1));
+                }
+                if name_matches(&name, &query, false, &None) {
+                    found.push(name);
+                }
+            }
+        }
+        assert!(
+            found.iter().any(|n| n.contains("2000")),
+            "BFS depth-1 should find 2000 Mules, got {found:?}"
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn name_matches_glob() {
+        let pattern = glob::Pattern::new("*mules*").unwrap();
+        let folded = crate::native_accel::case_fold_for_sort("2000 Mules (2022)");
+        assert!(pattern.matches(&folded));
+        assert!(name_matches(
+            "2000 Mules (2022)",
+            "*mules*",
+            false,
+            &Some(pattern)
+        ));
+    }
 }
