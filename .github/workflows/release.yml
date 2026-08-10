@@ -159,6 +159,45 @@ jobs:
           workspaces: src-tauri
           key: ${{ matrix.target }}-release
 
+      - name: Install WiX Toolset (MSI)
+        shell: pwsh
+        run: |
+          function Resolve-WixBin {
+            $command = Get-Command candle.exe -ErrorAction SilentlyContinue
+            if ($command) { return $command.Source | Split-Path -Parent }
+
+            $candidates = @(
+              'C:\Program Files (x86)\WiX Toolset v3.14\bin',
+              'C:\Program Files (x86)\WiX Toolset v3.11\bin',
+              'C:\Program Files\WiX Toolset v3.14\bin'
+            )
+            $candidate = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            if ($candidate) { return $candidate }
+
+            $found = Get-ChildItem -Path 'C:\Program Files (x86)', 'C:\Program Files' -Filter 'candle.exe' -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+            if ($found) { return $found.DirectoryName }
+
+            return $null
+          }
+
+          $wixBin = Resolve-WixBin
+          if (-not $wixBin) {
+            choco install wixtoolset -y --no-progress
+            $wixBin = Resolve-WixBin
+          }
+          if (-not $wixBin) {
+            throw 'WiX bin directory not found after install.'
+          }
+          echo "$wixBin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "WiX on PATH: $wixBin"
+          & (Join-Path $wixBin 'candle.exe') -? | Select-Object -First 1
+
+      - name: Install Tauri CLI
+        uses: taiki-e/install-action@v2
+        with:
+          tool: tauri-cli
+
       - name: Verify updater signing secret
         shell: bash
         env:
@@ -170,26 +209,99 @@ jobs:
             exit 1
           fi
 
-      - name: Build and upload release assets
-        uses: tauri-apps/tauri-action@action-v0.6.2
+      - name: Build signed Windows installers and portable executable
+        working-directory: src-tauri
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_TRIPLE: ${{ matrix.target }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: cargo tauri build --ci --target $env:TARGET_TRIPLE --bundles nsis,msi
+
+      - name: Stage release assets
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          TARGET_TRIPLE: ${{ matrix.target }}
+        run: |
+          $root = (Get-Location).Path
+          $version = $env:RELEASE_VERSION.TrimStart('v')
+          $assetsDir = Join-Path $root 'release-assets'
+          New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
+
+          $releaseRoots = @(
+            Join-Path $root "src-tauri\target\$env:TARGET_TRIPLE\release",
+            Join-Path $root 'src-tauri\target\release'
+          )
+          $releaseRoot = $releaseRoots |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_ 'simplefile.exe') } |
+            Select-Object -First 1
+          if (-not $releaseRoot) {
+            throw "No release executable found under: $($releaseRoots -join ', ')"
+          }
+
+          $portableName = "SimpleFile_${version}_x64-portable.exe"
+          $portableExe = Join-Path $assetsDir $portableName
+          Copy-Item -LiteralPath (Join-Path $releaseRoot 'simplefile.exe') -Destination $portableExe -Force
+          Compress-Archive -LiteralPath $portableExe -DestinationPath (Join-Path $assetsDir "SimpleFile_${version}_x64-portable.zip") -Force
+
+          $bundleRoot = Join-Path $releaseRoot 'bundle'
+          $bundleFiles = Get-ChildItem -Path (Join-Path $bundleRoot 'nsis\*'), (Join-Path $bundleRoot 'msi\*') -File -ErrorAction SilentlyContinue
+          if (-not $bundleFiles) {
+            throw "No NSIS/MSI bundle files found under $bundleRoot."
+          }
+
+          foreach ($file in $bundleFiles) {
+            Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $assetsDir $file.Name) -Force
+          }
+
+          $assets = Get-ChildItem -LiteralPath $assetsDir -File
+          if (-not ($assets | Where-Object { $_.Name -like 'SimpleFile_*_x64-setup.exe' })) {
+            throw 'NSIS setup executable was not staged.'
+          }
+          if (-not ($assets | Where-Object { $_.Name -like 'SimpleFile_*_x64_en-US.msi' })) {
+            throw 'MSI installer was not staged.'
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $assetsDir "SimpleFile_${version}_x64-portable.zip"))) {
+            throw 'Portable zip was not staged.'
+          }
+          if (-not ($assets | Where-Object { $_.Name -eq 'latest.json' })) {
+            throw 'Updater latest.json was not staged.'
+          }
+          if (-not ($assets | Where-Object { $_.Extension -eq '.sig' })) {
+            throw 'Updater signature files were not staged.'
+          }
+
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Release assets'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '| File | Size |'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '| --- | ---: |'
+          foreach ($asset in ($assets | Sort-Object Name)) {
+            $sizeMb = [Math]::Round($asset.Length / 1MB, 2)
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| ``$($asset.Name)`` | $sizeMb MB |"
+          }
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v3
         with:
-          tagName: ${{ needs.validate.outputs.version }}
-          releaseName: SimpleFile ${{ needs.validate.outputs.version }}
-          releaseBody: |
+          tag_name: ${{ needs.validate.outputs.version }}
+          name: SimpleFile ${{ needs.validate.outputs.version }}
+          body: |
             ## SimpleFile ${{ needs.validate.outputs.version }}
 
-            Windows NSIS and MSI installers are attached below.
+            Windows installer and portable artifacts are attached below:
+            - NSIS setup executable for standard per-user installation.
+            - MSI installer for managed deployment.
+            - Portable zip containing the standalone executable.
+            - Signed updater artifacts, signatures, and latest.json.
+
             See [docs/CHANGELOG.md](https://github.com/conniecombs/SimpleFile-Windows/blob/main/docs/CHANGELOG.md) for release notes and upgrade details.
-          releaseDraft: true
+          draft: true
           prerelease: ${{ needs.validate.outputs.prerelease }}
-          uploadUpdaterJson: true
-          uploadUpdaterSignatures: true
-          updaterJsonPreferNsis: true
-          args: --target ${{ matrix.target }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
     name: Publish release

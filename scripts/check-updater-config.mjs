@@ -43,9 +43,9 @@ if (updater.windows?.installMode !== 'passive') {
 
 const requiredWorkflowSnippets = [
     'TAURI_SIGNING_PRIVATE_KEY',
-    'uploadUpdaterJson: true',
-    'uploadUpdaterSignatures: true',
-    'updaterJsonPreferNsis: true',
+    'cargo tauri build --ci',
+    'latest.json',
+    "Extension -eq '.sig'",
 ];
 
 for (const snippet of requiredWorkflowSnippets) {

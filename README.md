@@ -187,12 +187,13 @@ If Windows File Explorer feels limited for power workflows — dual panes, tabs 
 
 ### End users
 
-Download the latest Windows installer from **[GitHub Releases](https://github.com/conniecombs/SimpleFile-Windows/releases)**.
+Download the latest Windows installer or portable package from **[GitHub Releases](https://github.com/conniecombs/SimpleFile-Windows/releases)**.
 
-| Installer | Best for |
+| Artifact | Best for |
 | --- | --- |
 | `SimpleFile_1.1.0_x64-setup.exe` | **Recommended** — NSIS per-user install |
 | `SimpleFile_1.1.0_x64_en-US.msi` | Enterprise / GPO-style MSI deployment |
+| `SimpleFile_1.1.0_x64-portable.zip` | Portable use without running an installer |
 
 **Requirements:** Windows 10 or later, x64.
 
@@ -202,6 +203,7 @@ After the first manual install, check for later versions from **Settings → Upd
 
 - Windows x64 NSIS setup executable
 - Windows x64 MSI package
+- Windows x64 portable executable zip
 - Signed updater artifacts and `latest.json` (production releases)
 
 ---
@@ -533,6 +535,7 @@ The `check` pipeline also enforces project invariants:
 | --- | --- | --- |
 | NSIS | `SimpleFile_<version>_x64-setup.exe` | Per-user install; recommended for most users |
 | MSI | `SimpleFile_<version>_x64_en-US.msi` | Per-machine style deployment |
+| Portable | `SimpleFile_<version>_x64-portable.zip` | Standalone executable package |
 
 ### Config files
 
@@ -556,7 +559,7 @@ Operational details: [docs/UPDATER_RELEASE.md](docs/UPDATER_RELEASE.md).
 | --- | --- |
 | [CI](.github/workflows/ci.yml) | Push/PR quality gates |
 | [Release build](.github/workflows/release-build.yml) | On-demand `npm run release:build`; uploads artifacts; does **not** publish a GitHub Release |
-| [Release](.github/workflows/release.yml) | Tag `v*` or manual dispatch: validate version, run `check:release`, build signed installers, publish draft GitHub Release |
+| [Release](.github/workflows/release.yml) | Tag `v*` or manual dispatch: validate version, run `check:release`, build signed installers plus portable zip, publish draft GitHub Release |
 | [Installer Smoke](.github/workflows/installer-smoke.yml) | Nightly/manual installer validation |
 
 ### Versioning

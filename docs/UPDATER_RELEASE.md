@@ -37,8 +37,8 @@ tracked.
 3. Create a tag such as `v1.1.0`, or run the `Release` GitHub Actions workflow
    manually with that version.
 4. The release workflow runs quality gates, builds the Windows x64 release
-   target, signs updater artifacts, uploads signatures, and uploads
-   `latest.json`.
+   target, uploads NSIS/MSI installers, stages a portable executable zip, signs
+   updater artifacts, uploads signatures, and uploads `latest.json`.
 5. Publish the GitHub release when ready. Draft releases are not returned by the
    `releases/latest` endpoint, so installed apps only see published releases.
 

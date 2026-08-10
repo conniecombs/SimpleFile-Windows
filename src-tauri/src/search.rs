@@ -29,8 +29,7 @@ fn parse_search_datetime(value: &str) -> Option<DateTime<Local>> {
 }
 
 fn is_cancelled(flag: &Option<Arc<AtomicBool>>) -> bool {
-    flag.as_ref()
-        .is_some_and(|f| f.load(Ordering::Relaxed))
+    flag.as_ref().is_some_and(|f| f.load(Ordering::Relaxed))
 }
 
 /// Case-aware name match (substring or glob).
@@ -78,21 +77,22 @@ fn entry_metadata(path: &Path) -> (bool, bool, u64, String) {
     }
 }
 
-fn passes_filters(
-    path: &Path,
+struct FilterCandidate<'a> {
+    path: &'a Path,
     is_dir: bool,
     is_file: bool,
     size: u64,
-    extension: &str,
-    options: &SearchOptions,
-    after_dt: &Option<DateTime<Local>>,
-    before_dt: &Option<DateTime<Local>>,
-) -> bool {
+    extension: &'a str,
+    after_dt: &'a Option<DateTime<Local>>,
+    before_dt: &'a Option<DateTime<Local>>,
+}
+
+fn passes_filters(candidate: &FilterCandidate<'_>, options: &SearchOptions) -> bool {
     // Extension filters apply to files only so name-matched folders still appear.
-    if is_file {
+    if candidate.is_file {
         if let Some(ref types) = options.file_types {
             if !types.is_empty() {
-                let ext_lower = extension.to_lowercase();
+                let ext_lower = candidate.extension.to_lowercase();
                 if !types.iter().any(|t| t.to_lowercase() == ext_lower) {
                     return false;
                 }
@@ -101,18 +101,18 @@ fn passes_filters(
     }
 
     if let Some(min) = options.min_size {
-        if !is_dir && size < min {
+        if !candidate.is_dir && candidate.size < min {
             return false;
         }
     }
     if let Some(max) = options.max_size {
-        if !is_dir && size > max {
+        if !candidate.is_dir && candidate.size > max {
             return false;
         }
     }
 
-    if let Some(ref after) = after_dt {
-        if let Ok(meta) = fs::metadata(path) {
+    if let Some(ref after) = candidate.after_dt {
+        if let Ok(meta) = fs::metadata(candidate.path) {
             if let Ok(mod_time) = meta.modified() {
                 let dt: DateTime<Local> = mod_time.into();
                 if dt < *after {
@@ -121,8 +121,8 @@ fn passes_filters(
             }
         }
     }
-    if let Some(ref before) = before_dt {
-        if let Ok(meta) = fs::metadata(path) {
+    if let Some(ref before) = candidate.before_dt {
+        if let Ok(meta) = fs::metadata(candidate.path) {
             if let Ok(mod_time) = meta.modified() {
                 let dt: DateTime<Local> = mod_time.into();
                 if dt > *before {
@@ -150,8 +150,8 @@ fn content_matches_file(path: &Path, options: &SearchOptions, size: u64) -> bool
 }
 
 /// Breadth-first search so shallow name matches (e.g. sibling folders) appear
-/// before deep recursion into the first child tree. Critical on network / cloud
-/// drives where depth-first WalkDir can stall for a long time.
+/// before deep recursion into the first child tree. Critical on slow network or
+/// removable drives where depth-first WalkDir can stall for a long time.
 fn search_files_bfs(
     options: &SearchOptions,
     search_path: &Path,
@@ -222,7 +222,7 @@ fn search_files_bfs(
                     let is_dir = file_type.is_dir();
                     let is_file = file_type.is_file();
                     // On Windows, junctions/reparse points report as dirs; treat as dirs
-                    // so we can recurse. metadata() may fail for offline cloud placeholders.
+                    // so we can recurse. metadata() may fail for offline placeholders.
                     let modified = m
                         .modified()
                         .ok()
@@ -235,7 +235,7 @@ fn search_files_bfs(
                     (is_dir, is_file, if is_dir { 0 } else { m.len() }, modified)
                 }
                 Err(_) => {
-                    // Fall back to path metadata (helps some cloud providers).
+                    // Fall back to path metadata for file systems that need it.
                     entry_metadata(&path)
                 }
             };
@@ -253,21 +253,20 @@ fn search_files_bfs(
                 queue.push_back((path.clone(), depth + 1));
             }
 
-            if !passes_filters(
-                &path,
+            let candidate = FilterCandidate {
+                path: &path,
                 is_dir,
                 is_file,
                 size,
-                &extension,
-                options,
-                &after_dt,
-                &before_dt,
-            ) {
+                extension: &extension,
+                after_dt: &after_dt,
+                before_dt: &before_dt,
+            };
+            if !passes_filters(&candidate, options) {
                 continue;
             }
 
-            let matched_name =
-                name_matches(&name, &query, options.case_sensitive, &glob_pattern);
+            let matched_name = name_matches(&name, &query, options.case_sensitive, &glob_pattern);
             let matched_content =
                 !matched_name && is_file && content_matches_file(&path, options, size);
 
@@ -393,10 +392,14 @@ mod tests {
     #[test]
     fn bfs_finds_sibling_folder_without_deep_dive_first() {
         let root = unique_temp_dir("bfs");
-        // Deep tree under an early sibling (depth-first walk would stall here on cloud).
+        // Deep tree under an early sibling (depth-first walk would stall here on slow mounts).
         let deep = root.join("aaa-deep");
         fs::create_dir_all(deep.join("l1").join("l2").join("l3")).unwrap();
-        fs::write(deep.join("l1").join("l2").join("l3").join("nested.txt"), b"x").unwrap();
+        fs::write(
+            deep.join("l1").join("l2").join("l3").join("nested.txt"),
+            b"x",
+        )
+        .unwrap();
 
         let target = root.join("2000 Mules (2022)");
         fs::create_dir_all(&target).unwrap();

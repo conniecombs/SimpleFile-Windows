@@ -58,9 +58,9 @@ The release workflow will:
 3. Build the Windows release target:
    - Windows x64 (`x86_64-pc-windows-msvc`)
 4. Verify the updater signing secret is available for release builds.
-5. Create or update a draft GitHub release and upload Windows installer artifacts,
-   signed updater artifacts, signatures, and `latest.json` through
-   `tauri-apps/tauri-action@action-v0.6.2`.
+5. Build the signed Windows NSIS/MSI installers, stage a portable executable zip,
+   and upload those artifacts plus signed updater artifacts, signatures, and
+   `latest.json` to the draft GitHub release.
 6. Keep tag-triggered releases as drafts by default so assets can be reviewed before publishing.
 7. Publish the release only after the Windows build succeeds when manual
    `draft=false` is selected.
@@ -86,6 +86,7 @@ bundler output:
 |----------|----------------|--------------|
 | Windows x64 | NSIS setup executable | `SimpleFile_x.x.x_x64-setup.exe` |
 | Windows x64 | MSI installer | `SimpleFile_x.x.x_x64_en-US.msi` |
+| Windows x64 | Portable executable zip | `SimpleFile_x.x.x_x64-portable.zip` |
 | Windows updater | Static JSON / signatures | `latest.json`, updater bundle signatures, and Windows updater artifacts |
 
 ## Auto-Update
@@ -118,7 +119,7 @@ See [`docs/UPDATER_RELEASE.md`](../docs/UPDATER_RELEASE.md) for the operational 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
 | `ci.yml` | Push/PR to `main`, manual dispatch | Rust format, Clippy, tests, Svelte/frontend checks, frontend/backend invoke checks, updater/workflow/provider-surface checks, Rust dependency audit, and Windows x64 backend build with the committed lockfile |
-| `release.yml` | Tag push (`v*`), manual dispatch | Version validation, release quality gates, Windows x64 Tauri release packaging, installer/updater upload via Tauri Action, optional publishing |
+| `release.yml` | Tag push (`v*`), manual dispatch | Version validation, release quality gates, Windows x64 Tauri release packaging, installer/portable/updater asset upload, optional publishing |
 | `dependabot.yml` | Weekly schedule | Dependency update pull requests for Cargo, npm, and GitHub Actions |
 
 ## Code Signing

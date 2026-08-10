@@ -338,8 +338,8 @@ fn ascii_lowercase_scalar_tail(bytes: &mut [u8], start: usize) {
 #[cfg(test)]
 mod tests {
     use super::{
-        ascii_lowercase_in_place, case_fold_for_sort, contains_case_insensitive, contains_zero_byte,
-        dirs_first_name_key, find_first_of_two,
+        ascii_lowercase_in_place, case_fold_for_sort, contains_case_insensitive,
+        contains_zero_byte, dirs_first_name_key, find_first_of_two,
     };
 
     #[test]
@@ -408,7 +408,7 @@ mod tests {
             "",
             "README.md",
             "MiXeD_Case-FILE.TXT",
-            "zzzzzzzzzzzzzzzz", // 16 bytes
+            "zzzzzzzzzzzzzzzz",                  // 16 bytes
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", // 33 bytes
             "a",
             "Z",
@@ -423,7 +423,11 @@ mod tests {
     fn case_fold_for_sort_matches_to_lowercase_on_unicode() {
         let samples = ["İstanbul", "Straße", "naïve", "ΑΒΓ", "日本語", "Café"];
         for s in samples {
-            assert_eq!(case_fold_for_sort(s), s.to_lowercase(), "unicode fold: {s:?}");
+            assert_eq!(
+                case_fold_for_sort(s),
+                s.to_lowercase(),
+                "unicode fold: {s:?}"
+            );
         }
     }
 
@@ -438,7 +442,8 @@ mod tests {
     fn dirs_first_name_key_orders_directories_before_files() {
         let dir = dirs_first_name_key(true, "Zoo");
         let file = dirs_first_name_key(false, "alpha");
-        assert!(dir.0 < file.0); // !is_dir is false for dirs
+        assert!(!dir.0); // !is_dir is false for dirs
+        assert!(file.0);
         assert_eq!(dir.1, "zoo");
         assert_eq!(file.1, "alpha");
     }
