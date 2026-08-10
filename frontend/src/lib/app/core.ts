@@ -1633,6 +1633,9 @@ const defaultColorLabels = [
   }
 
   export function scheduleFileChangeRefresh(path: PathString) {
+    // Avoid wiping an in-progress or active search with a directory reload.
+    if (appState.searchMode || appState.isSearching) return;
+
     const touchesPrimary = appState.currentPath && pathContains(appState.currentPath, path);
     const touchesSecondary = appState.secondaryPath && pathContains(appState.secondaryPath, path);
     if (!touchesPrimary && !touchesSecondary) return;
@@ -1643,6 +1646,7 @@ const defaultColorLabels = [
 
     localState.fileChangeRefreshTimer = window.setTimeout(() => {
       localState.fileChangeRefreshTimer = null;
+      if (appState.searchMode || appState.isSearching) return;
       if (touchesPrimary) void refreshCurrentDirectory();
       if (touchesSecondary) void refreshSecondaryPane();
     }, 250);

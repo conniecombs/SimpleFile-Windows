@@ -26,6 +26,7 @@
     searchResultsLabel(
       String(appState.searchQuery || ''),
       appState.searchResults?.length || 0,
+      Boolean(appState.isSearching),
     ),
   );
 

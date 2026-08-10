@@ -31,6 +31,12 @@ export function requestSearchFocus() {
   searchUi.focusToken += 1;
 }
 
-export function searchResultsLabel(query: string, count: number) {
+export function searchResultsLabel(query: string, count: number, isSearching = false) {
+  if (isSearching) {
+    if (count > 0) {
+      return `Searching… ${count} result${count === 1 ? '' : 's'} so far for "${query}"`;
+    }
+    return `Searching for "${query}"…`;
+  }
   return `${count} result${count === 1 ? '' : 's'} for "${query}"`;
 }

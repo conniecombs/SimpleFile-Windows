@@ -52,6 +52,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
     getAppVersion,
     installRar,
     installUpdate,
+    onSearchResultsBatch,
     saveSmartFolder,
     setTagsForPath,
     watchDirectory,
@@ -87,6 +88,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
     ProgressUpdate,
     RenameRequest,
     SearchOptions,
+    SearchResult,
     SmartFolder,
     TransferResult,
   } from '../types';
@@ -236,11 +238,76 @@ import {
     selectPaths([]);
   }
 
+  function localNameMatches(name: string, query: string, caseSensitive: boolean) {
+    if (!query) return true;
+    if (caseSensitive) return name.includes(query);
+    return name.toLowerCase().includes(query.toLowerCase());
+  }
+
+  /** Instant matches from the current listing so shallow hits appear before the walk finishes. */
+  function seedLocalSearchMatches(query: string, options: SearchWorkflowOptions) {
+    const source = appState._savedEntries || appState.entries || [];
+    const caseSensitive = !!options.caseSensitive;
+    const hasGlob = query.includes('*') || query.includes('?');
+    if (hasGlob) return [] as SearchResult[];
+
+    return source
+      .filter((entry: FileEntry) => localNameMatches(entry.name, query, caseSensitive))
+      .map((entry: FileEntry) => ({
+        name: entry.name,
+        path: entry.path,
+        is_dir: entry.is_dir,
+        size: entry.size,
+        modified: entry.modified,
+        extension: entry.extension || '',
+        match_type: 'name',
+      }));
+  }
+
+  function applySearchResultsToUi(results: SearchResult[]) {
+    const entries = results.map(searchResultToFileEntry);
+    appState.searchResults = results;
+    appState.entries = entries;
+    appState.filteredEntries = visibleEntries(entries, {
+      showHidden: appState.showHiddenFiles,
+      sortAsc: appState.sortAsc,
+      sortBy: appState.sortBy,
+    });
+    updateStatusBar();
+    renderSearchHeader();
+  }
+
+  function mergeSearchBatch(
+    existing: SearchResult[],
+    batch: SearchResult[],
+    maxResults: number,
+  ): SearchResult[] {
+    if (!batch?.length) return existing;
+    const seen = new Set(existing.map((item) => item.path));
+    const merged = existing.slice();
+    for (const item of batch) {
+      if (!item?.path || seen.has(item.path)) continue;
+      seen.add(item.path);
+      merged.push(item);
+      if (merged.length >= maxResults) break;
+    }
+    return merged;
+  }
+
   export async function runSearch(query: string, options: SearchWorkflowOptions = {}) {
     const cleanQuery = query.trim();
     if (!cleanQuery) {
       await clearSearch();
       return;
+    }
+
+    // Cancel any in-flight search before starting a new one.
+    if (appState.currentSearchId) {
+      try {
+        await cancelSearch(appState.currentSearchId);
+      } catch {
+        // Previous search may already have finished.
+      }
     }
 
     const searchId = `search-${Date.now()}`;
@@ -259,7 +326,23 @@ import {
     setSearchQuery(cleanQuery);
     setSearchControlsVisible({ clear: true, cancel: true });
 
+    const maxResults = options.maxResults || 500;
+    const seeded = seedLocalSearchMatches(cleanQuery, options);
+    applySearchResultsToUi(seeded);
+
+    let unlistenBatch: (() => void) | undefined;
     try {
+      unlistenBatch = await onSearchResultsBatch((event) => {
+        if (appState.currentSearchId !== searchId) return;
+        const batch = Array.isArray(event?.payload) ? event.payload : [];
+        const merged = mergeSearchBatch(
+          (appState.searchResults || []) as SearchResult[],
+          batch as SearchResult[],
+          maxResults,
+        );
+        applySearchResultsToUi(merged);
+      });
+
       const results = await searchFiles(toSearchCommandOptions({
         currentPath: appState.currentPath,
         options,
@@ -269,19 +352,20 @@ import {
       }));
       if (appState.currentSearchId !== searchId) return;
 
-      const entries = results.map(searchResultToFileEntry);
-      appState.searchResults = results;
-      appState.entries = entries;
-      appState.filteredEntries = visibleEntries(entries, {
-        showHidden: appState.showHiddenFiles,
-        sortAsc: appState.sortAsc,
-        sortBy: appState.sortBy,
-      });
-      updateStatusBar();
-      renderSearchHeader();
+      // Final authoritative result set from the backend.
+      applySearchResultsToUi(results);
     } catch (error) {
-      showError(error);
+      if (appState.currentSearchId === searchId) {
+        showError(error);
+      }
     } finally {
+      if (typeof unlistenBatch === 'function') {
+        try {
+          unlistenBatch();
+        } catch {
+          // Listener may already be gone.
+        }
+      }
       if (appState.currentSearchId === searchId) {
         appState.currentSearchId = null;
         appState.isSearching = false;
