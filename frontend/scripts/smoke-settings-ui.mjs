@@ -277,6 +277,20 @@ function connectCdp(webSocketUrl) {
   const events = new Map();
   const socket = new WebSocket(webSocketUrl);
 
+  function rejectAll(error) {
+    for (const deferred of pending.values()) {
+      deferred.reject(error);
+    }
+    pending.clear();
+
+    for (const waiters of events.values()) {
+      for (const waiter of waiters) {
+        waiter.reject(error);
+      }
+    }
+    events.clear();
+  }
+
   socket.addEventListener('message', (event) => {
     const payload = JSON.parse(event.data);
     if (payload.id) {
@@ -299,10 +313,11 @@ function connectCdp(webSocketUrl) {
   });
 
   socket.addEventListener('error', (event) => {
-    for (const deferred of pending.values()) {
-      deferred.reject(new Error(`CDP socket error: ${event.message || 'unknown error'}`));
-    }
-    pending.clear();
+    rejectAll(new Error(`CDP socket error: ${event.message || 'unknown error'}`));
+  });
+
+  socket.addEventListener('close', () => {
+    rejectAll(new Error('CDP socket closed.'));
   });
 
   const opened = new Promise((resolveOpen, rejectOpen) => {
@@ -335,6 +350,10 @@ function connectCdp(webSocketUrl) {
             clearTimeout(timer);
             resolveEvent(value);
           },
+          reject(error) {
+            clearTimeout(timer);
+            rejectEvent(error);
+          },
         };
 
         const waiters = events.get(method) || [];
@@ -361,15 +380,32 @@ async function evaluate(page, expression) {
 
 async function waitForExpression(page, expression, { timeoutMs = 8000 } = {}) {
   const expiresAt = Date.now() + timeoutMs;
+  let lastError;
 
   while (Date.now() < expiresAt) {
-    if (await evaluate(page, expression)) {
-      return;
+    try {
+      if (await evaluate(page, expression)) {
+        return;
+      }
+    } catch (error) {
+      lastError = error;
     }
     await delay(100);
   }
 
+  if (lastError) {
+    throw new Error(`Timed out waiting for expression after CDP error: ${expression}. Last error: ${lastError.message}`);
+  }
   throw new Error(`Timed out waiting for expression: ${expression}`);
+}
+
+async function navigateAndWaitForReady(page, url) {
+  await page.send('Page.navigate', { url });
+  await waitForExpression(
+    page,
+    `location.href === ${JSON.stringify(url)} && (document.readyState === 'interactive' || document.readyState === 'complete')`,
+    { timeoutMs: 15000 },
+  );
 }
 
 async function runSettingsUiSmoke() {
@@ -434,9 +470,7 @@ async function runSettingsUiSmoke() {
       width: 1280,
     });
 
-    const loaded = page.waitForEvent('Page.loadEventFired');
-    await page.send('Page.navigate', { url: appUrl });
-    await loaded;
+    await navigateAndWaitForReady(page, appUrl);
     await waitForExpression(page, "Boolean(document.querySelector('#btn-settings'))");
 
     await evaluate(page, "document.querySelector('#btn-settings').click()");

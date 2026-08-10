@@ -177,6 +177,7 @@ assertContains('frontend/src/css/modules/settings.css', [
 assertContains('frontend/scripts/smoke-settings-ui.mjs', [
   'createServer',
   'remote-debugging-port',
+  'navigateAndWaitForReady',
   'Settings UI smoke passed.',
   '#settings-search',
   'Move Deleted Items to Trash',
