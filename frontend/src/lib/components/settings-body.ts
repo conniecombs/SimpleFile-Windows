@@ -7,6 +7,7 @@ export type SettingsTab =
   | 'file-list'
   | 'navigation'
   | 'behavior'
+  | 'shortcuts'
   | 'tools'
   | 'updates'
   | 'about'

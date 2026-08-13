@@ -1,8 +1,10 @@
 import type { AppSettings, Bookmark, FileTab, RecentLocation, SimpleFileAppState } from '../../lib/appState';
 import {
   columnsForPreset,
+  clampFileListColumnWidth,
   DEFAULT_FILE_LIST_COLUMN_WIDTHS,
   DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
+  type FileListColumnId,
   isColumnPresetId,
   normalizeVisibleColumns,
   OPTIONAL_FILE_LIST_COLUMNS,
@@ -354,10 +356,10 @@ function sanitizeColumnWidths(value: unknown, fallback: AppSettings['columnWidth
   if (!value || typeof value !== 'object') return fallback;
   const next = { ...fallback };
   const record = value as Record<string, unknown>;
-  for (const key of ['name', ...OPTIONAL_FILE_LIST_COLUMNS] as const) {
+  for (const key of ['name', ...OPTIONAL_FILE_LIST_COLUMNS] as FileListColumnId[]) {
     const width = Number(record[key]);
     if (Number.isFinite(width) && width > 0) {
-      next[key] = width;
+      next[key] = clampFileListColumnWidth(key, width);
     }
   }
   return next;

@@ -42,6 +42,11 @@ assertContains('frontend/src/lib/app/core.ts', [
   'function renderColumnManagerControls',
   'function moveSettingsColumn',
   'function resetColumnSettings',
+  'function showColumnHeaderMenuAt',
+  'function autoFitFileListColumn',
+  'function autoFitAllFileListColumns',
+  'function toggleHeaderColumn',
+  'function openColumnManagerFromHeader',
   'function applyContextualFolderView',
   'function saveShortcutSettingFromInput',
   'function resetShortcutSetting',
@@ -85,6 +90,14 @@ assertContains('frontend/src/lib/app/setup.ts', [
   'resetAllShortcutSettings',
   'moveSettingsColumn',
   'resetColumnSettings',
+  'showColumnHeaderMenuAt',
+  'autoFitFileListColumn',
+  'autoFitAllFileListColumns',
+  'openColumnManagerFromHeader',
+  "document.addEventListener('simplefile:column-header-menu', handleColumnHeaderMenu);",
+  "document.addEventListener('simplefile:column-autofit', handleColumnAutoFit);",
+  "document.addEventListener('click', handleColumnHeaderMenuClick);",
+  "document.addEventListener('change', handleColumnHeaderMenuChange);",
   "case 'settings-custom-path-browse':",
   "case 'settings-columns-reset':",
   "case 'settings-shortcuts-reset-all':",
@@ -158,6 +171,25 @@ assertContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', 
   'id="btn-about"',
 ], 'Stage 4 settings control id');
 
+assertContains('frontend/src/lib/components/layout-shell/FileListHeaderCells.svelte', [
+  'data-column-resize={column.id}',
+  'onpointerdown={(event) => beginColumnResize(event, column)}',
+  'ondblclick={(event) => emitAutoFit(event, column)}',
+  'oncontextmenu={(event) => emitHeaderMenu(event, column)}',
+], 'Stage 4 Explorer-style column header interactions');
+
+assertContains('frontend/src/lib/components/context-menus/ColumnHeaderMenu.svelte', [
+  'data-column-action="size-column-to-fit"',
+  'data-column-action="size-all-columns-to-fit"',
+  'data-column-action="more-columns"',
+  'data-column-toggle={column.id}',
+], 'Stage 4 column header menu commands');
+
+assertContains('frontend/src/lib/components/OverlayShell.svelte', [
+  'id="column-header-menu"',
+  'aria-label="Column options"',
+], 'Stage 4 column header overlay');
+
 assertNotContains('frontend/src/lib/components/settings-body/SettingsBody.svelte', [
   `btn-${'remote'}-${'drives'}`,
   `${'r'}${'clone'}-install-btn`,
@@ -189,6 +221,12 @@ assertContains('frontend/src/css/modules/settings.css', [
   'scroll-snap-type: x proximity;',
 ], 'Stage 4 settings sidebar layout styles');
 
+assertContains('frontend/src/css/modules/toolbar.css', [
+  '.column-header-menu',
+  '.column-menu-divider',
+  '.column-resize-handle',
+], 'Stage 4 column header menu styles');
+
 assertContains('frontend/scripts/smoke-settings-ui.mjs', [
   'createServer',
   'remote-debugging-port',
@@ -197,6 +235,7 @@ assertContains('frontend/scripts/smoke-settings-ui.mjs', [
   '#settings-search',
   'Move Deleted Items to Trash',
   'data-shortcut-input="directory.refresh"',
+  'columnHeaderResult',
   'scrollSnapType.includes',
 ], 'Stage 4 settings UI smoke');
 

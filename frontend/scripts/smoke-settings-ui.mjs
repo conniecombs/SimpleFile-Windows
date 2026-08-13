@@ -472,6 +472,182 @@ async function runSettingsUiSmoke() {
 
     await navigateAndWaitForReady(page, appUrl);
     await waitForExpression(page, "Boolean(document.querySelector('#btn-settings'))");
+    await waitForExpression(page, "Boolean(document.querySelector('.file-list-header [data-column=\"name\"]'))");
+
+    const columnHeaderResult = await evaluate(page, `(async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const [{ state, saveSettings }, columns] = await Promise.all([
+        import('/src/vanilla-js/runtime/state.svelte.ts'),
+        import('/src/lib/fileListColumns.ts'),
+      ]);
+
+      function resetColumns() {
+        state.settings = {
+          ...state.settings,
+          columnPreset: 'default',
+          columnWidths: { ...columns.DEFAULT_FILE_LIST_COLUMN_WIDTHS },
+          defaultView: 'list',
+          visibleColumns: [...columns.DEFAULT_VISIBLE_FILE_LIST_COLUMNS],
+        };
+        state.isGridView = false;
+        saveSettings();
+      }
+
+      resetColumns();
+      await nextFrame();
+
+      const header = document.querySelector('.file-list-header');
+      const list = document.querySelector('#file-list');
+      const nameCell = header.querySelector('[data-column="name"]');
+      const nameHandle = header.querySelector('[data-column-resize="name"]');
+      const startWidth = Math.round(nameCell.getBoundingClientRect().width);
+      const handleRect = nameHandle.getBoundingClientRect();
+      nameHandle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true,
+        clientX: handleRect.left + 4,
+        pointerId: 17,
+      }));
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true,
+        clientX: handleRect.left + 68,
+        pointerId: 17,
+      }));
+      document.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true,
+        clientX: handleRect.left + 68,
+        pointerId: 17,
+      }));
+      await nextFrame();
+
+      const savedAfterDrag = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      const dragHeaderTemplate = header.style.getPropertyValue('--file-list-columns').trim();
+      const dragListTemplate = list.style.getPropertyValue('--file-list-columns').trim();
+
+      state.settings = {
+        ...state.settings,
+        columnWidths: {
+          ...state.settings.columnWidths,
+          name: 120,
+        },
+      };
+      saveSettings();
+      await nextFrame();
+      nameHandle.dispatchEvent(new MouseEvent('dblclick', {
+        bubbles: true,
+        clientX: handleRect.left + 4,
+      }));
+      await nextFrame();
+      const savedAfterDoubleClick = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+
+      const dateCell = header.querySelector('[data-column="date"]');
+      const dateRect = dateCell.getBoundingClientRect();
+      dateCell.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        button: 2,
+        cancelable: true,
+        clientX: dateRect.left + 12,
+        clientY: dateRect.bottom + 4,
+      }));
+      await nextFrame();
+
+      const menu = document.querySelector('#column-header-menu');
+      const quickColumns = Array.from(menu.querySelectorAll('[data-column-toggle]')).map((input) => input.dataset.columnToggle);
+      const actionLabels = Array.from(menu.querySelectorAll('[data-column-action]')).map((button) => button.textContent.trim());
+      const menuOpen = menu.classList.contains('open');
+      const menuCurrentColumn = menu.dataset.column;
+
+      menu.querySelector('[data-column-toggle="items"]').click();
+      await nextFrame();
+      const savedAfterToggle = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+
+      dateCell.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        button: 2,
+        cancelable: true,
+        clientX: dateRect.left + 12,
+        clientY: dateRect.bottom + 4,
+      }));
+      await nextFrame();
+      document.querySelector('#column-header-menu [data-column-action="size-column-to-fit"]').click();
+      await nextFrame();
+      const savedAfterFitColumn = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+
+      dateCell.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        button: 2,
+        cancelable: true,
+        clientX: dateRect.left + 12,
+        clientY: dateRect.bottom + 4,
+      }));
+      await nextFrame();
+      document.querySelector('#column-header-menu [data-column-action="size-all-columns-to-fit"]').click();
+      await nextFrame();
+      const savedAfterFitAll = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+
+      dateCell.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        button: 2,
+        cancelable: true,
+        clientX: dateRect.left + 12,
+        clientY: dateRect.bottom + 4,
+      }));
+      await nextFrame();
+      document.querySelector('#column-header-menu [data-column-action="more-columns"]').click();
+      await nextFrame();
+      await nextFrame();
+      const morePanel = document.querySelector('.settings-tab-panel:not([hidden])')?.getAttribute('data-settings-panel') || null;
+      document.querySelector('#modal-close')?.click();
+      await nextFrame();
+
+      resetColumns();
+      await nextFrame();
+
+      return {
+        actionLabels,
+        dragHeaderTemplate,
+        dragListTemplate,
+        menuCurrentColumn,
+        menuOpen,
+        morePanel,
+        quickColumns,
+        savedAfterDoubleClick,
+        savedAfterDrag,
+        savedAfterFitAll,
+        savedAfterFitColumn,
+        savedAfterToggle,
+        startWidth,
+      };
+    })()`);
+
+    assert.ok(
+      columnHeaderResult.savedAfterDrag.columnWidths.name >= columnHeaderResult.startWidth + 40,
+      'Dragging the Name divider should persist a larger width.',
+    );
+    assert.equal(columnHeaderResult.dragHeaderTemplate, columnHeaderResult.dragListTemplate);
+    assert.ok(
+      columnHeaderResult.savedAfterDoubleClick.columnWidths.name > 120,
+      'Double-clicking a divider should auto-fit the column wider than the forced minimum.',
+    );
+    assert.equal(columnHeaderResult.menuOpen, true);
+    assert.equal(columnHeaderResult.menuCurrentColumn, 'date');
+    assert.deepEqual(columnHeaderResult.quickColumns, ['size', 'date', 'type', 'items', 'extension']);
+    assert.deepEqual(columnHeaderResult.actionLabels, [
+      'Size Column to Fit',
+      'Size All Columns to Fit',
+      'Reset Modified Width',
+      'Reset All Column Widths',
+      'More...',
+    ]);
+    assert.equal(columnHeaderResult.savedAfterToggle.columnPreset, 'custom');
+    assert.deepEqual(columnHeaderResult.savedAfterToggle.visibleColumns, ['size', 'date', 'type', 'items']);
+    assert.ok(
+      Number.isFinite(columnHeaderResult.savedAfterFitColumn.columnWidths.date),
+      'Size Column to Fit should persist a width for the active column.',
+    );
+    for (const column of ['name', 'size', 'date', 'type', 'items']) {
+      assert.ok(Number.isFinite(columnHeaderResult.savedAfterFitAll.columnWidths[column]), `Missing fit width for ${column}`);
+    }
+    assert.equal(columnHeaderResult.morePanel, 'file-list');
 
     await evaluate(page, "document.querySelector('#btn-settings').click()");
     await waitForExpression(page, "Boolean(document.querySelector('.settings-modal'))");

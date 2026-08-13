@@ -38,6 +38,13 @@
         <button class="context-item" id="ctx-info" role="menuitem">Properties</button>
     </div>
 
+    <div
+      class="column-header-menu"
+      id="column-header-menu"
+      role="menu"
+      aria-label="Column options"
+    ></div>
+
     <GenericModal />
     <ProgressModal />
     <ArchiveViewerModal />

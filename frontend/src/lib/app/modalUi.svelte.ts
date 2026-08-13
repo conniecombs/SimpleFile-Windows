@@ -1,4 +1,5 @@
 import { tick } from 'svelte';
+import type { SettingsTab } from '../components/settings-body';
 
 export type ModalKind = 'none' | 'confirm' | 'prompt' | 'html' | 'settings';
 
@@ -14,6 +15,7 @@ export type ModalUiState = {
   promptValue: string;
   showCancel: boolean;
   showConfirm: boolean;
+  settingsActiveTab: SettingsTab;
   title: string;
   visible: boolean;
 };
@@ -30,6 +32,7 @@ export const modalUi = $state<ModalUiState>({
   promptValue: '',
   showCancel: true,
   showConfirm: true,
+  settingsActiveTab: 'appearance',
   title: 'Dialog',
   visible: false,
 });
@@ -53,6 +56,7 @@ function resetModalFields() {
   modalUi.promptValue = '';
   modalUi.modalClass = '';
   modalUi.bodyClass = '';
+  modalUi.settingsActiveTab = 'appearance';
   onConfirmHandler = null;
 }
 
@@ -217,7 +221,7 @@ export function openHtmlDialog(options: {
   return tick().then(() => settlePromise);
 }
 
-export function openSettingsModalUi() {
+export function openSettingsModalUi(activeTab: SettingsTab = 'appearance') {
   if (resolveDialog) {
     settleDialog(false);
   }
@@ -231,6 +235,7 @@ export function openSettingsModalUi() {
   modalUi.bodyClass = 'settings-body';
   modalUi.bodyHtml = '';
   modalUi.message = '';
+  modalUi.settingsActiveTab = activeTab;
   modalUi.visible = true;
 }
 

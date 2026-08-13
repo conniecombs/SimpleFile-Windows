@@ -1,4 +1,4 @@
-
+import { tick } from 'svelte';
 import { addBookmark, addRecentLocation, clearRecentLocations, loadBookmarks, loadRecentLocations, loadSettings, loadTabs, removeBookmark, saveSettings, saveTabs, state as appState } from '../../vanilla-js/runtime/state.svelte';
 import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-location';
   import { getActiveFileSystem } from '../vfs';
@@ -10,10 +10,14 @@ import {
     resetPassiveMetricFailures,
 } from '../fileListLazyData';
 import {
+    clampFileListColumnWidth,
     columnDefinition,
     columnsForPreset,
+    defaultFileListColumnWidth,
     DEFAULT_FILE_LIST_COLUMN_WIDTHS,
+    FILE_LIST_HEADER_QUICK_COLUMNS,
     FILE_LIST_COLUMN_PRESET_LABELS,
+    type FileListColumnId,
     isColumnId,
     isColumnPresetId,
     normalizeVisibleColumns,
@@ -100,7 +104,7 @@ import {
   import { renderAdvancedRenamePreview } from '../components/advanced-rename-preview';
   import { renderArchiveContents, renderArchiveInfo, renderCreateArchiveBody } from '../components/archive-surfaces';
   import { clearSearchResultsHeader, renderSearchResultsHeader } from '../components/search-chrome';
-  import { renderContextMenu } from '../components/context-menus';
+  import { renderColumnHeaderMenu, renderContextMenu } from '../components/context-menus';
 
     import { renderStatusBar } from '../components/status-bar';
   import { showError, showSuccess } from '../components/toasts';
@@ -144,6 +148,7 @@ import {
     TransferResult,
     ViewMode,
   } from '../types';
+  import type { SettingsTab } from '../components/settings-body';
   import type { FileTab, OperationLogEntry, OperationLogRetry, OperationLogStatus } from '../appState';
 
   export type ColorLabelTag = import('../types').ColorLabelTag;
@@ -1336,8 +1341,8 @@ const defaultColorLabels = [
     closeSettingsModalUi();
   }
 
-  export function openSettingsModal() {
-    openSettingsModalUi();
+  export function openSettingsModal(activeTab: SettingsTab = 'appearance') {
+    openSettingsModalUi(activeTab);
   }
 
   export function resetGenericModal() {
@@ -2755,11 +2760,171 @@ const defaultColorLabels = [
     document.getElementById('context-menu')?.classList.remove('visible');
   }
 
+  export function hideColumnHeaderMenu() {
+    document.getElementById('column-header-menu')?.classList.remove('open');
+  }
+
   export function showContextMenuAt(x: number, y: number) {
     const menu = document.getElementById('context-menu');
     if (!menu) return;
 
+    hideColumnHeaderMenu();
     menu.classList.add('visible');
+    const rect = menu.getBoundingClientRect();
+    const left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
+    const top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+  }
+
+  function currentVisibleColumnIds() {
+    return normalizeVisibleColumns(appState.settings?.visibleColumns, columnsForPreset(appState.settings?.columnPreset));
+  }
+
+  function visibleFileListColumnIds() {
+    return ['name', ...currentVisibleColumnIds()] as FileListColumnId[];
+  }
+
+  function paneListElement(pane: PaneId = appState.activePane as PaneId) {
+    return document.getElementById(pane === 'secondary' ? 'secondary-file-list' : 'file-list');
+  }
+
+  function paneHeaderElement(pane: PaneId = appState.activePane as PaneId) {
+    const paneElement = document.getElementById(pane === 'secondary' ? 'pane-secondary' : 'pane-primary');
+    return paneElement?.querySelector<HTMLElement>('.file-list-header') || null;
+  }
+
+  function setFileListColumnWidth(column: FileListColumnId, width: number) {
+    appState.settings = {
+      ...appState.settings,
+      columnWidths: {
+        ...appState.settings.columnWidths,
+        [column]: clampFileListColumnWidth(column, width),
+      },
+    };
+    saveSettings();
+  }
+
+  function resetColumnWidthValue(column: FileListColumnId) {
+    setFileListColumnWidth(column, defaultFileListColumnWidth(column));
+  }
+
+  function resetAllColumnWidthValues() {
+    appState.settings = {
+      ...appState.settings,
+      columnWidths: { ...DEFAULT_FILE_LIST_COLUMN_WIDTHS },
+    };
+    saveSettings();
+  }
+
+  function measureColumnContentWidth(column: FileListColumnId, pane: PaneId) {
+    const candidates: number[] = [];
+    const header = paneHeaderElement(pane);
+    const headerCell = header?.querySelector<HTMLElement>(`[data-column="${column}"]`);
+    const headerLabel = headerCell?.querySelector<HTMLElement>('span:first-of-type');
+    if (headerLabel) {
+      candidates.push(headerLabel.scrollWidth + 36);
+    }
+
+    const list = paneListElement(pane);
+    if (list?.classList.contains('list-view')) {
+      const selector = column === 'name'
+        ? '.list-item .name-col'
+        : `.list-item .${column}-col`;
+      const cells = [...list.querySelectorAll<HTMLElement>(selector)].slice(0, 150);
+      for (const cell of cells) {
+        if (column === 'name') {
+          const fileName = cell.querySelector<HTMLElement>('.file-name');
+          const icon = cell.querySelector<HTMLElement>('.file-icon');
+          const iconWidth = icon ? icon.getBoundingClientRect().width + 12 : 0;
+          if (fileName) candidates.push(fileName.scrollWidth + iconWidth + 36);
+        } else {
+          candidates.push(cell.scrollWidth + 24);
+        }
+      }
+    }
+
+    return clampFileListColumnWidth(column, Math.max(defaultFileListColumnWidth(column), ...candidates));
+  }
+
+  export function autoFitFileListColumn(column: FileListColumnId, pane: PaneId = appState.activePane as PaneId) {
+    setFileListColumnWidth(column, measureColumnContentWidth(column, pane));
+  }
+
+  export function autoFitAllFileListColumns(pane: PaneId = appState.activePane as PaneId) {
+    const columnWidths = { ...appState.settings.columnWidths };
+    for (const column of visibleFileListColumnIds()) {
+      columnWidths[column] = measureColumnContentWidth(column, pane);
+    }
+    appState.settings = {
+      ...appState.settings,
+      columnWidths,
+    };
+    saveSettings();
+  }
+
+  export function resetFileListColumnWidth(column?: FileListColumnId) {
+    if (column) {
+      resetColumnWidthValue(column);
+      return;
+    }
+    resetAllColumnWidthValues();
+  }
+
+  export function toggleHeaderColumn(column: ColumnId) {
+    if (!isColumnId(column)) return;
+
+    const visibleColumns = currentVisibleColumnIds();
+    const isVisible = visibleColumns.includes(column);
+    if (isVisible && visibleColumns.length <= 1) {
+      return;
+    }
+
+    appState.settings = {
+      ...appState.settings,
+      columnPreset: 'custom',
+      visibleColumns: isVisible
+        ? visibleColumns.filter((candidate) => candidate !== column)
+        : [...visibleColumns, column],
+    };
+    saveSettings();
+    applyEntryFilters();
+    if (appState.dualPaneEnabled) applySecondaryEntryFilters();
+    syncSettingsControls();
+  }
+
+  export function openColumnManagerFromHeader() {
+    hideColumnHeaderMenu();
+    openSettingsModal('file-list');
+    void tick().then(syncSettingsControls);
+  }
+
+  export function showColumnHeaderMenuAt(
+    x: number,
+    y: number,
+    column: FileListColumnId = 'name',
+    pane: PaneId = appState.activePane as PaneId,
+  ) {
+    const menu = document.getElementById('column-header-menu');
+    if (!menu) return;
+
+    hideContextMenu();
+    const visibleColumns = currentVisibleColumnIds();
+    const visibleSet = new Set(visibleColumns);
+    renderColumnHeaderMenu(menu, {
+      columns: FILE_LIST_HEADER_QUICK_COLUMNS.map((id) => ({
+        checked: visibleSet.has(id),
+        disabled: visibleSet.has(id) && visibleColumns.length <= 1,
+        id,
+        label: columnDefinition(id).label,
+      })),
+      currentColumn: column,
+      currentColumnLabel: columnDefinition(column).label,
+    });
+    menu.dataset.column = column;
+    menu.dataset.pane = pane;
+    menu.classList.add('open');
+
     const rect = menu.getBoundingClientRect();
     const left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
     const top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));

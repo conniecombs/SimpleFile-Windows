@@ -418,8 +418,8 @@
 .column-header-menu {
     display: none;
     position: fixed;
-    z-index: 900;
-    min-width: 220px;
+    z-index: 1000;
+    min-width: 230px;
     padding: 6px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md, 6px);
@@ -454,6 +454,7 @@
     color: var(--text-primary);
     font-size: 13px;
     text-align: left;
+    white-space: nowrap;
 }
 
 .column-menu-item {
@@ -474,9 +475,14 @@
 .column-menu-button {
     cursor: pointer;
     margin-top: 4px;
-    border-top: 1px solid var(--border-color);
     border-radius: 0;
     color: var(--text-secondary);
+}
+
+.column-menu-divider {
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    margin: 6px 0;
 }
 
 .column-menu-item:hover,

@@ -1,15 +1,21 @@
 import { mount, unmount } from 'svelte';
 
+import type { ColumnId } from '../types';
+import type { FileListColumnId } from '../fileListColumns';
 import ColumnHeaderMenu from './context-menus/ColumnHeaderMenu.svelte';
 import ContextMenu from './context-menus/ContextMenu.svelte';
 
 export type ColumnHeaderMenuColumn = {
-  id: string;
+  checked?: boolean;
+  disabled?: boolean;
+  id: ColumnId;
   label: string;
 };
 
 export type RenderColumnHeaderMenuProps = {
   columns?: ColumnHeaderMenuColumn[];
+  currentColumn?: FileListColumnId;
+  currentColumnLabel?: string;
 };
 
 const mountedContextMenus = new WeakMap<Element, ReturnType<typeof mount>>();
@@ -68,6 +74,8 @@ export function renderColumnHeaderMenu(
     target,
     props: {
       columns: props.columns ?? [],
+      currentColumn: props.currentColumn ?? 'name',
+      currentColumnLabel: props.currentColumnLabel ?? 'Name',
     },
   });
 

@@ -95,6 +95,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
     TransferResult,
   } from '../types';
 import { localState } from './localState.svelte';
+import type { FileListColumnId } from "../fileListColumns.js";
 import type { PaneId } from "../fileNavigation.js";
 import type { TransferAction } from "../transferPathUtils.js";
 import { handleKeyDown, isEditableTarget, normalizeShortcutCombo, registerShortcut, unregisterShortcut, updateShortcutCombo, type ShortcutOptions } from "../keyboardShortcuts.js";
@@ -107,7 +108,7 @@ import { closeDuplicateCheckerUi, isDuplicateCheckerVisible } from './duplicateC
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow, confirmCreateArchiveFlow } from "./archive.js";
 import { isArchiveViewerVisible, isCreateArchiveVisible, closeCreateArchiveUi } from './archiveUi.svelte';
 import { requestSearchFocus } from './searchUi.svelte';
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, loadDirectoryForPane, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, tabsForPane, activeTabIdForPane, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, moveSettingsColumn, resetColumnSettings, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, loadDirectoryForPane, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, tabsForPane, activeTabIdForPane, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, hideColumnHeaderMenu, showColumnHeaderMenuAt, toggleHeaderColumn, autoFitFileListColumn, autoFitAllFileListColumns, resetFileListColumnWidth, openColumnManagerFromHeader, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, moveSettingsColumn, resetColumnSettings, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
 import { cancelModalUi, isSettingsModalOpen } from './modalUi.svelte';
 import { dismissProgressUi, progressUi } from './progressUi.svelte';
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
@@ -155,6 +156,18 @@ type PathDetail = {
 
 type SortDetail = {
   sort?: string;
+};
+
+type ColumnHeaderMenuDetail = {
+  column?: FileListColumnId;
+  pane?: PaneId;
+  x?: number;
+  y?: number;
+};
+
+type ColumnAutoFitDetail = {
+  column?: FileListColumnId;
+  pane?: PaneId;
 };
 
 type IconSizeDetail = {
@@ -699,6 +712,7 @@ export function initApp() {
       const selectedSet = selectedSetForPane(pane);
 
       event.preventDefault();
+      hideColumnHeaderMenu();
       const item = target?.closest<HTMLElement>('.file-item');
       if (item?.dataset.path) {
         const index = Number(item.dataset.index ?? -1);
@@ -714,6 +728,20 @@ export function initApp() {
       showContextMenuAt(event.clientX, event.clientY);
     };
 
+    const handleColumnHeaderMenu = (event: Event) => {
+      const detail = detailOf<ColumnHeaderMenuDetail>(event);
+      const column = detail.column || 'name';
+      const pane = detail.pane === 'secondary' ? 'secondary' : 'primary';
+      showColumnHeaderMenuAt(Number(detail.x || 0), Number(detail.y || 0), column, pane);
+    };
+
+    const handleColumnAutoFit = (event: Event) => {
+      const detail = detailOf<ColumnAutoFitDetail>(event);
+      const column = detail.column || 'name';
+      const pane = detail.pane === 'secondary' ? 'secondary' : 'primary';
+      autoFitFileListColumn(column, pane);
+    };
+
     const handleContextMenuClick = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       const button = target?.closest<HTMLButtonElement>('#context-menu button[id]');
@@ -722,10 +750,55 @@ export function initApp() {
       void handleContextMenuCommand(button.id);
     };
 
+    const handleColumnHeaderMenuClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest<HTMLButtonElement>('#column-header-menu button[data-column-action]');
+      if (!button || button.disabled) return;
+
+      event.preventDefault();
+      const menu = button.closest<HTMLElement>('#column-header-menu');
+      const pane = menu?.dataset.pane === 'secondary' ? 'secondary' : 'primary';
+      const column = (button.dataset.column || menu?.dataset.column || 'name') as FileListColumnId;
+
+      switch (button.dataset.columnAction) {
+        case 'size-column-to-fit':
+          autoFitFileListColumn(column, pane);
+          hideColumnHeaderMenu();
+          break;
+        case 'size-all-columns-to-fit':
+          autoFitAllFileListColumns(pane);
+          hideColumnHeaderMenu();
+          break;
+        case 'reset-column-width':
+          resetFileListColumnWidth(column);
+          hideColumnHeaderMenu();
+          break;
+        case 'reset-all-column-widths':
+          resetFileListColumnWidth();
+          hideColumnHeaderMenu();
+          break;
+        case 'more-columns':
+          openColumnManagerFromHeader();
+          break;
+        default:
+          break;
+      }
+    };
+
+    const handleColumnHeaderMenuChange = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || !target.dataset.columnToggle) return;
+      toggleHeaderColumn(target.dataset.columnToggle as ColumnId);
+      hideColumnHeaderMenu();
+    };
+
     const handleDocumentPointerDown = (event: MouseEvent) => {
       const target = event.target as HTMLElement | null;
       if (!target?.closest('#context-menu')) {
         hideContextMenu();
+      }
+      if (!target?.closest('#column-header-menu')) {
+        hideColumnHeaderMenu();
       }
     };
 
@@ -1380,13 +1453,17 @@ export function initApp() {
     document.addEventListener('simplefile:duplicate-checker-open', handleDuplicateCheckerOpen);
     document.addEventListener('simplefile:duplicate-checker-preview', handleDuplicateCheckerPreview);
     document.addEventListener('simplefile:duplicate-checker-reveal', handleDuplicateCheckerReveal);
+    document.addEventListener('simplefile:column-header-menu', handleColumnHeaderMenu);
+    document.addEventListener('simplefile:column-autofit', handleColumnAutoFit);
     document.addEventListener('contextmenu', handleFileListContextMenu);
     document.addEventListener('click', handleContextMenuClick);
+    document.addEventListener('click', handleColumnHeaderMenuClick);
     document.addEventListener('click', handleSettingsClick);
     document.addEventListener('click', handleSettingsListClick);
 
     document.addEventListener('click', handleStage5OverlayClick);
     document.addEventListener('change', handleSettingsChange);
+    document.addEventListener('change', handleColumnHeaderMenuChange);
     document.addEventListener('change', handleAdvancedRenameControlInput);
     document.addEventListener('input', handleSettingsInput);
     document.addEventListener('input', handleAdvancedRenameControlInput);
@@ -1461,13 +1538,17 @@ export function initApp() {
       document.removeEventListener('simplefile:duplicate-checker-open', handleDuplicateCheckerOpen);
       document.removeEventListener('simplefile:duplicate-checker-preview', handleDuplicateCheckerPreview);
       document.removeEventListener('simplefile:duplicate-checker-reveal', handleDuplicateCheckerReveal);
+      document.removeEventListener('simplefile:column-header-menu', handleColumnHeaderMenu);
+      document.removeEventListener('simplefile:column-autofit', handleColumnAutoFit);
       document.removeEventListener('contextmenu', handleFileListContextMenu);
       document.removeEventListener('click', handleContextMenuClick);
+      document.removeEventListener('click', handleColumnHeaderMenuClick);
       document.removeEventListener('click', handleSettingsClick);
       document.removeEventListener('click', handleSettingsListClick);
 
       document.removeEventListener('click', handleStage5OverlayClick);
       document.removeEventListener('change', handleSettingsChange);
+      document.removeEventListener('change', handleColumnHeaderMenuChange);
       document.removeEventListener('change', handleAdvancedRenameControlInput);
       document.removeEventListener('input', handleSettingsInput);
       document.removeEventListener('input', handleAdvancedRenameControlInput);

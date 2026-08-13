@@ -81,7 +81,7 @@
       bind:this={htmlBodyHost}
     >
       {#if modalUi.kind === 'settings'}
-        <SettingsBody />
+        <SettingsBody activeTab={modalUi.settingsActiveTab} />
       {:else if modalUi.kind === 'html'}
         <ModalBody bodyHtml={modalUi.bodyHtml} />
       {:else}
