@@ -6,8 +6,19 @@ import {
     applyPassiveFolderMetricsToState,
     cancelPassiveFolderMetricWork,
     clearThumbnailCache,
+    isImageFileName,
     resetPassiveMetricFailures,
 } from '../fileListLazyData';
+import {
+    columnDefinition,
+    columnsForPreset,
+    DEFAULT_FILE_LIST_COLUMN_WIDTHS,
+    FILE_LIST_COLUMN_PRESET_LABELS,
+    isColumnId,
+    isColumnPresetId,
+    normalizeVisibleColumns,
+    orderedOptionalColumns,
+} from '../fileListColumns';
 import {
     batchRename,
     calculateFolderSize,
@@ -114,6 +125,7 @@ import {
   import type {
     ArchiveFormat,
     ColumnId,
+    ColumnPresetId,
     ClipboardAction,
     CleanupResult,
     ConflictAction,
@@ -123,6 +135,7 @@ import {
     NativeFileDropEventPayload,
     OperationId,
     PathString,
+    PhotoFolderMode,
     ProgressUpdate,
     RarInstallPlan,
     RenameRequest,
@@ -742,12 +755,54 @@ const defaultColorLabels = [
     document.documentElement.setAttribute('data-theme', appState.theme || 'dark');
   }
 
+  function clampPhotoFolderThreshold(value: unknown) {
+    const threshold = Number(value);
+    if (!Number.isFinite(threshold)) return 70;
+    return Math.max(10, Math.min(100, Math.round(threshold)));
+  }
+
+  function clampPhotoFolderIconSize(value: unknown) {
+    const iconSize = Number(value);
+    if (!Number.isFinite(iconSize)) return 112;
+    return Math.max(64, Math.min(160, Math.round(iconSize)));
+  }
+
+  function photoFolderMode(value: unknown): PhotoFolderMode {
+    return value === 'off' ? 'off' : 'auto';
+  }
+
+  function isPhotoFolder(entries: FileEntry[]) {
+    const files = entries.filter((entry) => !entry.is_dir);
+    if (files.length < 3) {
+      return false;
+    }
+
+    const imageCount = files.filter((entry) => isImageFileName(entry.name)).length;
+    const threshold = clampPhotoFolderThreshold(appState.settings?.photoFolderImageThreshold);
+    return (imageCount / files.length) * 100 >= threshold;
+  }
+
+  export function applyContextualFolderView(entries: FileEntry[] = appState.entries) {
+    const settings = appState.settings || {};
+    let nextGridView = settings.defaultView === 'grid';
+    let nextIconSize = Number(settings.defaultIconSize || appState.iconSize || 64);
+
+    const photoFolderActive = photoFolderMode(settings.photoFolderMode) === 'auto' && isPhotoFolder(entries);
+    if (photoFolderActive) {
+      nextGridView = true;
+      nextIconSize = clampPhotoFolderIconSize(settings.photoFolderIconSize);
+    }
+
+    appState.contextualPhotoViewActive = photoFolderActive;
+    appState.isGridView = nextGridView;
+    appState.iconSize = nextIconSize;
+    document.documentElement.style.setProperty('--icon-size', `${nextIconSize}px`);
+  }
+
   export function applyPersistedViewSettings() {
     appState.theme = appState.settings?.theme || appState.theme || 'dark';
-    appState.isGridView = appState.settings?.defaultView === 'grid';
-    appState.iconSize = Number(appState.settings?.defaultIconSize || appState.iconSize || 64);
     appState.showHiddenFiles = Boolean(appState.settings?.showHidden);
-    document.documentElement.style.setProperty('--icon-size', `${appState.iconSize}px`);
+    applyContextualFolderView(appState.entries);
     applyTheme();
   }
 
@@ -1782,6 +1837,7 @@ const defaultColorLabels = [
       appState.entries = listing.entries;
       appState.primaryPathIsNetwork = listing.is_network
         ?? isNetworkFsPath(listing.path, appState.drives || []);
+      applyContextualFolderView(listing.entries);
       recordHistory(listing.path, historyMode);
       applyEntryFilters();
       startDirectoryWatch(listing.path);
@@ -1843,6 +1899,9 @@ const defaultColorLabels = [
       appState.secondaryPathIsNetwork = listing.is_network
         ?? isNetworkFsPath(listing.path, appState.drives || []);
       if (activate) appState.activePane = 'secondary';
+      if (activate || appState.activePane === 'secondary') {
+        applyContextualFolderView(listing.entries);
+      }
       recordSecondaryHistory(listing.path, historyMode);
       applySecondaryEntryFilters();
       syncActiveTab('secondary');
@@ -3577,6 +3636,118 @@ const defaultColorLabels = [
     if (input) input.value = String(value);
   }
 
+  function activeColumnPreset(): ColumnPresetId {
+    const value = (document.getElementById('settings-column-preset') as HTMLSelectElement | null)?.value;
+    return isColumnPresetId(value) ? value : (appState.settings?.columnPreset || 'custom');
+  }
+
+  function readVisibleColumnsFromManager() {
+    const rows = [...document.querySelectorAll<HTMLElement>('#settings-column-manager [data-column-row]')];
+    const columns = rows
+      .map((row) => {
+        const column = row.dataset.columnRow;
+        const checked = row.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked;
+        return checked && isColumnId(column) ? column : null;
+      })
+      .filter((column): column is ColumnId => Boolean(column));
+
+    return normalizeVisibleColumns(columns, appState.settings?.visibleColumns || columnsForPreset('default'));
+  }
+
+  export function renderColumnManagerControls() {
+    const container = document.getElementById('settings-column-manager');
+    if (!container) return;
+
+    const settings = appState.settings || {};
+    const visibleColumns = normalizeVisibleColumns(settings.visibleColumns, columnsForPreset(settings.columnPreset));
+    const visibleSet = new Set(visibleColumns);
+    const orderedColumns = orderedOptionalColumns(visibleColumns);
+    const rows = orderedColumns.map((column, index) => {
+      const definition = columnDefinition(column);
+      const row = document.createElement('div');
+      row.className = 'settings-column-row';
+      row.dataset.columnRow = column;
+
+      const label = document.createElement('label');
+      label.htmlFor = `settings-col-${column}`;
+
+      const checkbox = document.createElement('input');
+      checkbox.id = `settings-col-${column}`;
+      checkbox.type = 'checkbox';
+      checkbox.dataset.settingsColumn = column;
+      checkbox.checked = visibleSet.has(column);
+
+      const name = document.createElement('span');
+      name.className = 'settings-column-name';
+      name.textContent = definition.label;
+
+      const up = document.createElement('button');
+      up.type = 'button';
+      up.className = 'settings-column-move';
+      up.dataset.columnMove = column;
+      up.dataset.columnDirection = '-1';
+      up.textContent = 'Up';
+      up.disabled = index === 0;
+
+      const down = document.createElement('button');
+      down.type = 'button';
+      down.className = 'settings-column-move';
+      down.dataset.columnMove = column;
+      down.dataset.columnDirection = '1';
+      down.textContent = 'Down';
+      down.disabled = index === orderedColumns.length - 1;
+
+      label.append(checkbox, name);
+      row.append(label, up, down);
+      return row;
+    });
+
+    container.replaceChildren(...rows);
+  }
+
+  function refreshColumnManagerMoveButtons() {
+    const rows = [...document.querySelectorAll<HTMLElement>('#settings-column-manager [data-column-row]')];
+    rows.forEach((row, index) => {
+      const up = row.querySelector<HTMLButtonElement>('[data-column-direction="-1"]');
+      const down = row.querySelector<HTMLButtonElement>('[data-column-direction="1"]');
+      if (up) up.disabled = index === 0;
+      if (down) down.disabled = index === rows.length - 1;
+    });
+  }
+
+  export function moveSettingsColumn(column: ColumnId, direction: number) {
+    const row = document.querySelector<HTMLElement>(`#settings-column-manager [data-column-row="${column}"]`);
+    const container = document.getElementById('settings-column-manager');
+    if (!row || !container || direction === 0) return;
+
+    const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+    if (!(sibling instanceof HTMLElement)) return;
+
+    if (direction < 0) {
+      container.insertBefore(row, sibling);
+    } else {
+      container.insertBefore(sibling, row);
+    }
+
+    setInputValue('settings-column-preset', 'custom');
+    refreshColumnManagerMoveButtons();
+    saveSettingsFromControls();
+  }
+
+  export function resetColumnSettings() {
+    appState.settings = {
+      ...appState.settings,
+      columnPreset: 'default',
+      columnWidths: { ...DEFAULT_FILE_LIST_COLUMN_WIDTHS },
+      visibleColumns: columnsForPreset('default'),
+    };
+    saveSettings();
+    applyEntryFilters();
+    if (appState.dualPaneEnabled) applySecondaryEntryFilters();
+    syncSettingsControls();
+    showSuccess('Columns reset');
+  }
+
   export function syncSettingsControls() {
     const settings = appState.settings || {};
     setInputValue('settings-theme', settings.theme || appState.theme || 'dark');
@@ -3594,38 +3765,36 @@ const defaultColorLabels = [
     setInputValue('settings-start-location', settings.startLocation || 'home');
     setInputValue('settings-custom-path', settings.customPath || '');
     setElementDisplayById('settings-custom-path-row', settings.startLocation === 'custom' ? 'grid' : 'none');
-
-    const visibleColumns = new Set(settings.visibleColumns || ['size', 'date', 'type']);
-    setCheckbox('settings-col-size', visibleColumns.has('size'));
-    setCheckbox('settings-col-items', visibleColumns.has('items'));
-    setCheckbox('settings-col-date', visibleColumns.has('date'));
-    setCheckbox('settings-col-type', visibleColumns.has('type'));
+    setInputValue('settings-column-preset', settings.columnPreset || 'default');
+    setInputValue('settings-photo-folder-mode', photoFolderMode(settings.photoFolderMode));
+    setInputValue('settings-photo-folder-threshold', clampPhotoFolderThreshold(settings.photoFolderImageThreshold));
+    setInputValue('settings-photo-icon-size', clampPhotoFolderIconSize(settings.photoFolderIconSize));
+    renderColumnManagerControls();
     renderShortcutSettingsControls();
   }
 
   export function saveSettingsFromControls() {
-    const visibleColumns = [
-      ['settings-col-size', 'size'],
-      ['settings-col-items', 'items'],
-      ['settings-col-date', 'date'],
-      ['settings-col-type', 'type'],
-    ] satisfies Array<[string, ColumnId]>;
-    const selectedVisibleColumns = visibleColumns
-      .filter(([id]) => (document.getElementById(id) as HTMLInputElement | null)?.checked)
-      .map(([, value]) => value);
-
+    const columnPreset = activeColumnPreset();
+    const selectedVisibleColumns = columnPreset === 'custom'
+      ? readVisibleColumnsFromManager()
+      : columnsForPreset(columnPreset);
     const iconSize = Number((document.getElementById('settings-icon-size') as HTMLInputElement | null)?.value || appState.iconSize || 64);
     const defaultViewValue = (document.getElementById('settings-default-view') as HTMLSelectElement | null)?.value;
     const defaultView: ViewMode = defaultViewValue === 'grid' ? 'grid' : 'list';
+    const photoModeValue = (document.getElementById('settings-photo-folder-mode') as HTMLSelectElement | null)?.value;
     appState.settings = {
       ...appState.settings,
       autoCollapseTree: (document.getElementById('settings-auto-collapse') as HTMLInputElement | null)?.checked || false,
+      columnPreset,
       confirmDelete: (document.getElementById('settings-confirm-delete') as HTMLInputElement | null)?.checked !== false,
       customPath: (document.getElementById('settings-custom-path') as HTMLInputElement | null)?.value?.trim() || '',
       defaultIconSize: iconSize,
       defaultView,
       enableGitIntegration: (document.getElementById('settings-git-integration') as HTMLInputElement | null)?.checked !== false,
       openInNewTab: (document.getElementById('settings-new-tab') as HTMLInputElement | null)?.checked || false,
+      photoFolderIconSize: clampPhotoFolderIconSize((document.getElementById('settings-photo-icon-size') as HTMLInputElement | null)?.value),
+      photoFolderImageThreshold: clampPhotoFolderThreshold((document.getElementById('settings-photo-folder-threshold') as HTMLInputElement | null)?.value),
+      photoFolderMode: photoFolderMode(photoModeValue),
       showFolderSizes: (document.getElementById('settings-folder-sizes') as HTMLInputElement | null)?.checked !== false,
       showHidden: (document.getElementById('settings-show-hidden') as HTMLInputElement | null)?.checked || false,
       showRecentLocations: (document.getElementById('settings-recent-locations') as HTMLInputElement | null)?.checked !== false,
@@ -3635,11 +3804,9 @@ const defaultColorLabels = [
       visibleColumns: selectedVisibleColumns,
     };
     appState.theme = appState.settings.theme;
-    appState.isGridView = appState.settings.defaultView === 'grid';
-    appState.iconSize = iconSize;
     appState.showHiddenFiles = Boolean(appState.settings.showHidden);
-    document.documentElement.style.setProperty('--icon-size', `${iconSize}px`);
     applyTheme();
+    applyContextualFolderView(entriesForPane(appState.activePane as PaneId));
     saveSettings();
     applyEntryFilters();
     if (appState.dualPaneEnabled) applySecondaryEntryFilters();

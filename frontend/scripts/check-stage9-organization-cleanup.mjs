@@ -108,9 +108,10 @@ assertContains('frontend/src/lib/components/file-list/FileList.svelte', [
 ], 'Stage 9 file-list metadata rendering');
 
 assertContains('frontend/src/lib/components/layout-shell/FileListHeaderCells.svelte', [
-  "id: 'items'",
+  'columnDefinition',
   'displayColumns',
-  'visibleColumns.includes(column.id)',
+  'normalizeVisibleColumns(visibleColumns)',
+  'FileListHeaderColumn',
 ], 'Stage 9 file-list header columns');
 
 assertContains('frontend/src/lib/coreFileManager.ts', [

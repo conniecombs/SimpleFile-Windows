@@ -14,8 +14,14 @@ import type {
   TreeNode,
   ViewMode,
   ColumnId,
+  ColumnPresetId,
+  PhotoFolderMode,
 } from './types';
 import type { SearchWorkflowOptions } from './searchOptions';
+import {
+  DEFAULT_FILE_LIST_COLUMN_WIDTHS,
+  DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
+} from './fileListColumns';
 
 export interface AppSettings {
   theme: ThemeName;
@@ -32,8 +38,12 @@ export interface AppSettings {
   startLocation: 'home' | 'last' | 'custom' | string;
   customPath: PathString;
   shortcutOverrides: Record<string, string>;
+  columnPreset: ColumnPresetId;
   visibleColumns: ColumnId[];
   columnWidths: Record<'name' | ColumnId, number>;
+  photoFolderMode: PhotoFolderMode;
+  photoFolderImageThreshold: number;
+  photoFolderIconSize: number;
 }
 
 export interface FileTab {
@@ -140,6 +150,7 @@ export interface SimpleFileAppState {
   sortBy: 'name' | 'size' | 'modified' | 'extension' | string;
   sortAsc: boolean;
   isGridView: boolean;
+  contextualPhotoViewActive: boolean;
   homePath: PathString;
   showHiddenFiles: boolean;
   activeOperations: Map<OperationId, ProgressUpdate>;
@@ -217,14 +228,12 @@ export function createDefaultSettings(): AppSettings {
     startLocation: 'home',
     customPath: '',
     shortcutOverrides: {},
-    visibleColumns: ['size', 'date', 'type'],
-    columnWidths: {
-      name: 240,
-      size: 100,
-      items: 90,
-      date: 140,
-      type: 100,
-    },
+    columnPreset: 'default',
+    visibleColumns: [...DEFAULT_VISIBLE_FILE_LIST_COLUMNS],
+    columnWidths: { ...DEFAULT_FILE_LIST_COLUMN_WIDTHS },
+    photoFolderMode: 'auto',
+    photoFolderImageThreshold: 70,
+    photoFolderIconSize: 112,
   };
 }
 
@@ -245,6 +254,7 @@ export function createInitialAppState(): SimpleFileAppState {
     sortBy: 'name',
     sortAsc: true,
     isGridView: false,
+    contextualPhotoViewActive: false,
     homePath: '',
     showHiddenFiles: false,
     activeOperations: new Map(),

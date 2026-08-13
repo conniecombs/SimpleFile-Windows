@@ -1,8 +1,11 @@
 <script lang="ts">
-import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
-import type { ColumnId } from '../../types';
-
-  type FileListColumnId = 'name' | ColumnId;
+  import { state as appState } from '../../../vanilla-js/runtime/state.svelte';
+  import {
+    columnDefinition,
+    DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
+    normalizeVisibleColumns,
+    type FileListColumnId,
+  } from '../../fileListColumns';
 
   export type FileListHeaderColumn = {
     className?: string;
@@ -17,19 +20,19 @@ import type { ColumnId } from '../../types';
     pane?: 'primary' | 'secondary';
   };
 
-  const columnDefinitions: FileListHeaderColumn[] = [
-    { className: 'name-col', id: 'name', label: 'Name', sort: 'name' },
-    { className: 'size-col', id: 'size', label: 'Size', sort: 'size' },
-    { className: 'items-col', id: 'items', label: 'Items', sort: 'items' },
-    { className: 'date-col', id: 'date', label: 'Modified', sort: 'modified' },
-    { className: 'type-col', id: 'type', label: 'Type', sort: 'type' },
-  ];
-
   let { columns = undefined, pane = 'primary' }: Props = $props();
 
-  let visibleColumns = $derived(appState.settings?.visibleColumns || ['size', 'date', 'type']);
+  let visibleColumns = $derived(appState.settings?.visibleColumns || DEFAULT_VISIBLE_FILE_LIST_COLUMNS);
   let displayColumns = $derived.by(() => (
-    columns || columnDefinitions.filter((column) => column.id === 'name' || visibleColumns.includes(column.id))
+    columns || (['name', ...normalizeVisibleColumns(visibleColumns)] as FileListColumnId[]).map((id): FileListHeaderColumn => {
+      const definition = columnDefinition(id);
+      return {
+        className: `${id}-col`,
+        id,
+        label: definition.label,
+        sort: definition.sort,
+      };
+    })
   ));
 
   function getColumnClass(column: FileListHeaderColumn) {

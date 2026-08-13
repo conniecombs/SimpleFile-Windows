@@ -12,7 +12,18 @@ export type ArchiveFormat = 'zip' | 'tar' | 'tar.gz' | 'tgz' | 'rar';
 export type TransferStatus = 'queued' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
 export type ProgressStatus = 'running' | 'completed' | 'error' | 'cancelled' | (string & {});
 
-export type ColumnId = 'size' | 'items' | 'date' | 'type';
+export type ColumnId =
+  | 'size'
+  | 'items'
+  | 'date'
+  | 'type'
+  | 'extension'
+  | 'git'
+  | 'path'
+  | 'parent'
+  | 'symlink';
+export type ColumnPresetId = 'default' | 'details' | 'media' | 'developer' | 'photo' | 'custom';
+export type PhotoFolderMode = 'off' | 'auto';
 
 /** Color label / tag returned by the tags Tauri commands. */
 export interface ColorLabelTag {

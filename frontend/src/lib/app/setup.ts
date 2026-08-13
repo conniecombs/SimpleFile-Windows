@@ -80,6 +80,7 @@ import { resolveStartupLocation } from '../../vanilla-js/runtime/startup-locatio
   import { renderLayoutShell } from '../components/layout-shell';
   import type {
     ArchiveFormat,
+    ColumnId,
     ClipboardAction,
     CleanupResult,
     ConflictAction,
@@ -106,7 +107,7 @@ import { closeDuplicateCheckerUi, isDuplicateCheckerVisible } from './duplicateC
 import { showCreateArchiveFlow, closeArchiveFlow, extractArchiveFlow, confirmCreateArchiveFlow } from "./archive.js";
 import { isArchiveViewerVisible, isCreateArchiveVisible, closeCreateArchiveUi } from './archiveUi.svelte';
 import { requestSearchFocus } from './searchUi.svelte';
-import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, loadDirectoryForPane, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, tabsForPane, activeTabIdForPane, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
+import { applyPersistedViewSettings, updateStatusBar, loadTagsFlow, loadDirectory, openEntryPath, filteredEntriesForPane, selectedSetForPane, selectSecondaryPaths, selectPaths, updatePreviewPane, navigateHistory, refreshCurrentDirectory, createFolderFlow, createFileFlow, renameSelectedFlow, copySelection, pasteClipboard, deleteSelectedFlow, undoLastFlow, redoLastFlow, showClipboardHistoryFlow, showOperationHistoryFlow, showSetColorLabelFlow, showFolderMetricsFlow, showDiskCleanupFlow, showDuplicateCheckerFlow, closePreviewPaneFlow, applyTheme, loadSecondaryDirectory, loadDirectoryForPane, pathForPane, navigateSpecial, navigateSecondaryHistory, loadTreeChildren, applyEntryFilters, applySecondaryEntryFilters, openNewTab, switchToTab, closeTab, moveTabFocus, tabsForPane, activeTabIdForPane, showQuickLookFlow, showKeyboardHelpFlow, showContextMenuAt, handleContextMenuCommand, hideContextMenu, closeSettingsModal, openSettingsModal, syncSettingsControls, updateToolStatus, saveSettingsFromControls, moveSettingsColumn, resetColumnSettings, installRarFlow, checkForUpdatesFlow, installUpdateFlow, showAboutFlow, overlayById, closeQuickLookFlow, closeKeyboardHelpFlow, hideProgressFlow, selectAllEntries, clearActiveSelection, moveActiveListFocus, focusActiveListEdge, handleActiveTypeAhead, refreshSecondaryPane, openSelected, copySelectedPathsToSystemClipboard, updateProgressFlow, pathsFromNativeDropPayload, setExternalDropOverlayVisible, transferEntriesWithSafety, scheduleFileChangeRefresh, currentSelectionPaths, dropDestinationFromTarget, resetInternalDragState, previewShortcutSettingInput, resetAllShortcutSettings, resetShortcutSetting, saveShortcutSettingFromInput, isProgressDialogVisible, isGenericModalVisible, activatePane, switchActivePane, copyOrMoveToOtherPane, refreshDrives, previewDuplicateCheckerPath, openDuplicateCheckerPath, revealDuplicateCheckerPath, deleteDuplicateCheckerSelection } from "./core.js";
 import { cancelModalUi, isSettingsModalOpen } from './modalUi.svelte';
 import { dismissProgressUi, progressUi } from './progressUi.svelte';
 import { loadSmartFoldersFlow, runSearch, clearSearch, setSearchControlsVisible, openAdvancedSearchFlow, saveCurrentSearchAsSmartFolderFlow, openSmartFolderFlow, deleteSmartFolderFlow, showPropertiesFlow } from "./search.js";
@@ -756,10 +757,10 @@ export function initApp() {
       'settings-git-integration',
       'settings-start-location',
       'settings-custom-path',
-      'settings-col-size',
-      'settings-col-items',
-      'settings-col-date',
-      'settings-col-type',
+      'settings-column-preset',
+      'settings-photo-folder-mode',
+      'settings-photo-folder-threshold',
+      'settings-photo-icon-size',
     ]);
 
     const handleSettingsChange = (event: Event) => {
@@ -769,7 +770,14 @@ export function initApp() {
         saveShortcutSettingFromInput(target);
         return;
       }
-      if (!target.closest('.settings-body') || !persistedSettingsControlIds.has(target.id)) return;
+      if (!target.closest('.settings-body')) return;
+      if (target instanceof HTMLInputElement && target.dataset.settingsColumn) {
+        const preset = document.getElementById('settings-column-preset') as HTMLSelectElement | null;
+        if (preset) preset.value = 'custom';
+        saveSettingsFromControls();
+        return;
+      }
+      if (!persistedSettingsControlIds.has(target.id)) return;
       saveSettingsFromControls();
     };
 
@@ -795,10 +803,20 @@ export function initApp() {
         return;
       }
 
+      const columnMove = button.dataset.columnMove as ColumnId | undefined;
+      if (columnMove) {
+        moveSettingsColumn(columnMove, Number(button.dataset.columnDirection || 0));
+        event.preventDefault();
+        return;
+      }
+
       let handled = true;
       switch (button.id) {
         case 'settings-shortcuts-reset-all':
           resetAllShortcutSettings();
+          break;
+        case 'settings-columns-reset':
+          resetColumnSettings();
           break;
         case 'settings-custom-path-browse':
           void (async () => {

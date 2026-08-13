@@ -31,7 +31,7 @@
       id: 'file-list',
       label: 'File List',
       searchText:
-        'file list files folders visible columns size items modified date type hidden folder sizes directory sizes git integration repository source control',
+        'file list files folders visible columns column preset manager size items modified date type extension path parent symlink photo folders images thumbnails hidden folder sizes directory sizes git integration repository source control',
     },
     {
       id: 'navigation',
@@ -286,15 +286,51 @@
       <div class="settings-section-grid">
         <div
           class="settings-row settings-row--wide"
-          hidden={hideSettingRow('file-list', 'visible columns size items modified date type file list')}
+          hidden={hideSettingRow('file-list', 'column preset default details media developer photo custom visible columns file list')}
         >
-          <span class="settings-row-label">Visible Columns</span>
-          <div class="settings-col-options">
-            <label><input type="checkbox" id="settings-col-size" /> <span>Size</span></label>
-            <label><input type="checkbox" id="settings-col-items" /> <span>Items</span></label>
-            <label><input type="checkbox" id="settings-col-date" /> <span>Modified</span></label>
-            <label><input type="checkbox" id="settings-col-type" /> <span>Type</span></label>
+          <label for="settings-column-preset">Column Preset</label>
+          <select id="settings-column-preset">
+            <option value="default">Default</option>
+            <option value="details">Details</option>
+            <option value="media">Media</option>
+            <option value="developer">Developer</option>
+            <option value="photo">Photo</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div
+          class="settings-row settings-row--wide"
+          hidden={hideSettingRow('file-list', 'visible columns column manager size items modified date type extension git path parent symlink file list')}
+        >
+          <span class="settings-row-label">Columns</span>
+          <div class="settings-column-manager-wrap">
+            <div id="settings-column-manager" class="settings-column-manager"></div>
+            <button type="button" id="settings-columns-reset" class="secondary-btn">Reset Columns</button>
           </div>
+        </div>
+        <div
+          class="settings-row"
+          hidden={hideSettingRow('file-list', 'photo folders images thumbnails auto detect gallery file list')}
+        >
+          <label for="settings-photo-folder-mode">Photo Folders</label>
+          <select id="settings-photo-folder-mode">
+            <option value="auto">Auto</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+        <div
+          class="settings-row"
+          hidden={hideSettingRow('file-list', 'photo folder image threshold percent auto detect file list')}
+        >
+          <label for="settings-photo-folder-threshold">Photo Threshold</label>
+          <input id="settings-photo-folder-threshold" type="number" min="10" max="100" step="5" />
+        </div>
+        <div
+          class="settings-row"
+          hidden={hideSettingRow('file-list', 'photo folder thumbnail icon size grid gallery file list')}
+        >
+          <label for="settings-photo-icon-size">Photo Icon Size</label>
+          <input id="settings-photo-icon-size" type="number" min="64" max="160" step="8" />
         </div>
         <div class="settings-row" hidden={hideSettingRow('file-list', 'show hidden files hidden file list')}>
           <label for="settings-show-hidden">Show Hidden Files</label>

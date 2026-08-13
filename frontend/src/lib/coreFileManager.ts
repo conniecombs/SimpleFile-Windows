@@ -194,6 +194,14 @@ function sortValue(entry: FileEntry, sortBy: string) {
     case 'extension':
     case 'type':
       return entry.is_dir ? 'folder' : (entry.extension || '').toLowerCase();
+    case 'git':
+      return (entry.git_status || '').toLowerCase();
+    case 'path':
+      return (entry.path || '').toLowerCase();
+    case 'parent':
+      return (getParentPath(entry.path) || '').toLowerCase();
+    case 'symlink':
+      return (entry.symlink_target || '').toLowerCase();
     case 'name':
     default:
       return entry.name.toLowerCase();

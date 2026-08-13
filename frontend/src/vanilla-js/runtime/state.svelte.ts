@@ -1,5 +1,13 @@
 import type { AppSettings, Bookmark, FileTab, RecentLocation, SimpleFileAppState } from '../../lib/appState';
-import type { ColumnId, PathString } from '../../lib/types';
+import {
+  columnsForPreset,
+  DEFAULT_FILE_LIST_COLUMN_WIDTHS,
+  DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
+  isColumnPresetId,
+  normalizeVisibleColumns,
+  OPTIONAL_FILE_LIST_COLUMNS,
+} from '../../lib/fileListColumns';
+import type { ColumnId, ColumnPresetId, PathString, PhotoFolderMode } from '../../lib/types';
 
 type StateChangeListener = (
   property: string | symbol,
@@ -31,6 +39,7 @@ const initialState = {
   sortBy: 'name',
   sortAsc: true,
   isGridView: false,
+  contextualPhotoViewActive: false,
   homePath: '',
   showHiddenFiles: false,
   activeOperations: new Map(),
@@ -72,14 +81,12 @@ const initialState = {
     startLocation: 'home',
     customPath: '',
     shortcutOverrides: {},
-    visibleColumns: ['size', 'date', 'type'],
-    columnWidths: {
-      name: 240,
-      size: 100,
-      items: 90,
-      date: 140,
-      type: 100,
-    },
+    columnPreset: 'default',
+    visibleColumns: [...DEFAULT_VISIBLE_FILE_LIST_COLUMNS],
+    columnWidths: { ...DEFAULT_FILE_LIST_COLUMN_WIDTHS },
+    photoFolderMode: 'auto',
+    photoFolderImageThreshold: 70,
+    photoFolderIconSize: 112,
   },
   dualPaneEnabled: false,
   activePane: 'primary',
@@ -208,10 +215,15 @@ export function loadSettings() {
           ...state.settings.shortcutOverrides,
           ...parsed.shortcutOverrides,
         },
+        columnPreset: sanitizeColumnPreset(parsed.columnPreset, state.settings.columnPreset),
+        visibleColumns: sanitizeVisibleColumns(parsed.visibleColumns, state.settings.visibleColumns),
         columnWidths: {
           ...state.settings.columnWidths,
-          ...parsed.columnWidths,
+          ...sanitizeColumnWidths(parsed.columnWidths, state.settings.columnWidths),
         },
+        photoFolderMode: sanitizePhotoFolderMode(parsed.photoFolderMode, state.settings.photoFolderMode),
+        photoFolderImageThreshold: sanitizePhotoFolderThreshold(parsed.photoFolderImageThreshold, state.settings.photoFolderImageThreshold),
+        photoFolderIconSize: sanitizePhotoFolderIconSize(parsed.photoFolderIconSize, state.settings.photoFolderIconSize),
       };
     }
 
@@ -280,6 +292,7 @@ export function loadTabs() {
 export interface WorkspaceLayoutState {
   activePane: 'primary' | 'secondary';
   activeTabId: string | null;
+  columnPreset: ColumnPresetId;
   columnWidths: Partial<Record<'name' | ColumnId, number>>;
   dualPaneEnabled: boolean;
   iconSize: number;
@@ -330,23 +343,40 @@ function sanitizeTabs(value: unknown) {
 }
 
 function sanitizeVisibleColumns(value: unknown, fallback: ColumnId[]) {
-  const validColumns = new Set<ColumnId>(['size', 'items', 'date', 'type']);
-  if (!Array.isArray(value)) return fallback;
-  const columns = value.filter((column): column is ColumnId => validColumns.has(column as ColumnId));
-  return columns.length > 0 ? columns : fallback;
+  return normalizeVisibleColumns(value, fallback);
+}
+
+function sanitizeColumnPreset(value: unknown, fallback: ColumnPresetId) {
+  return isColumnPresetId(value) ? value : fallback;
 }
 
 function sanitizeColumnWidths(value: unknown, fallback: AppSettings['columnWidths']) {
   if (!value || typeof value !== 'object') return fallback;
   const next = { ...fallback };
   const record = value as Record<string, unknown>;
-  for (const key of ['name', 'size', 'items', 'date', 'type'] as const) {
+  for (const key of ['name', ...OPTIONAL_FILE_LIST_COLUMNS] as const) {
     const width = Number(record[key]);
     if (Number.isFinite(width) && width > 0) {
       next[key] = width;
     }
   }
   return next;
+}
+
+function sanitizePhotoFolderMode(value: unknown, fallback: PhotoFolderMode): PhotoFolderMode {
+  return value === 'off' || value === 'auto' ? value : fallback;
+}
+
+function sanitizePhotoFolderThreshold(value: unknown, fallback: number) {
+  const threshold = Number(value);
+  if (!Number.isFinite(threshold)) return fallback;
+  return Math.max(10, Math.min(100, Math.round(threshold)));
+}
+
+function sanitizePhotoFolderIconSize(value: unknown, fallback: number) {
+  const iconSize = Number(value);
+  if (!Number.isFinite(iconSize)) return fallback;
+  return Math.max(64, Math.min(160, Math.round(iconSize)));
 }
 
 function readWorkspaceLayout(): WorkspaceLayoutState | null {
@@ -371,6 +401,7 @@ function readWorkspaceLayout(): WorkspaceLayoutState | null {
   return {
     activePane: parsed.activePane === 'secondary' ? 'secondary' : 'primary',
     activeTabId,
+    columnPreset: sanitizeColumnPreset(parsed.columnPreset, state.settings.columnPreset),
     columnWidths: sanitizeColumnWidths(parsed.columnWidths, state.settings.columnWidths),
     dualPaneEnabled: Boolean(parsed.dualPaneEnabled),
     iconSize: Number(parsed.iconSize || state.iconSize || state.settings.defaultIconSize || 64),
@@ -383,7 +414,12 @@ function readWorkspaceLayout(): WorkspaceLayoutState | null {
     secondaryActiveTabId,
     secondaryTabs,
     tabs,
-    visibleColumns: sanitizeVisibleColumns(parsed.visibleColumns, state.settings.visibleColumns),
+    visibleColumns: sanitizeVisibleColumns(
+      parsed.visibleColumns,
+      parsed.columnPreset && parsed.columnPreset !== 'custom'
+        ? columnsForPreset(parsed.columnPreset)
+        : state.settings.visibleColumns,
+    ),
   };
 }
 
@@ -391,10 +427,11 @@ export function currentWorkspaceLayout(): WorkspaceLayoutState {
   return {
     activePane: state.activePane === 'secondary' && state.dualPaneEnabled ? 'secondary' : 'primary',
     activeTabId: state.activeTabId,
+    columnPreset: state.settings.columnPreset,
     columnWidths: { ...state.settings.columnWidths },
     dualPaneEnabled: Boolean(state.dualPaneEnabled),
-    iconSize: Number(state.iconSize || state.settings.defaultIconSize || 64),
-    isGridView: Boolean(state.isGridView),
+    iconSize: Number(state.contextualPhotoViewActive ? state.settings.defaultIconSize : (state.iconSize || state.settings.defaultIconSize || 64)),
+    isGridView: Boolean(state.contextualPhotoViewActive ? state.settings.defaultView === 'grid' : state.isGridView),
     primaryPath: state.currentPath,
     previewVisible: Boolean(state.showPreviewPane),
     secondaryHistory: [...state.secondaryHistory],
@@ -438,9 +475,11 @@ export function loadWorkspaceLayout() {
     state.activePane = layout.dualPaneEnabled ? layout.activePane : 'primary';
     state.showPreviewPane = layout.previewVisible;
     state.isGridView = layout.isGridView;
+    state.contextualPhotoViewActive = false;
     state.iconSize = layout.iconSize;
     state.settings = {
       ...state.settings,
+      columnPreset: layout.columnPreset,
       columnWidths: sanitizeColumnWidths(layout.columnWidths, state.settings.columnWidths),
       defaultIconSize: layout.iconSize,
       defaultView: layout.isGridView ? 'grid' : 'list',

@@ -1,4 +1,10 @@
 <script lang="ts">
+  import {
+    DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
+    normalizeVisibleColumns,
+  } from '../../fileListColumns';
+  import type { ColumnId } from '../../types';
+
   export type FileListTag = {
     color: string;
     emoji: string;
@@ -17,10 +23,15 @@
     isSelected: boolean;
     isSymlink: boolean;
     itemCount: string;
+    extension: string;
+    gitStatus: string;
     modified: string;
     name: string;
+    parent: string;
+    parentPath: string;
     path: string;
     size: string;
+    symlinkTarget: string;
     git_status?: string | null;
     tag?: FileListTag | null;
     thumbnail?: string | null;
@@ -34,7 +45,7 @@
     pane = 'primary',
     virtualOffset = 0,
     virtualTotalSize = 0,
-    visibleColumns = ['size', 'date', 'type'],
+    visibleColumns = DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
   }: {
     isGrid?: boolean;
     items?: FileListViewItem[];
@@ -42,7 +53,7 @@
     pane?: 'primary' | 'secondary';
     virtualOffset?: number;
     virtualTotalSize?: number;
-    visibleColumns?: string[];
+    visibleColumns?: ColumnId[];
   } = $props();
 
   function itemClass(item: FileListViewItem) {
@@ -56,8 +67,45 @@
     ].filter(Boolean).join(' ');
   }
 
-  function hasColumn(column: string) {
-    return visibleColumns.includes(column);
+  let normalizedVisibleColumns = $derived(normalizeVisibleColumns(visibleColumns));
+
+  function columnValue(item: FileListViewItem, column: ColumnId) {
+    switch (column) {
+      case 'size':
+        return item.size;
+      case 'items':
+        return item.itemCount;
+      case 'date':
+        return item.modified;
+      case 'type':
+        return item.type;
+      case 'extension':
+        return item.extension;
+      case 'git':
+        return item.gitStatus;
+      case 'path':
+        return item.path;
+      case 'parent':
+        return item.parent;
+      case 'symlink':
+        return item.symlinkTarget;
+      default:
+        return '';
+    }
+  }
+
+  function columnTitle(item: FileListViewItem, column: ColumnId) {
+    if (column === 'parent') {
+      return item.parentPath || item.parent;
+    }
+    return columnValue(item, column);
+  }
+
+  function columnDataPath(item: FileListViewItem, column: ColumnId) {
+    if ((column === 'size' || column === 'items') && item.isDir) {
+      return item.path;
+    }
+    return '';
   }
 
   function emitItemInteraction(type: string, event: MouseEvent | KeyboardEvent, item: FileListViewItem) {
@@ -166,18 +214,15 @@
           {@render tagBadge(item.tag)}
         {/if}
       </div>
-      {#if hasColumn('size')}
-        <div class="file-cell size-col" data-path={item.isDir ? item.path : ''}>{item.size}</div>
-      {/if}
-      {#if hasColumn('items')}
-        <div class="file-cell items-col" data-path={item.isDir ? item.path : ''}>{item.itemCount}</div>
-      {/if}
-      {#if hasColumn('date')}
-        <div class="file-cell date-col">{item.modified}</div>
-      {/if}
-      {#if hasColumn('type')}
-        <div class="file-cell type-col">{item.type}</div>
-      {/if}
+      {#each normalizedVisibleColumns as column}
+        <div
+          class={`file-cell ${column}-col`}
+          data-path={columnDataPath(item, column)}
+          title={columnTitle(item, column)}
+        >
+          {columnValue(item, column)}
+        </div>
+      {/each}
     {/if}
   </div>
 {/snippet}

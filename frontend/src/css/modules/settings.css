@@ -253,7 +253,8 @@
 
 .settings-row select,
 .settings-row input[type="text"],
-.settings-row input[type="password"] {
+.settings-row input[type="password"],
+.settings-row input[type="number"] {
     width: 100%;
     min-width: 0;
     height: 32px;
@@ -267,7 +268,8 @@
 
 .settings-row select:focus,
 .settings-row input[type="text"]:focus,
-.settings-row input[type="password"]:focus {
+.settings-row input[type="password"]:focus,
+.settings-row input[type="number"]:focus {
     outline: none;
     border-color: var(--accent-primary);
     box-shadow: 0 0 0 1px var(--accent-primary);
@@ -407,6 +409,76 @@
     width: 16px;
     height: 16px;
     accent-color: var(--accent-primary);
+}
+
+.settings-column-manager-wrap {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+}
+
+.settings-column-manager {
+    display: grid;
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--border-color);
+}
+
+.settings-column-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 6px 8px;
+    background: var(--bg-secondary);
+}
+
+.settings-column-row label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.settings-column-row input[type="checkbox"] {
+    flex: 0 0 auto;
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent-primary);
+}
+
+.settings-column-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.settings-column-move,
+.secondary-btn {
+    min-height: 30px;
+    padding: 5px 9px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.settings-column-move:hover,
+.secondary-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.settings-column-move:disabled {
+    cursor: default;
+    opacity: 0.45;
 }
 
 .shortcut-settings-list {

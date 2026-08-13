@@ -8,7 +8,18 @@
     updateStatusBar,
   } from '../../app/core';
   import { isProgressVisible, progressUi } from '../../app/progressUi.svelte';
-  import { fileType, formatFileSize, formatModified, visibleEntries } from '../../coreFileManager';
+  import {
+    basename,
+    fileType,
+    formatFileSize,
+    formatModified,
+    getParentPath,
+    visibleEntries,
+  } from '../../coreFileManager';
+  import {
+    buildFileListColumns,
+    DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
+  } from '../../fileListColumns';
   import {
     applyPassiveFolderMetricsToState,
     clearThumbnailCache,
@@ -30,7 +41,7 @@
     normalizeRect,
     type MarqueeLayout,
   } from '../../marqueeSelection';
-  import type { ColumnId, FileEntry, PathString } from '../../types';
+  import type { FileEntry, PathString } from '../../types';
   import FileListItems from './FileListItems.svelte';
   import type { FileListViewItem } from './FileListItems.svelte';
 
@@ -74,7 +85,7 @@
     startContentY: number;
   } | null = null;
 
-  let visibleColumns = $derived(appState.settings?.visibleColumns || ['size', 'date', 'type']);
+  let visibleColumns = $derived(appState.settings?.visibleColumns || DEFAULT_VISIBLE_FILE_LIST_COLUMNS);
   let sourceEntries = $derived(
     pane === 'primary' ? appState.filteredEntries : (appState.secondaryFilteredEntries || []),
   );
@@ -146,20 +157,6 @@
       start,
     };
   });
-
-  type FileListColumnId = 'name' | ColumnId;
-
-  function columnWidth(column: FileListColumnId) {
-    const width = Number(appState.settings?.columnWidths?.[column] || 0);
-    return width > 0 ? `${width}px` : `var(--col-${column}-width)`;
-  }
-
-  function fileListColumns() {
-    return [
-      columnWidth('name'),
-      ...visibleColumns.map((column: ColumnId) => columnWidth(column)),
-    ].join(' ');
-  }
 
   function tagForPath(path: string) {
     const tag = appState.fileTags?.[path];
@@ -249,8 +246,11 @@
         const thumbnail = appState.isGridView && isImage
           ? (getCachedThumbnail(entry.path) ?? null)
           : null;
+        const parentPath = getParentPath(entry.path) || '';
 
         return {
+          extension: entry.is_dir ? '' : (entry.extension || ''),
+          gitStatus: entry.git_status || '',
           icon: entry.is_dir ? '\u{1f4c1}' : '\u{1f4c4}',
           index: i,
           isCut: cutPathSet?.has(entry.path) === true,
@@ -266,8 +266,11 @@
           // we avoid Intl.DateTimeFormat work across large remote listings.
           modified: lightDateFormat ? (entry.modified || '') : formatModified(entry.modified),
           name: entry.name,
+          parent: parentPath ? basename(parentPath) : '',
+          parentPath,
           path: entry.path,
           size: entry.is_dir ? formatDirectorySize(entry) : formatFileSize(entry.size, entry.is_dir),
+          symlinkTarget: entry.symlink_target || '',
           tag: tagForPath(entry.path),
           thumbnail,
           type: fileType(entry),
@@ -872,7 +875,7 @@
   aria-multiselectable="true"
   onscroll={handleScroll}
   onpointerdown={handleMarqueePointerDown}
-  style={`height: 100%; overflow: auto; --file-list-columns: ${fileListColumns()}; --file-list-row-height: ${LIST_ROW_HEIGHT}px; --file-list-grid-item-width: ${gridItemWidth}px; --file-list-grid-item-height: ${gridItemHeight}px;`}
+  style={`height: 100%; overflow: auto; --file-list-columns: ${buildFileListColumns(appState.settings, visibleColumns)}; --file-list-row-height: ${LIST_ROW_HEIGHT}px; --file-list-grid-item-width: ${gridItemWidth}px; --file-list-grid-item-height: ${gridItemHeight}px;`}
 >
   <FileListItems
     items={displayItems}

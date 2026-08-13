@@ -3,6 +3,8 @@ import { mount, unmount } from 'svelte';
 import FileListItems from './file-list/FileListItems.svelte';
 import type { FileListViewItem } from './file-list/FileListItems.svelte';
 import FileListSkeleton from './file-list/FileListSkeleton.svelte';
+import { DEFAULT_VISIBLE_FILE_LIST_COLUMNS } from '../fileListColumns';
+import type { ColumnId } from '../types';
 
 export type RenderFileListItemsProps = {
   isGrid?: boolean;
@@ -10,7 +12,7 @@ export type RenderFileListItemsProps = {
   mode?: 'simple' | 'virtual';
   virtualOffset?: number;
   virtualTotalSize?: number;
-  visibleColumns?: string[];
+  visibleColumns?: ColumnId[];
 };
 
 export type RenderFileListSkeletonProps = {
@@ -55,7 +57,7 @@ export function renderFileListItems(
       mode: props.mode ?? 'simple',
       virtualOffset: props.virtualOffset ?? 0,
       virtualTotalSize: props.virtualTotalSize ?? 0,
-      visibleColumns: props.visibleColumns ?? ['size', 'date', 'type'],
+      visibleColumns: props.visibleColumns ?? DEFAULT_VISIBLE_FILE_LIST_COLUMNS,
     },
   });
 

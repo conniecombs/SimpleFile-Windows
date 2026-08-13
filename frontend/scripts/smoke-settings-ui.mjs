@@ -524,6 +524,154 @@ async function runSettingsUiSmoke() {
       assert.equal(result.panel, result.expected);
     }
 
+    const columnManagerResult = await evaluate(page, `(async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      document.querySelector('[data-settings-tab="file-list"]').click();
+      await nextFrame();
+
+      const manager = document.querySelector('#settings-column-manager');
+      const preset = document.querySelector('#settings-column-preset');
+      const beforeRows = Array.from(manager.querySelectorAll('[data-column-row]')).map((row) => row.dataset.columnRow);
+      const beforeChecked = Array.from(manager.querySelectorAll('[data-settings-column]:checked')).map((input) => input.dataset.settingsColumn);
+
+      preset.value = 'developer';
+      preset.dispatchEvent(new Event('change', { bubbles: true }));
+      await nextFrame();
+
+      const savedDeveloper = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      const header = document.querySelector('.file-list-header');
+      const list = document.querySelector('#file-list');
+      const firstRow = list?.querySelector('.list-item');
+      const headerColumns = Array.from(header?.querySelectorAll('[data-column]') || []).map((cell) => cell.dataset.column);
+      const rowColumns = Array.from(firstRow?.querySelectorAll('.file-cell') || [])
+        .map((cell) => Array.from(cell.classList).find((className) => className.endsWith('-col'))?.replace(/-col$/, ''))
+        .filter(Boolean);
+      const headerTemplate = header?.style.getPropertyValue('--file-list-columns').trim();
+      const listTemplate = list?.style.getPropertyValue('--file-list-columns').trim();
+
+      const parentCheckbox = document.querySelector('[data-settings-column="parent"]');
+      parentCheckbox.click();
+      await nextFrame();
+
+      const savedCustom = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      document.querySelector('[data-column-row="parent"] [data-column-direction="-1"]')?.click();
+      await nextFrame();
+
+      const savedMoved = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      const movedRows = Array.from(manager.querySelectorAll('[data-column-row]')).map((row) => row.dataset.columnRow);
+
+      document.querySelector('#settings-columns-reset').click();
+      await nextFrame();
+
+      const savedReset = JSON.parse(localStorage.getItem('simplefile-settings') || '{}');
+      return {
+        beforeChecked,
+        beforeRows,
+        headerColumns,
+        headerTemplate,
+        listTemplate,
+        movedRows,
+        rowColumns,
+        savedCustom,
+        savedDeveloper,
+        savedMoved,
+        savedReset,
+      };
+    })()`);
+
+    assert.deepEqual(
+      columnManagerResult.beforeRows,
+      ['size', 'date', 'type', 'items', 'extension', 'git', 'path', 'parent', 'symlink'],
+    );
+    assert.deepEqual(columnManagerResult.beforeChecked, ['size', 'date', 'type']);
+    assert.equal(columnManagerResult.savedDeveloper.columnPreset, 'developer');
+    assert.deepEqual(columnManagerResult.savedDeveloper.visibleColumns, ['size', 'date', 'extension', 'git', 'symlink', 'path']);
+    assert.deepEqual(columnManagerResult.headerColumns, ['name', 'size', 'date', 'extension', 'git', 'symlink', 'path']);
+    assert.deepEqual(columnManagerResult.rowColumns, ['name', 'size', 'date', 'extension', 'git', 'symlink', 'path']);
+    assert.equal(columnManagerResult.headerTemplate, columnManagerResult.listTemplate);
+    assert.equal(columnManagerResult.savedCustom.columnPreset, 'custom');
+    assert.deepEqual(columnManagerResult.savedCustom.visibleColumns, ['size', 'date', 'extension', 'git', 'symlink', 'path', 'parent']);
+    assert.equal(columnManagerResult.savedMoved.columnPreset, 'custom');
+    assert.deepEqual(columnManagerResult.savedMoved.visibleColumns, ['size', 'date', 'extension', 'git', 'symlink', 'parent', 'path']);
+    assert.ok(
+      columnManagerResult.movedRows.indexOf('parent') < columnManagerResult.movedRows.indexOf('path'),
+      'Column move controls should reorder the visible custom columns.',
+    );
+    assert.equal(columnManagerResult.savedReset.columnPreset, 'default');
+    assert.deepEqual(columnManagerResult.savedReset.visibleColumns, ['size', 'date', 'type']);
+
+    const photoFolderResult = await evaluate(page, `(async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const [{ state }, core] = await Promise.all([
+        import('/src/vanilla-js/runtime/state.svelte.ts'),
+        import('/src/lib/app/core.ts'),
+      ]);
+      const originalSettings = {
+        ...state.settings,
+        columnWidths: { ...state.settings.columnWidths },
+        shortcutOverrides: { ...state.settings.shortcutOverrides },
+        visibleColumns: [...state.settings.visibleColumns],
+      };
+      const originalGridView = state.isGridView;
+      const originalIconSize = state.iconSize;
+      const originalContextualPhotoViewActive = state.contextualPhotoViewActive;
+      const entries = ['a.jpg', 'b.png', 'c.webp', 'notes.txt'].map((name) => ({
+        extension: name.split('.').pop(),
+        is_dir: false,
+        modified: '',
+        name,
+        path: 'C:\\\\Photos\\\\' + name,
+        size: 100,
+      }));
+
+      state.settings = {
+        ...state.settings,
+        defaultIconSize: 64,
+        defaultView: 'list',
+        photoFolderIconSize: 128,
+        photoFolderImageThreshold: 70,
+        photoFolderMode: 'auto',
+      };
+      core.applyContextualFolderView(entries);
+      await nextFrame();
+      const active = {
+        contextual: state.contextualPhotoViewActive,
+        cssIconSize: document.documentElement.style.getPropertyValue('--icon-size'),
+        iconSize: state.iconSize,
+        isGridView: state.isGridView,
+      };
+
+      state.settings = { ...state.settings, photoFolderMode: 'off' };
+      core.applyContextualFolderView(entries);
+      await nextFrame();
+      const disabled = {
+        contextual: state.contextualPhotoViewActive,
+        cssIconSize: document.documentElement.style.getPropertyValue('--icon-size'),
+        iconSize: state.iconSize,
+        isGridView: state.isGridView,
+      };
+
+      state.settings = originalSettings;
+      state.isGridView = originalGridView;
+      state.iconSize = originalIconSize;
+      state.contextualPhotoViewActive = originalContextualPhotoViewActive;
+      document.documentElement.style.setProperty('--icon-size', originalIconSize + 'px');
+      return { active, disabled };
+    })()`);
+
+    assert.deepEqual(photoFolderResult.active, {
+      contextual: true,
+      cssIconSize: '128px',
+      iconSize: 128,
+      isGridView: true,
+    });
+    assert.deepEqual(photoFolderResult.disabled, {
+      contextual: false,
+      cssIconSize: '64px',
+      iconSize: 64,
+      isGridView: false,
+    });
+
     const searchResults = await evaluate(page, `(async () => {
       const cases = [
         { query: 'Trash', expectedTabs: ['Behavior'], expectedPanel: 'behavior', expectedText: 'Move Deleted Items to Trash' },
