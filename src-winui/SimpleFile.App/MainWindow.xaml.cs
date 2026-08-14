@@ -57,7 +57,8 @@ public sealed partial class MainWindow : Window
             StatusText.Text = "Starting simplefile-service…";
             _backend = new BackendSession();
             await _backend.StartAsync();
-            _workspace = new ExplorerWorkspace(_backend);
+            var fileOps = new FileOperationService(_backend.Client!);
+            _workspace = new ExplorerWorkspace(_backend, fileOps);
             _workspace.Changed += OnWorkspaceChanged;
             await _workspace.InitializeAsync();
             SyncFromWorkspace();
@@ -807,4 +808,306 @@ public sealed partial class MainWindow : Window
     private readonly record struct PanePath(PaneId Pane, string Path);
 
     private readonly record struct PaneTab(PaneId Pane, string TabId);
+
+    // ========================================================================
+    // File operation helpers
+    // ========================================================================
+
+    private ListView ActiveFileList
+        => _workspace?.ActivePane == PaneId.Secondary ? SecondaryFileList : PrimaryFileList;
+
+    private string? SelectedPath
+    {
+        get
+        {
+            var list = ActiveFileList;
+            return list.SelectedItem is FileRow row ? row.Path : null;
+        }
+    }
+
+    private string[]? SelectedPaths
+    {
+        get
+        {
+            var list = ActiveFileList;
+            var items = list.SelectedItems;
+            if (items == null || items.Count == 0) return null;
+            return items.OfType<FileRow>().Select(r => r.Path).ToArray();
+        }
+    }
+
+    private async Task PromptAndCreateFolder(PaneId pane)
+    {
+        if (_workspace is null) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "New Folder",
+            Content = new TextBox { PlaceholderText = "Folder name" },
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && dialog.Content is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
+        {
+            try
+            {
+                _workspace.ActivatePane(pane);
+                await _workspace.CreateFolderInCurrentPaneAsync(tb.Text.Trim());
+            }
+            catch (IpcException ex)
+            {
+                ShowMessage("New Folder", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+    }
+
+    private async Task PromptAndCreateFile(PaneId pane)
+    {
+        if (_workspace is null) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "New File",
+            Content = new TextBox { PlaceholderText = "File name" },
+            PrimaryButtonText = "Create",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && dialog.Content is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
+        {
+            try
+            {
+                _workspace.ActivatePane(pane);
+                await _workspace.CreateFileInCurrentPaneAsync(tb.Text.Trim());
+            }
+            catch (IpcException ex)
+            {
+                ShowMessage("New File", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+    }
+
+    private async Task PromptAndRename()
+    {
+        if (_workspace is null) return;
+
+        var list = ActiveFileList;
+        if (list.SelectedItem is not FileRow row) return;
+
+        var tb = new TextBox { Text = row.Name };
+        tb.SelectAll();
+
+        var dialog = new ContentDialog
+        {
+            Title = "Rename",
+            Content = tb,
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(tb.Text) && tb.Text.Trim() != row.Name)
+        {
+            try
+            {
+                await _workspace.RenameSelectedAsync(row.Path, tb.Text.Trim());
+            }
+            catch (IpcException ex)
+            {
+                ShowMessage("Rename", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+    }
+
+    private async Task TrashSelected()
+    {
+        if (_workspace is null) return;
+        var paths = SelectedPaths;
+        if (paths is null || paths.Length == 0) return;
+
+        try
+        {
+            await _workspace.TrashSelectedAsync(paths);
+        }
+        catch (IpcException ex)
+        {
+            ShowMessage("Trash", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async Task DeleteSelected()
+    {
+        if (_workspace is null) return;
+        var path = SelectedPath;
+        if (path is null) return;
+
+        var dialog = new ContentDialog
+        {
+            Title = "Permanently Delete",
+            Content = $"Are you sure you want to permanently delete this item?\n{path}",
+            PrimaryButtonText = "Delete",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            try
+            {
+                await _workspace.DeleteSelectedAsync(path);
+            }
+            catch (IpcException ex)
+            {
+                ShowMessage("Delete", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+    }
+
+    private void CopyToClipboard()
+    {
+        var paths = SelectedPaths;
+        if (paths is not null && paths.Length > 0)
+        {
+            _workspace?.Clipboard.SetCopy(paths);
+            StatusText.Text = $"Copied {paths.Length} item(s)";
+        }
+    }
+
+    private void CutToClipboard()
+    {
+        var paths = SelectedPaths;
+        if (paths is not null && paths.Length > 0)
+        {
+            _workspace?.Clipboard.SetCut(paths);
+            StatusText.Text = $"Cut {paths.Length} item(s)";
+        }
+    }
+
+    private async Task PasteFromClipboard()
+    {
+        if (_workspace is null || _workspace.Clipboard is null || !_workspace.Clipboard.HasItems) return;
+        if (_workspace.FileOps is null) return;
+
+        var clipboard = _workspace.Clipboard;
+        var destination = _workspace.ActivePane == PaneId.Primary ? _workspace.Primary.Path : _workspace.Secondary.Path;
+
+        try
+        {
+            if (clipboard.Operation == ClipboardOperation.Copy)
+            {
+                await _workspace.FileOps.CopyAsync(
+                    clipboard.SourcePaths, destination, "keep-both");
+            }
+            else
+            {
+                await _workspace.FileOps.MoveAsync(
+                    clipboard.SourcePaths, destination, "keep-both");
+                clipboard.Clear();
+            }
+            await _workspace.RefreshAsync();
+        }
+        catch (IpcException ex)
+        {
+            ShowMessage("Paste", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    // ========================================================================
+    // Per-pane button Click handlers
+    // ========================================================================
+
+    private async void OnPrimaryNewFolder(object sender, RoutedEventArgs e) => await PromptAndCreateFolder(PaneId.Primary);
+
+    private async void OnPrimaryNewFile(object sender, RoutedEventArgs e) => await PromptAndCreateFile(PaneId.Primary);
+
+    private async void OnPrimaryRename(object sender, RoutedEventArgs e)
+    {
+        _workspace?.ActivatePane(PaneId.Primary);
+        await PromptAndRename();
+    }
+
+    private async void OnPrimaryDelete(object sender, RoutedEventArgs e)
+    {
+        _workspace?.ActivatePane(PaneId.Primary);
+        await TrashSelected();
+    }
+
+    private async void OnSecondaryNewFolder(object sender, RoutedEventArgs e) => await PromptAndCreateFolder(PaneId.Secondary);
+
+    private async void OnSecondaryNewFile(object sender, RoutedEventArgs e) => await PromptAndCreateFile(PaneId.Secondary);
+
+    private async void OnSecondaryRename(object sender, RoutedEventArgs e)
+    {
+        _workspace?.ActivatePane(PaneId.Secondary);
+        await PromptAndRename();
+    }
+
+    private async void OnSecondaryDelete(object sender, RoutedEventArgs e)
+    {
+        _workspace?.ActivatePane(PaneId.Secondary);
+        await TrashSelected();
+    }
+
+    // ========================================================================
+    // Keyboard accelerator handlers
+    // ========================================================================
+
+    private async void OnNewFolderAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        await PromptAndCreateFolder(_workspace?.ActivePane ?? PaneId.Primary);
+    }
+
+    private async void OnNewFileAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        await PromptAndCreateFile(_workspace?.ActivePane ?? PaneId.Primary);
+    }
+
+    private async void OnRenameAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        await PromptAndRename();
+    }
+
+    private async void OnDeleteAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        await DeleteSelected();
+    }
+
+    private async void OnTrashAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        await TrashSelected();
+    }
+
+    private void OnCopyAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        CopyToClipboard();
+    }
+
+    private void OnCutAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        CutToClipboard();
+    }
+
+    private async void OnPasteAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
+    {
+        e.Handled = true;
+        await PasteFromClipboard();
+    }
 }

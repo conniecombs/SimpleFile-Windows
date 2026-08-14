@@ -4151,10 +4151,13 @@ name = "simplefile-core"
 version = "1.1.0"
 dependencies = [
  "chrono",
+ "filetime",
+ "getrandom 0.4.3",
  "log",
  "notify",
  "parking_lot",
  "serde",
+ "trash",
  "winapi",
 ]
 
@@ -4170,6 +4173,7 @@ dependencies = [
 name = "simplefile-service"
 version = "1.1.0"
 dependencies = [
+ "getrandom 0.4.3",
  "serde",
  "serde_json",
  "simplefile-core",

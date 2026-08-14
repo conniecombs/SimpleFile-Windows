@@ -32,15 +32,19 @@ public sealed class ExplorerWorkspace
     private readonly object _gate = new();
     private List<DriveInfo> _drives = [];
 
-    public ExplorerWorkspace(IExplorerBackend backend)
+    public ExplorerWorkspace(IExplorerBackend backend, FileOperationService? fileOps = null)
     {
         _backend = backend;
+        FileOps = fileOps;
+        Clipboard = new ClipboardState();
         Primary = new ExplorerPane(PaneId.Primary);
         Secondary = new ExplorerPane(PaneId.Secondary);
     }
 
     public event EventHandler? Changed;
 
+    public FileOperationService? FileOps { get; }
+    public ClipboardState Clipboard { get; }
     public ExplorerPane Primary { get; }
     public ExplorerPane Secondary { get; }
 
@@ -708,5 +712,57 @@ public sealed class ExplorerWorkspace
     private void RaiseChanged()
     {
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private FileOperationService RequireFileOps()
+        => FileOps ?? throw new InvalidOperationException(
+            "FileOperationService is required for file operations.");
+
+    public async Task<string> CreateFolderInCurrentPaneAsync(string name)
+    {
+        var ops = RequireFileOps();
+        var path = ActivePane == PaneId.Primary ? Primary.Path : Secondary.Path;
+        var result = await ops.CreateFolderAsync(path, name).ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+        return result;
+    }
+
+    public async Task<string> CreateFileInCurrentPaneAsync(string name)
+    {
+        var ops = RequireFileOps();
+        var path = ActivePane == PaneId.Primary ? Primary.Path : Secondary.Path;
+        var result = await ops.CreateFileAsync(path, name).ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+        return result;
+    }
+
+    public async Task TrashSelectedAsync(string[] selectedPaths)
+    {
+        await RequireFileOps().TrashAsync(selectedPaths).ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+    }
+
+    public async Task DeleteSelectedAsync(string path)
+    {
+        await RequireFileOps().DeleteAsync(path).ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+    }
+
+    public async Task<string> RenameSelectedAsync(string path, string newName)
+    {
+        var ops = RequireFileOps();
+        var result = await ops.RenameAsync(path, newName).ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+        return result;
+    }
+
+    public async Task OpenFileAsync(string path)
+    {
+        await RequireFileOps().OpenFileAsync(path).ConfigureAwait(false);
+    }
+
+    public async Task RevealInFolderAsync(string path)
+    {
+        await RequireFileOps().RevealInFolderAsync(path).ConfigureAwait(false);
     }
 }

@@ -1,10 +1,11 @@
-use serde_json::Value;
+use serde_json::{json, Value};
 use simplefile_ipc::frame::{decode_length, encode_frame, FrameError};
 use simplefile_ipc::rpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use simplefile_ipc::{LIST_DIRECTORY_CHUNK, MAX_FRAME_BYTES, PREFIX_RESULT_TOO_LARGE};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use crate::dispatch::{dispatch, Dispatch, SessionState};
+use crate::dispatch::{dispatch, Dispatch, ProgressCopyMoveParams, SessionState};
+use crate::progress::OperationRegistry;
 
 pub async fn serve_connection<R, W>(
     mut reader: R,
@@ -16,6 +17,7 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
 {
     let writer = std::sync::Arc::new(tokio::sync::Mutex::new(writer));
+    let registry = std::sync::Arc::new(OperationRegistry::default());
 
     loop {
         let payload = match read_frame(&mut reader).await {
@@ -34,6 +36,16 @@ where
             Dispatch::Reply(response) => write_json(&writer, &response).await?,
             Dispatch::ListDirectory { id, path } => {
                 list_directory_and_reply(&writer, id, path).await?;
+            }
+            Dispatch::CopyWithProgress { id, params } => {
+                copy_move_with_progress(&writer, &registry, id, params, true).await?;
+            }
+            Dispatch::MoveWithProgress { id, params } => {
+                copy_move_with_progress(&writer, &registry, id, params, false).await?;
+            }
+            Dispatch::CancelOperation { id, operation_id } => {
+                registry.cancel(&operation_id).await;
+                write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
             }
             Dispatch::Shutdown(response) => {
                 write_json(&writer, &response).await?;
@@ -85,6 +97,66 @@ where
         }
         Err(message) => write_json(writer, &JsonRpcResponse::application_error(id, message)).await,
     }
+}
+
+async fn copy_move_with_progress<W>(
+    writer: &std::sync::Arc<tokio::sync::Mutex<W>>,
+    registry: &std::sync::Arc<OperationRegistry>,
+    id: Option<Value>,
+    params: ProgressCopyMoveParams,
+    is_copy: bool,
+) -> Result<(), String>
+where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    let op_id = params.operation_id.clone().unwrap_or_else(|| {
+        let mut buf = [0u8; 8];
+        let _ = getrandom::fill(&mut buf);
+        buf.iter().map(|b| format!("{b:02x}")).collect()
+    });
+    let cancel = registry.register(&op_id).await;
+
+    let sources = params.sources;
+    let destination = params.destination;
+    let conflict_action = params.conflict_action;
+    let total = sources.len();
+
+    let join = tokio::task::spawn_blocking(move || {
+        let mut results: Vec<Value> = Vec::with_capacity(total);
+        for (i, source) in sources.iter().enumerate() {
+            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                return Err("Operation cancelled".to_string());
+            }
+            let result = if is_copy {
+                simplefile_core::file_ops::copy_entry_resolved(source, &destination, &conflict_action)
+            } else {
+                simplefile_core::file_ops::move_entry_resolved(source, &destination, &conflict_action)
+            };
+            match result {
+                Ok(dest_path) => {
+                    results.push(json!({"source": source, "destination": dest_path}));
+                }
+                Err(e) => return Err(e),
+            }
+            let _ = i; // progress index available for future notification use
+        }
+        Ok(results)
+    });
+
+    match join
+        .await
+        .map_err(|error| format!("transfer task failed: {error}"))?
+    {
+        Ok(results) => {
+            write_json(writer, &JsonRpcResponse::result(id, json!(results))).await?;
+        }
+        Err(message) => {
+            write_json(writer, &JsonRpcResponse::application_error(id, message)).await?;
+        }
+    }
+
+    registry.remove(&op_id).await;
+    Ok(())
 }
 
 async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, FrameError> {

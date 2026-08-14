@@ -5,6 +5,7 @@
 
 pub mod dir_list;
 pub mod drives;
+pub mod file_ops;
 pub mod models;
 pub mod native_accel;
 pub mod state;

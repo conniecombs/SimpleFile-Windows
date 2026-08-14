@@ -105,6 +105,63 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
         return InvokeAsync(Protocol.ShutdownMethod, new { }, cancellationToken);
     }
 
+    public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.CreateDirectoryMethod, new { path, name }, ct);
+
+    public Task<string> CreateFileAsync(string path, string name, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.CreateFileMethod, new { path, name }, ct);
+
+    public Task DeleteEntryAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.DeleteEntryMethod, new { path }, ct);
+
+    public Task MoveToTrashAsync(string[] paths, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.MoveToTrashMethod, new { paths }, ct);
+
+    public Task<string> RenameEntryAsync(string path, string newName, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.RenameEntryMethod, new { path, newName }, ct);
+
+    public Task<string[]> BatchRenameAsync(RenameRequest[] entries, CancellationToken ct = default)
+        => InvokeAsync<string[]>(Protocol.BatchRenameMethod, new { entries }, ct);
+
+    public Task<string> CopyEntryAsync(string source, string destination, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.CopyEntryMethod, new { source, destination }, ct);
+
+    public Task<string> MoveEntryAsync(string source, string destination, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.MoveEntryMethod, new { source, destination }, ct);
+
+    public Task<string> CopyEntryResolvedAsync(string source, string destination, string conflictAction, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.CopyEntryResolvedMethod, new { source, destination, conflictAction }, ct);
+
+    public Task<string> MoveEntryResolvedAsync(string source, string destination, string conflictAction, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.MoveEntryResolvedMethod, new { source, destination, conflictAction }, ct);
+
+    public Task<FileEntry> GetEntryInfoAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<FileEntry>(Protocol.GetEntryInfoMethod, new { path }, ct);
+
+    public Task OpenFileAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.OpenFileMethod, new { path }, ct);
+
+    public Task RevealInFolderAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.RevealInFolderMethod, new { path }, ct);
+
+    public Task<TreeNode[]> ListSubdirectoriesAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<TreeNode[]>(Protocol.ListSubdirectoriesMethod, new { path }, ct);
+
+    public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<ulong>(Protocol.CalculateFolderSizeMethod, new { path }, ct);
+
+    public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<ulong>(Protocol.CountFolderItemsMethod, new { path }, ct);
+
+    public Task<TransferResult[]> CopyWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default)
+        => InvokeAsync<TransferResult[]>(Protocol.CopyWithProgressMethod, new { sources, destination, operationId, conflictAction }, ct);
+
+    public Task<TransferResult[]> MoveWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default)
+        => InvokeAsync<TransferResult[]>(Protocol.MoveWithProgressMethod, new { sources, destination, operationId, conflictAction }, ct);
+
+    public Task CancelOperationAsync(string operationId, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelOperationMethod, new { operationId }, ct);
+
     public async Task<DirectoryListing> ListDirectoryAsync(
         string path,
         Action<DirectoryListingChunk>? onChunk = null,

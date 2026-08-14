@@ -17,6 +17,25 @@ public static class Protocol
     public const string SelectDirectoryMethod = "select_directory";
     public const string ShowMainWindowMethod = "show_main_window";
 
+    public const string CreateDirectoryMethod = "create_directory";
+    public const string CreateFileMethod = "create_file";
+    public const string DeleteEntryMethod = "delete_entry";
+    public const string MoveToTrashMethod = "move_to_trash";
+    public const string RenameEntryMethod = "rename_entry";
+    public const string BatchRenameMethod = "batch_rename";
+    public const string CopyEntryMethod = "copy_entry";
+    public const string MoveEntryMethod = "move_entry";
+    public const string CopyEntryResolvedMethod = "copy_entry_resolved";
+    public const string MoveEntryResolvedMethod = "move_entry_resolved";
+    public const string GetEntryInfoMethod = "get_entry_info";
+    public const string OpenFileMethod = "open_file";
+    public const string RevealInFolderMethod = "reveal_in_folder";
+    public const string ListSubdirectoriesMethod = "list_subdirectories";
+    public const string CalculateFolderSizeMethod = "calculate_folder_size";
+    public const string CountFolderItemsMethod = "count_folder_items";
+    public const string CopyWithProgressMethod = "copy_with_progress";
+    public const string MoveWithProgressMethod = "move_with_progress";
+    public const string CancelOperationMethod = "cancel_operation";
     public const string ListDirectoryChunkEvent = "list_directory.chunk";
     public const string OperationProgressEvent = "operation-progress";
     public const string FileChangeEvent = "file-change";

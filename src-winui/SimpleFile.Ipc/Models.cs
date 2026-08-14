@@ -167,3 +167,31 @@ public sealed class FileChangeEvent
     [JsonPropertyName("kind")]
     public string Kind { get; set; } = "";
 }
+
+public sealed class TreeNode
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+    [JsonPropertyName("has_children")]
+    public bool HasChildren { get; set; }
+    [JsonPropertyName("children")]
+    public List<TreeNode> Children { get; set; } = [];
+}
+
+public sealed class RenameRequest
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+    [JsonPropertyName("new_name")]
+    public string NewName { get; set; } = "";
+}
+
+public sealed class TransferResult
+{
+    [JsonPropertyName("source")]
+    public string Source { get; set; } = "";
+    [JsonPropertyName("destination")]
+    public string Destination { get; set; } = "";
+}

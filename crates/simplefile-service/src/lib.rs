@@ -3,7 +3,9 @@
 //! The Tauri/Svelte app is unchanged and does not speak this protocol.
 
 pub mod dispatch;
+pub mod progress;
 pub mod session;
+pub mod shell;
 
 pub use dispatch::SessionState;
 pub use session::serve_connection;
