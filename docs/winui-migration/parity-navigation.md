@@ -1,6 +1,9 @@
-# Navigation parity checklist (WinUI slice 1)
+# Navigation parity checklist (WinUI slices 1–2)
 
-First WinUI 3 feature slice: **drives, sidebar root, directory listing, breadcrumbs / path entry, primary-pane navigation, open folder in-app**.
+WinUI 3 feature slices so far:
+
+1. Drives, sidebar root, directory listing, breadcrumbs / path entry, primary-pane navigation, open folder in-app.
+2. Dual-pane navigation and **pane-local tabs** (this update).
 
 Svelte/Tauri remains the shipping UI. This document compares the live Svelte paths (`frontend/src/lib/app/core.ts`, `fileNavigationPrimary.ts`, `ContentShell.svelte`, `SidebarShell.svelte`, `coreFileManager.ts`) to `src-winui`.
 
@@ -11,6 +14,9 @@ Sources of truth for this slice:
 - Quick Access + My PC in `frontend/src/lib/components/layout-shell/SidebarShell.svelte`
 - Path helpers + `visibleEntries` in `frontend/src/lib/coreFileManager.ts`
 - Startup default `startLocation: 'home'` in `frontend/src/lib/appState.ts`
+- Dual pane + tabs: `toggleDualPane`, `loadDirectoryForPane`, `loadSecondaryDirectory`, `openNewTab` / `switchToTab` / `closeTab`, `activatePane` in `frontend/src/lib/app/core.ts`
+- Sidebar Left/Right target in `frontend/src/lib/components/layout-shell/SidebarShell.svelte`
+- Per-pane chrome in `frontend/src/lib/components/layout-shell/ContentShell.svelte` and `frontend/src/lib/components/tabs/TabsBar.svelte`
 
 ## In scope
 
@@ -39,15 +45,30 @@ Sources of truth for this slice:
 | Network drive offline → retry dialog | `offerNetworkDriveReconnect` | `ContentDialog` Retry/Cancel | Done (simplified copy) |
 | F5 refresh, Alt+Left/Right/Up | Keyboard map (subset) | Keyboard accelerators | Done (subset) |
 | Status: path / item count / errors | Status bar | Bottom bar + InfoBar | Done |
+| Dual pane toggle | F6 / toolbar; first enable copies primary path to secondary with `replace-current` and stays on primary | Dual button + F6; same first-load rule | Done |
+| Disable dual pane | Hide secondary, activate primary, keep secondary path | Same | Done |
+| Activate pane | Click pane, Alt+1 / Alt+2, Ctrl+Shift+Left/Right; Alt+2 enables dual | Same | Done |
+| Sidebar Left/Right target | `sidebarTargetPane` = active pane when dual | Same; Quick Access / drives navigate that pane | Done |
+| Pane-local history / breadcrumbs / path edit | Each pane has its own | Each pane has nav + breadcrumbs + ✎ | Done |
+| Pane-local tabs | `tabs` / `secondaryTabs`, `activeTabId` / `secondaryActiveTabId` | `ExplorerPane.Tabs` + `ActiveTabId` | Done |
+| First navigation creates a tab | `syncActiveTab` | Same | Done |
+| New tab (Ctrl+T, +) | Fresh history `[path]` then `replace-current` load | Same | Done |
+| Switch tab | Restore that tab’s history, load `none` | Same | Done |
+| Close tab | Neighbor if active; last tab → new tab at home | Same | Done |
+| Ctrl+Tab / Ctrl+Shift+Tab | Cycle tabs on the **active** pane | Same | Done |
+| Ctrl+W | Close active pane’s active tab | Same | Done |
+| Middle-click tab | Close | Same | Done |
+| Pane resize 20–80% | ContentShell divider | Drag divider | Done |
+| Persist tabs / `saveTabs` | `localStorage` | **Gap** — session only |
+| Tab keyboard focus wrap (ArrowLeft/Right on tab) | `moveTabFocus` | **Gap** — Ctrl+Tab only |
+| Tab key switches panes | `pane.switch` when dual | **Gap** — WinUI Tab moves focus; use click / Alt+1/2 / Ctrl+Shift+Left/Right |
 
-## Gaps (this slice)
+## Gaps (remaining)
 
 These are intentional. They stay on Svelte until a later PR.
 
 | Gap | Svelte today | Why WinUI does not match |
 | --- | --- | --- |
-| Dual pane, sidebar Left/Right target | `fileNavigationDualPane.ts`, `SidebarShell` | Out of slice (architecture PR 14) |
-| Tabs | `fileNavigationTabs.ts` | Out of slice |
 | Expandable folder tree | `listSubdirectories` / `loadTreeChildren` | IPC MVP returns `-32601` for `list_subdirectories` |
 | `watch_directory` live refresh | Watcher after `loadDirectory` | IPC MVP has no watch command |
 | Open file in default app | `open_file` / `openEntryPath` | IPC MVP has no `open_file`; UI reports “not ported yet” |
@@ -90,4 +111,17 @@ dotnet build src-winui/SimpleFile.sln -c Debug
 npm run dev:winui
 ```
 
-Manual: start at home, open a folder, breadcrumb back, path-bar Enter, drive click, Quick Access Desktop, Up at `C:\` does nothing, double-click file shows the not-ported InfoBar.
+### Slice 1 (single pane)
+
+Start at home, open a folder, breadcrumb back, path-bar Enter, drive click, Quick Access Desktop, Up at `C:\` does nothing, double-click file shows the not-ported InfoBar.
+
+### Slice 2 (dual pane + tabs)
+
+1. Press **F6** or Dual. Right pane lists the same folder as the left; left stays active. Status shows `Left pane`.
+2. Click the right pane (or **Alt+2**). Sidebar Left/Right highlight follows. Quick Access Desktop opens on the **right** only. Left path/history/tabs stay put.
+3. On the right, go up, then Back. Left history is unchanged.
+4. **Ctrl+T** on the left: new left tab at the current left path. Right tabs unchanged. Switch tabs; each tab restores its own history.
+5. Close a non-last tab: neighbor becomes active. Close the last tab on a pane: a new home tab opens on that pane only.
+6. **Ctrl+Tab** / **Ctrl+W** affect the active pane only.
+7. Drag the divider; panes stay between 20% and 80%.
+8. F6 again: right pane hides; left stays. F6 once more: right pane returns to the folder it had.

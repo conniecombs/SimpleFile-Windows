@@ -7,9 +7,18 @@
     <Grid x:Name="RootGrid" RequestedTheme="Dark" Background="{StaticResource SfBgPrimaryBrush}">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F5" Invoked="OnRefreshAccelerator" />
+            <KeyboardAccelerator Key="F6" Invoked="OnDualPaneAccelerator" />
             <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="OnBackAccelerator" />
             <KeyboardAccelerator Key="Right" Modifiers="Menu" Invoked="OnForwardAccelerator" />
             <KeyboardAccelerator Key="Up" Modifiers="Menu" Invoked="OnUpAccelerator" />
+            <KeyboardAccelerator Key="Number1" Modifiers="Menu" Invoked="OnFocusPrimaryAccelerator" />
+            <KeyboardAccelerator Key="Number2" Modifiers="Menu" Invoked="OnFocusSecondaryAccelerator" />
+            <KeyboardAccelerator Key="T" Modifiers="Control" Invoked="OnNewTabAccelerator" />
+            <KeyboardAccelerator Key="W" Modifiers="Control" Invoked="OnCloseTabAccelerator" />
+            <KeyboardAccelerator Key="Tab" Modifiers="Control" Invoked="OnNextTabAccelerator" />
+            <KeyboardAccelerator Key="Tab" Modifiers="Control,Shift" Invoked="OnPreviousTabAccelerator" />
+            <KeyboardAccelerator Key="Left" Modifiers="Control,Shift" Invoked="OnFocusPrimaryAccelerator" />
+            <KeyboardAccelerator Key="Right" Modifiers="Control,Shift" Invoked="OnFocusSecondaryAccelerator" />
         </Grid.KeyboardAccelerators>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="240" />
@@ -21,7 +30,22 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <TextBlock Margin="16,16,16,8" FontSize="20" FontWeight="SemiBold" Text="SimpleFile" Foreground="{StaticResource SfTextPrimaryBrush}" />
+            <StackPanel Padding="12,16,12,8" Spacing="8">
+                <Grid>
+                    <TextBlock FontSize="20" FontWeight="SemiBold" Text="SimpleFile" Foreground="{StaticResource SfTextPrimaryBrush}" />
+                    <Button
+                        x:Name="DualPaneButton"
+                        HorizontalAlignment="Right"
+                        Padding="8,4"
+                        Click="OnToggleDualPane"
+                        Content="Dual"
+                        ToolTipService.ToolTip="Toggle dual pane (F6)" />
+                </Grid>
+                <StackPanel x:Name="SidebarTargetSwitch" Orientation="Horizontal" Spacing="4" Visibility="Collapsed">
+                    <Button x:Name="SidebarLeftButton" Click="OnSidebarLeft" Content="Left" ToolTipService.ToolTip="Navigate left pane" />
+                    <Button x:Name="SidebarRightButton" Click="OnSidebarRight" Content="Right" ToolTipService.ToolTip="Navigate right pane" />
+                </StackPanel>
+            </StackPanel>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Padding="8,0,8,16" Spacing="12">
                     <StackPanel Spacing="4">
@@ -97,87 +121,201 @@
         <Grid Grid.Column="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid Padding="8,8,8,4" ColumnSpacing="8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <Button x:Name="BackButton" Click="OnBack" Content="◀" ToolTipService.ToolTip="Go Back" />
-                    <Button x:Name="ForwardButton" Click="OnForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
-                    <Button x:Name="UpButton" Click="OnUp" Content="▲" ToolTipService.ToolTip="Go Up" />
-                </StackPanel>
-                <Grid x:Name="PathBar" Grid.Column="1" Background="{StaticResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
-                    <ScrollViewer x:Name="BreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="BreadcrumbHost" Orientation="Horizontal" />
-                    </ScrollViewer>
-                    <TextBox
-                        x:Name="PathInput"
-                        PlaceholderText="Enter path..."
-                        Visibility="Collapsed"
-                        KeyDown="OnPathInputKeyDown"
-                        LostFocus="OnPathInputLostFocus" />
-                </Grid>
-                <Button Grid.Column="2" Click="OnEditPath" Content="✎" ToolTipService.ToolTip="Edit path" />
-            </Grid>
-
             <InfoBar
                 x:Name="MessageBar"
-                Grid.Row="1"
                 IsClosable="True"
                 IsOpen="False"
                 Severity="Informational" />
 
-            <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
+            <Grid x:Name="PanesGrid" Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
-                    <ColumnDefinition Width="160" />
-                    <ColumnDefinition Width="100" />
+                    <ColumnDefinition x:Name="PrimaryColumn" Width="*" />
+                    <ColumnDefinition x:Name="DividerColumn" Width="0" />
+                    <ColumnDefinition x:Name="SecondaryColumn" Width="0" />
                 </Grid.ColumnDefinitions>
-                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortName" Content="Name" />
-                <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortSize" Content="Size" />
-                <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortDate" Content="Modified" />
-                <Button Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortType" Content="Type" />
+
+                <Grid
+                    x:Name="PrimaryPaneRoot"
+                    Grid.Column="0"
+                    BorderBrush="{StaticResource SfAccentBrush}"
+                    BorderThickness="0"
+                    PointerPressed="OnPrimaryPanePressed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Padding="4,4,4,0">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="PrimaryTabHost" Orientation="Horizontal" />
+                        </ScrollViewer>
+                    </Grid>
+                    <Grid Grid.Row="1" Padding="8,4" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Button x:Name="PrimaryBackButton" Click="OnPrimaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
+                            <Button x:Name="PrimaryForwardButton" Click="OnPrimaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
+                            <Button x:Name="PrimaryUpButton" Click="OnPrimaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
+                        </StackPanel>
+                        <Grid x:Name="PrimaryPathBar" Grid.Column="1" Background="{StaticResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
+                            <ScrollViewer x:Name="PrimaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="PrimaryBreadcrumbHost" Orientation="Horizontal" />
+                            </ScrollViewer>
+                            <TextBox
+                                x:Name="PrimaryPathInput"
+                                PlaceholderText="Enter path..."
+                                Visibility="Collapsed"
+                                KeyDown="OnPrimaryPathKeyDown"
+                                LostFocus="OnPrimaryPathLostFocus" />
+                        </Grid>
+                        <Button Grid.Column="2" Click="OnEditPrimaryPath" Content="✎" ToolTipService.ToolTip="Edit left pane path" />
+                    </Grid>
+                    <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="100" />
+                        </Grid.ColumnDefinitions>
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortName" Content="Name" />
+                        <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortSize" Content="Size" />
+                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortDate" Content="Modified" />
+                        <Button Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortType" Content="Type" />
+                    </Grid>
+                    <ListView
+                        x:Name="PrimaryFileList"
+                        Grid.Row="3"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnPrimaryFileClick"
+                        DoubleTapped="OnPrimaryFileDoubleTapped"
+                        KeyDown="OnPrimaryFileKeyDown"
+                        SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="local:FileRow">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="160" />
+                                        <ColumnDefinition Width="100" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{x:Bind Icon}" />
+                                        <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Foreground="{StaticResource SfTextMutedBrush}" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind ModifiedText}" Foreground="{StaticResource SfTextMutedBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind TypeText}" Foreground="{StaticResource SfTextMutedBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+
+                <Border
+                    x:Name="PaneDivider"
+                    Grid.Column="1"
+                    Background="{StaticResource SfBorderBrush}"
+                    PointerPressed="OnDividerPressed"
+                    PointerMoved="OnDividerMoved"
+                    PointerReleased="OnDividerReleased"
+                    Visibility="Collapsed" />
+
+                <Grid
+                    x:Name="SecondaryPaneRoot"
+                    Grid.Column="2"
+                    BorderBrush="{StaticResource SfAccentBrush}"
+                    BorderThickness="0"
+                    PointerPressed="OnSecondaryPanePressed"
+                    Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Padding="4,4,4,0">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="SecondaryTabHost" Orientation="Horizontal" />
+                        </ScrollViewer>
+                    </Grid>
+                    <Grid Grid.Row="1" Padding="8,4" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Button x:Name="SecondaryBackButton" Click="OnSecondaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
+                            <Button x:Name="SecondaryForwardButton" Click="OnSecondaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
+                            <Button x:Name="SecondaryUpButton" Click="OnSecondaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
+                        </StackPanel>
+                        <Grid Grid.Column="1" Background="{StaticResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
+                            <ScrollViewer x:Name="SecondaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="SecondaryBreadcrumbHost" Orientation="Horizontal" />
+                            </ScrollViewer>
+                            <TextBox
+                                x:Name="SecondaryPathInput"
+                                PlaceholderText="Enter path..."
+                                Visibility="Collapsed"
+                                KeyDown="OnSecondaryPathKeyDown"
+                                LostFocus="OnSecondaryPathLostFocus" />
+                        </Grid>
+                        <Button Grid.Column="2" Click="OnEditSecondaryPath" Content="✎" ToolTipService.ToolTip="Edit right pane path" />
+                    </Grid>
+                    <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="160" />
+                            <ColumnDefinition Width="100" />
+                        </Grid.ColumnDefinitions>
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortName" Content="Name" />
+                        <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortSize" Content="Size" />
+                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortDate" Content="Modified" />
+                        <Button Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortType" Content="Type" />
+                    </Grid>
+                    <ListView
+                        x:Name="SecondaryFileList"
+                        Grid.Row="3"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnSecondaryFileClick"
+                        DoubleTapped="OnSecondaryFileDoubleTapped"
+                        KeyDown="OnSecondaryFileKeyDown"
+                        SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="local:FileRow">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="160" />
+                                        <ColumnDefinition Width="100" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{x:Bind Icon}" />
+                                        <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Foreground="{StaticResource SfTextMutedBrush}" />
+                                    <TextBlock Grid.Column="2" Text="{x:Bind ModifiedText}" Foreground="{StaticResource SfTextMutedBrush}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind TypeText}" Foreground="{StaticResource SfTextMutedBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
             </Grid>
 
-            <ListView
-                x:Name="FileList"
-                Grid.Row="3"
-                IsItemClickEnabled="True"
-                ItemClick="OnFileClick"
-                DoubleTapped="OnFileDoubleTapped"
-                KeyDown="OnFileListKeyDown"
-                SelectionMode="Single">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="local:FileRow">
-                        <Grid ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="160" />
-                                <ColumnDefinition Width="100" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="{x:Bind Icon}" />
-                                <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
-                            </StackPanel>
-                            <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                            <TextBlock Grid.Column="2" Text="{x:Bind ModifiedText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                            <TextBlock Grid.Column="3" Text="{x:Bind TypeText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-
-            <Grid Grid.Row="4" Padding="12,6" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,0">
+            <Grid Grid.Row="2" Padding="12,6" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,0">
                 <TextBlock x:Name="StatusText" Foreground="{StaticResource SfTextMutedBrush}" Text="Starting simplefile-service…" />
                 <TextBlock x:Name="CountText" HorizontalAlignment="Right" Foreground="{StaticResource SfTextMutedBrush}" />
             </Grid>
