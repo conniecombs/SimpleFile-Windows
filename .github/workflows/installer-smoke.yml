@@ -43,7 +43,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: .
           key: installer-smoke-x86_64-pc-windows-msvc
 
       - name: Install WiX Toolset (MSI)

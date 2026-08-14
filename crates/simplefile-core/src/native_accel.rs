@@ -10,7 +10,7 @@
 //! used when runtime-detected.
 
 /// Case-insensitive substring search used by content search.
-pub(crate) fn contains_case_insensitive(haystack: &str, needle: &str) -> bool {
+pub fn contains_case_insensitive(haystack: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return true;
     }
@@ -23,7 +23,7 @@ pub(crate) fn contains_case_insensitive(haystack: &str, needle: &str) -> bool {
 }
 
 /// True when `bytes` contains a NUL byte (binary sniffing for text tools).
-pub(crate) fn contains_zero_byte(bytes: &[u8]) -> bool {
+pub fn contains_zero_byte(bytes: &[u8]) -> bool {
     find_byte(bytes, 0).is_some()
 }
 
@@ -32,7 +32,7 @@ pub(crate) fn contains_zero_byte(bytes: &[u8]) -> bool {
 /// Pure ASCII uses a SIMD/fast lowercase path that matches Unicode lowercase
 /// for `A`–`Z`. Non-ASCII uses `str::to_lowercase()` for full correctness
 /// (e.g. Turkish `İ`, German `ß`).
-pub(crate) fn case_fold_for_sort(s: &str) -> String {
+pub fn case_fold_for_sort(s: &str) -> String {
     if s.is_empty() {
         return String::new();
     }
@@ -48,7 +48,7 @@ pub(crate) fn case_fold_for_sort(s: &str) -> String {
 
 /// Cached sort key: directories first, then case-folded name.
 #[inline]
-pub(crate) fn dirs_first_name_key(is_dir: bool, name: &str) -> (bool, String) {
+pub fn dirs_first_name_key(is_dir: bool, name: &str) -> (bool, String) {
     (!is_dir, case_fold_for_sort(name))
 }
 

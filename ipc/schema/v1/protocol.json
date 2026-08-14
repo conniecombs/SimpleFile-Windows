@@ -1,0 +1,80 @@
+{
+  "protocolVersion": 1,
+  "jsonrpc": "2.0",
+  "identifier": "com.simplefile.desktop",
+  "transport": {
+    "kind": "windows-named-pipe",
+    "framing": "uint32-le-length-prefixed-utf8",
+    "maxFrameBytes": 83886080,
+    "batchRequests": false,
+    "paramsStyle": "object"
+  },
+  "compatibility": {
+    "rule": "additive-optional-fields-ok",
+    "renamesRequireBump": true,
+    "frozenMethodNames": true,
+    "notes": "protocolVersion 1 is frozen to the 74 Tauri command names plus ipc.handshake. Unknown major versions return an application error and leave the process up."
+  },
+  "handshake": {
+    "method": "ipc.handshake",
+    "mustBeFirst": true,
+    "params": ["protocolVersion", "clientName", "authToken"],
+    "result": ["protocolVersion", "appVersion", "identifier", "methodCount"]
+  },
+  "controlMethods": ["ipc.health", "ipc.shutdown"],
+  "errors": {
+    "application": {
+      "code": -32000,
+      "mapsFrom": "Err(String)",
+      "preserveMessageExactly": true,
+      "knownPrefixes": ["CONFLICT:", "TRASH_UNAVAILABLE:", "RESULT_TOO_LARGE:", "HOST_OWNED:"]
+    },
+    "hostOwned": {
+      "code": -32001,
+      "messagePrefix": "HOST_OWNED:",
+      "methods": ["select_directory"]
+    },
+    "invalidRequest": { "code": -32600 },
+    "methodNotFound": { "code": -32601 },
+    "invalidParams": { "code": -32602 },
+    "internal": { "code": -32603 }
+  },
+  "inboundOversize": {
+    "action": "disconnect",
+    "log": "%LOCALAPPDATA%\\SimpleFile\\startup.log"
+  },
+  "outboundOversize": {
+    "previewMethods": ["read_file_preview", "generate_thumbnail", "generate_thumbnails"],
+    "unboundedArrayAction": "return -32000 RESULT_TOO_LARGE and keep the pipe"
+  },
+  "cancellation": {
+    "jsonrpcCancel": false,
+    "clientCancellationTokenCancelsBackend": false,
+    "commands": [
+      "cancel_operation",
+      "cancel_search",
+      "cancel_folder_size",
+      "cancel_folder_item_count",
+      "cancel_count_items",
+      "cancel_disk_cleanup",
+      "cancel_duplicate_check"
+    ],
+    "tokens": {
+      "operationId": {
+        "type": "string",
+        "generatedBy": "utils::generate_operation_id",
+        "pattern": "op_{unix_secs}_{counter}",
+        "usedBy": ["copy_with_progress", "move_with_progress", "cancel_operation", "operation-progress"]
+      },
+      "searchId": {
+        "type": "string",
+        "optionalOnSearch": true,
+        "usedBy": ["search_files.options.search_id", "cancel_search"]
+      }
+    }
+  },
+  "showMainWindow": {
+    "method": "show_main_window",
+    "serviceBehavior": "Ok(null)"
+  }
+}

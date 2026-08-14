@@ -1,0 +1,4 @@
+# Keep Tauri/release smoke paths on src-tauri/target while the
+# workspace root owns Cargo.lock.
+[build]
+target-dir = "src-tauri/target"

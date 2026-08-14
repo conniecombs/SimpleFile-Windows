@@ -1,0 +1,28 @@
+[package]
+name = "simplefile-core"
+version = "1.1.0"
+description = "Reusable SimpleFile backend domain types and utilities"
+authors = ["SimpleFile Team"]
+license-file = "../../LICENSE"
+repository = "https://github.com/conniecombs/SimpleFile-Windows"
+edition = "2021"
+
+[dependencies]
+chrono = "0.4"
+log = "0.4"
+notify = { version = "8", features = ["serde"] }
+parking_lot = "0.12"
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+  "errhandlingapi",
+  "fileapi",
+  "handleapi",
+  "minwinbase",
+  "minwindef",
+  "winbase",
+  "winerror",
+  "winnetwk",
+  "winnt",
+] }

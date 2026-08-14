@@ -95,19 +95,16 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: .
           key: release-quality
 
       - name: Check Rust formatting
-        working-directory: src-tauri
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        working-directory: src-tauri
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Run Rust tests
-        working-directory: src-tauri
         run: cargo test --locked --all-features
 
       - name: Install Svelte frontend dependencies
@@ -156,7 +153,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: .
           key: ${{ matrix.target }}-release
 
       - name: Install WiX Toolset (MSI)

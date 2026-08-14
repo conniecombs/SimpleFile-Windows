@@ -14,6 +14,8 @@ pnpm-debug.log*
 # Build artifacts
 dist/
 build/
+**/bin/
+**/obj/
 /frontend/dist/
 .svelte-kit/
 .vite/

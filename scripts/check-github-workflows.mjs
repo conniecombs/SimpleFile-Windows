@@ -227,7 +227,7 @@ for (const target of retiredArtifactTargets) {
 
 const dependabotSnippets = [
     'package-ecosystem: "cargo"',
-    'directory: "/src-tauri"',
+    'directory: "/"',
     'package-ecosystem: "github-actions"',
     'directory: "/"',
     'interval: "weekly"',

@@ -33,7 +33,7 @@ for (const advisory of ignoredAdvisories) {
 }
 
 const result = spawnSync(cargoBin, args, {
-  cwd: path.join(rootDir, 'src-tauri'),
+  cwd: rootDir,
   shell: process.platform === 'win32',
   stdio: 'inherit',
 });

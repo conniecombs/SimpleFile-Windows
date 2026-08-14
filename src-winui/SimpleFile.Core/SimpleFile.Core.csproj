@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Description>WinUI host helpers; file-manager workflows are not ported yet</Description>
+    <RootNamespace>SimpleFile.Core</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SimpleFile.Ipc\SimpleFile.Ipc.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimpleFile.Tests" />
+  </ItemGroup>
+</Project>

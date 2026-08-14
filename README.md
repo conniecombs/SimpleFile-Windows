@@ -321,6 +321,7 @@ Workspace layout (dual pane, active pane, tabs per pane, view mode, and related 
 | [Rust](https://rustup.rs/) | Stable | Backend compilation |
 | Tauri CLI v2 | via frontend npm deps | Desktop packaging |
 | Windows SDK (`rc.exe` on `PATH`) | — | Resource stamping for Rust/Tauri tests |
+| [.NET SDK](https://dotnet.microsoft.com/download) | **8+** (SDK 10 is fine) | WinUI 3 migration host |
 | [WiX Toolset](https://wixtoolset.org/) | Optional | Local MSI validation |
 
 ### Quick start
@@ -347,6 +348,14 @@ Frontend-only Vite dev (without the full desktop shell) is available as:
 npm --prefix frontend run dev
 ```
 
+The WinUI 3 migration host is a separate, incomplete shell. It starts `simplefile-service` and checks health/version only — file-manager UI is still Svelte/Tauri:
+
+```powershell
+npm run dev:winui
+```
+
+See [src-winui/README.md](src-winui/README.md).
+
 ### Root scripts
 
 Run from the **repository root** with `npm run <script>`.
@@ -354,6 +363,9 @@ Run from the **repository root** with `npm run <script>`.
 | Script | Description |
 | --- | --- |
 | `dev` | Start Tauri development (`tauri dev`) |
+| `dev:winui` | Build `simplefile-service` and run the minimal WinUI 3 host |
+| `build:winui` | `dotnet build src-winui/SimpleFile.sln` |
+| `check:winui` | `dotnet test src-winui/SimpleFile.sln` |
 | `build` | Production frontend build (`vite build` → `frontend/dist`) |
 | `check` | Full frontend gate: migration/API/behavior guards, Svelte check, settings UI smoke, production build |
 | `check:frontend` | Same as frontend package `check` |
@@ -437,6 +449,9 @@ SimpleFile-Windows/
 │       ├── db.rs                 SQLite-backed settings/persistence
 │       └── utils.rs              Shared helpers
 │
+├── src-winui/                    WinUI 3 migration host (minimal shell; not the shipping UI)
+├── crates/                       simplefile-core / simplefile-ipc / simplefile-service
+├── ipc/schema/                   Named-pipe JSON-RPC contract
 ├── scripts/                      Repo-level checks, release, and smokes
 ├── docs/                         User/dev docs, changelog, screenshots
 ├── build_notes/                  Internal hardening / migration notes

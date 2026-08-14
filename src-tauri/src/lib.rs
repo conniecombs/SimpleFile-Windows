@@ -12,8 +12,8 @@ mod fs_ops;
 mod git;
 
 mod metadata;
-mod models;
-mod native_accel;
+pub(crate) use simplefile_core::models;
+pub(crate) use simplefile_core::native_accel;
 
 mod open_with;
 
@@ -23,11 +23,11 @@ mod rar_installer;
 
 mod search;
 mod smart_folders;
-mod state;
+pub(crate) use simplefile_core::state;
 mod tags;
 mod terminal;
 mod updater;
-mod utils;
+pub(crate) use simplefile_core::utils;
 mod watcher;
 
 use db::DbState;

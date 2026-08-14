@@ -5,20 +5,20 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub(crate) fn hidden_command<S: AsRef<OsStr>>(program: S) -> Command {
+pub fn hidden_command<S: AsRef<OsStr>>(program: S) -> Command {
     use std::os::windows::process::CommandExt;
     let mut command = Command::new(program);
     command.creation_flags(0x08000000);
     command
 }
 
-pub(crate) fn dirs_home() -> Result<String, String> {
+pub fn dirs_home() -> Result<String, String> {
     std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .map_err(|_| "Could not determine home directory".to_string())
 }
 
-pub(crate) fn format_system_time(time: std::time::SystemTime) -> String {
+pub fn format_system_time(time: std::time::SystemTime) -> String {
     let datetime: DateTime<Local> = time.into();
     datetime.format("%Y-%m-%d %H:%M").to_string()
 }
@@ -63,7 +63,7 @@ fn build_file_entry(
 
 /// Build a `FileEntry` from a path. Uses a single `symlink_metadata` call for
 /// normal files/dirs. Only follows / `read_link`s when the node is a symlink.
-pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
+pub fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
     let symlink_meta = fs::symlink_metadata(path).ok()?;
     let is_symlink = symlink_meta.file_type().is_symlink();
 
@@ -104,7 +104,7 @@ pub(crate) fn get_file_entry(path: &PathBuf) -> Option<FileEntry> {
 /// Build a `FileEntry` from a `DirEntry` without re-opening the path for normal
 /// files. `DirEntry::metadata()` reuses find-data on Windows; we only
 /// `read_link` (never full follow-stat) when the entry is a symlink/reparse.
-pub(crate) fn get_file_entry_from_dir_entry(entry: &fs::DirEntry) -> Option<FileEntry> {
+pub fn get_file_entry_from_dir_entry(entry: &fs::DirEntry) -> Option<FileEntry> {
     let path = entry.path();
     let file_type = entry.file_type().ok()?;
     let is_symlink = file_type.is_symlink();
@@ -138,7 +138,7 @@ pub(crate) fn get_file_entry_from_dir_entry(entry: &fs::DirEntry) -> Option<File
 }
 
 /// True for UNC paths (`\\server\share`) and mapped network drive letters.
-pub(crate) fn is_network_path(path: &Path) -> bool {
+pub fn is_network_path(path: &Path) -> bool {
     let raw = path.to_string_lossy();
     let trimmed = raw.trim();
     if trimmed.starts_with("\\\\") || trimmed.starts_with("//") {
@@ -170,7 +170,7 @@ pub(crate) fn is_network_path(path: &Path) -> bool {
     false
 }
 
-pub(crate) fn generate_operation_id() -> String {
+pub fn generate_operation_id() -> String {
     use std::sync::atomic::{AtomicU64, Ordering};
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     let count = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -183,7 +183,7 @@ pub(crate) fn generate_operation_id() -> String {
 }
 
 /// Validate a path that must exist
-pub(crate) fn validate_existing_path(path: &str) -> Result<PathBuf, String> {
+pub fn validate_existing_path(path: &str) -> Result<PathBuf, String> {
     let path_buf = PathBuf::from(path);
 
     if !path_buf.exists() {
@@ -201,7 +201,7 @@ pub(crate) fn validate_existing_path(path: &str) -> Result<PathBuf, String> {
 /// Some Windows filesystem targets can be opened and listed normally but fail
 /// `canonicalize()` with OS error 1005. File-browser operations should keep the
 /// supplied path intact instead of resolving it first.
-pub(crate) fn validate_existing_path_no_resolve(path: &str) -> Result<PathBuf, String> {
+pub fn validate_existing_path_no_resolve(path: &str) -> Result<PathBuf, String> {
     let path_buf = PathBuf::from(path);
     fs::metadata(&path_buf)
         .map_err(|e| format!("Path does not exist or is not accessible: {path} ({e})"))?;
@@ -219,7 +219,7 @@ pub(crate) fn validate_existing_path_no_resolve(path: &str) -> Result<PathBuf, S
 ///   • causes `rename`/`rename` to move the target instead of the symlink;
 ///   • causes `get_file_entry` to report `is_symlink = false` because it
 ///     never sees the symlink node.
-pub(crate) fn validate_path_no_follow(path: &str) -> Result<PathBuf, String> {
+pub fn validate_path_no_follow(path: &str) -> Result<PathBuf, String> {
     let path_buf = PathBuf::from(path);
     // symlink_metadata (lstat) succeeds for both regular files *and* symlinks,
     // but does not resolve the link — so the returned PathBuf still points to
@@ -229,7 +229,7 @@ pub(crate) fn validate_path_no_follow(path: &str) -> Result<PathBuf, String> {
 }
 
 /// Validate a single Windows file/directory name.
-pub(crate) fn validate_name(name: &str) -> Result<(), String> {
+pub fn validate_name(name: &str) -> Result<(), String> {
     if name.is_empty() || name.trim().is_empty() {
         return Err("Name cannot be empty".to_string());
     }
@@ -331,7 +331,7 @@ fn classify_symlink_target(
     })
 }
 
-pub(crate) fn recreate_symlink(source_path: &Path, dst_path: &Path) -> Result<(), String> {
+pub fn recreate_symlink(source_path: &Path, dst_path: &Path) -> Result<(), String> {
     if let Some(parent) = dst_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
@@ -382,7 +382,7 @@ fn should_cancel(
 
 /// Count direct children under `path`, excluding the root directory itself.
 /// Returns `None` if cancelled or superseded by a newer count request.
-pub(crate) fn count_directory_entries(
+pub fn count_directory_entries(
     path: &Path,
     cancel: &std::sync::atomic::AtomicBool,
     generation: Option<(&std::sync::atomic::AtomicU64, u64)>,
@@ -402,7 +402,7 @@ pub(crate) fn count_directory_entries(
 
 /// Recursively count all entries under `path`, excluding the root directory itself.
 /// Returns `None` if cancelled or superseded by a newer count request.
-pub(crate) fn count_items_scoped(
+pub fn count_items_scoped(
     path: &Path,
     cancel: &std::sync::atomic::AtomicBool,
     generation: Option<(&std::sync::atomic::AtomicU64, u64)>,

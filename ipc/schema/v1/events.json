@@ -1,0 +1,61 @@
+{
+  "protocolVersion": 1,
+  "emitted": {
+    "file-change": {
+      "params": "FileChangeEvent",
+      "source": "src-tauri/src/watcher.rs"
+    },
+    "operation-progress": {
+      "params": "ProgressUpdate",
+      "source": ["src-tauri/src/progress.rs", "src-tauri/src/cleanup.rs"],
+      "statusValues": ["running", "completed", "error", "cancelled"]
+    },
+    "search-results-batch": {
+      "params": { "type": "array", "items": "SearchResult" },
+      "source": "src-tauri/src/search.rs"
+    },
+    "search-complete": {
+      "params": { "type": "number", "meaning": "result count" },
+      "source": "src-tauri/src/search.rs",
+      "notes": "Emitted; current Svelte UI waits on search_files return instead of this wrapper."
+    },
+    "update-chunk": {
+      "params": { "type": "tuple", "items": ["number", "number|null"] },
+      "source": "src-tauri/src/updater.rs",
+      "notes": "Positional array [bytesDownloaded, totalBytes|null] matching UpdateChunkPayload."
+    },
+    "list_directory.chunk": {
+      "params": "DirectoryListingChunkNotification",
+      "source": "replaces tauri::ipc::Channel on list_directory",
+      "chunkSizes": { "first": 96, "later": 256 }
+    }
+  },
+  "typedNotEmitted": {
+    "operation-complete": {
+      "reason": "Present on TauriEventMap only. Completion is ProgressUpdate.status plus the command result."
+    },
+    "operation-error": {
+      "reason": "Present on TauriEventMap only. Errors are ProgressUpdate.status === error plus Err(String)."
+    }
+  },
+  "hostOnly": {
+    "tauri://drag-enter": {
+      "replacement": "WinUI DragEnter",
+      "params": "NativeFileDropEventPayload"
+    },
+    "tauri://drag-drop": {
+      "replacement": "WinUI Drop",
+      "params": "NativeFileDropEventPayload"
+    },
+    "tauri://drag-leave": {
+      "replacement": "WinUI DragLeave",
+      "params": "NativeFileDropEventPayload"
+    }
+  },
+  "serviceNotifications": {
+    "app.restart-required": {
+      "params": { "type": "object", "fields": [] },
+      "notes": "WinUI-era install_update completion. Not a current Tauri event. UI exits; NSIS relaunches. Do not emit from the Tauri host."
+    }
+  }
+}

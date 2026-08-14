@@ -34,18 +34,15 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: .
 
       - name: Check formatting
-        working-directory: src-tauri
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        working-directory: src-tauri
         run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
       - name: Run tests
-        working-directory: src-tauri
         run: cargo test --locked --all-features
 
   frontend-sanity:
@@ -114,7 +111,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: .
           key: ${{ matrix.target }}
 
       - name: Build backend
