@@ -1,7 +1,8 @@
 # Release Process
 
 This document describes how to create a Windows-only SimpleFile release from the
-`main` branch.
+`main` branch. The shipping app is WinUI 3 + the Rust `simplefile-service` IPC
+process.
 
 ## Automated Releases
 
@@ -9,22 +10,22 @@ Releases are automated with GitHub Actions through `.github/workflows/release.ym
 
 ## Windows Build Prerequisites
 
-Local release validation requires Node.js 24 or newer, stable Rust, and the
-Windows SDK Resource Compiler (`rc.exe`) on `PATH`. GitHub-hosted
-`windows-latest` runners provide the Windows SDK; local shells should expose
-the x64 SDK bin directory before running Rust/Tauri release gates.
+Local release validation requires Node.js 24 or newer, stable Rust, .NET SDK 8,
+and optional NSIS / WiX for installer artifacts. GitHub-hosted `windows-latest`
+runners provide the Windows SDK.
 
 ### 1. Update Version Numbers
 
 Update the version in these files and keep them identical:
 
-- `src-tauri/tauri.conf.json` — `version` field
-- `src-tauri/Cargo.toml` — package `version` field
+- `src-winui/Directory.Build.props` — `<Version>`
+- `crates/simplefile-service/Cargo.toml` — package `version` field
 - [`README.md`](../README.md) — version badge
 - [`docs/CHANGELOG.md`](../docs/CHANGELOG.md) — release notes and compare links
 
-Release workflow validation fails if the tag/manual version does not match both Rust/Tauri manifest versions.
-`src-tauri/Cargo.lock` must also be committed and current so release builds use the reviewed dependency graph.
+Release workflow validation fails if the tag/manual version does not match both
+the WinUI and service versions. Root `Cargo.lock` must also be committed and
+current so release builds use the reviewed dependency graph.
 For releases that change Windows drive enumeration, mapped network drive display,
 process launching, updater behavior, installer behavior, or release smoke tests,
 update [`docs/SECURITY.md`](../docs/SECURITY.md),
@@ -52,21 +53,20 @@ git push origin v1.0.0
 
 The release workflow will:
 
-1. Validate the release version against `Cargo.toml` and `tauri.conf.json`.
-2. Run release quality gates: Rust formatting, Clippy, tests, Svelte build/type checks,
-   frontend/backend invoke checks, updater configuration checks, and Rust dependency audit.
+1. Validate the release version against `Directory.Build.props` and
+   `crates/simplefile-service/Cargo.toml`.
+2. Run release quality gates: Rust formatting, Clippy, tests, IPC/schema
+   checks, updater/workflow checks, WinUI packaging/parity checks, and Rust
+   dependency audit.
 3. Build the Windows release target:
    - Windows x64 (`x86_64-pc-windows-msvc`)
-4. Verify the updater signing secret is available for release builds.
-5. Build the signed Windows NSIS/MSI installers, stage a portable executable zip,
-   and upload those artifacts plus signed updater artifacts, signatures, and
-   `latest.json` to the draft GitHub release.
-   The same job also builds the dual-stack WinUI host (`scripts/build-winui-release.ps1`):
+4. Build the WinUI host and Rust IPC service (`scripts/build-winui-release.ps1`):
    `SimpleFile_*_x64-winui-setup.exe`, `SimpleFile_*_x64-winui.msi`,
-   `SimpleFile_*_x64-winui-portable.zip` (inner `SimpleFile.exe` + `simplefile-service.exe`),
-   and `latest-winui.json`. Tauri `latest.json` remains the shipping updater until Gate 6.
-6. Keep tag-triggered releases as drafts by default so assets can be reviewed before publishing.
-7. Publish the release only after the Windows build succeeds when manual
+   `SimpleFile_*_x64-winui-portable.zip` (inner `SimpleFile.exe` +
+   `simplefile-service.exe`), and `latest-winui.json`.
+5. Keep tag-triggered releases as drafts by default so assets can be reviewed
+   before publishing.
+6. Publish the release only after the Windows build succeeds when manual
    `draft=false` is selected.
 
 ### 5. Manual Release
@@ -83,47 +83,38 @@ Windows build succeeds.
 
 ## Release Artifacts
 
-Each release may include the following Windows artifacts, depending on Tauri
-bundler output:
-
 | Platform | Installer Type | Example File |
 |----------|----------------|--------------|
-| Windows x64 | NSIS setup executable | `SimpleFile_x.x.x_x64-setup.exe` |
-| Windows x64 | MSI installer | `SimpleFile_x.x.x_x64_en-US.msi` |
-| Windows x64 | Portable executable zip | `SimpleFile_x.x.x_x64-portable.zip` |
-| Windows updater | Static JSON / signatures | `latest.json`, updater bundle signatures, and Windows updater artifacts |
+| Windows x64 | NSIS setup executable | `SimpleFile_x.x.x_x64-winui-setup.exe` |
+| Windows x64 | MSI installer | `SimpleFile_x.x.x_x64-winui.msi` |
+| Windows x64 | Portable zip | `SimpleFile_x.x.x_x64-winui-portable.zip` |
+| Windows updater | Static JSON / signatures | `latest-winui.json` and optional `.sig` files |
 
 ## Auto-Update
 
-SimpleFile uses Tauri's updater plugin with GitHub Releases as the static update server.
-The app checks `https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json`.
+SimpleFile publishes `latest-winui.json` to GitHub Releases. The app checks
+`https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest-winui.json`.
 
 ### Setup Requirements
 
-1. **Generate signing keys:**
-   ```bash
-   cargo tauri signer generate -w .secrets/simplefile-updater.key
-   ```
+1. **Optional signing key** in GitHub secrets:
+   - `SIMPLEFILE_SIGNING_PRIVATE_KEY` — private signing key content
+   - `SIMPLEFILE_SIGNING_PRIVATE_KEY_PASSWORD` — optional private key passphrase
+   - Legacy `TAURI_SIGNING_*` secrets are still accepted by the build script.
 
-2. **Add secrets to GitHub:**
-   - `TAURI_SIGNING_PRIVATE_KEY` — private signing key content
-   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` — optional private key passphrase
-
-3. **Keep `src-tauri/tauri.conf.json` updater settings enabled:**
-   - `bundle.createUpdaterArtifacts` must be `true`.
-   - `plugins.updater.pubkey` must contain the updater public key.
-   - `plugins.updater.endpoints` must point at the GitHub release `latest.json`.
+2. Keep `scripts/write-latest-winui.mjs` pointed at the GitHub release
+   `latest-winui.json` URL.
 
 The first updater-enabled release must be installed manually by existing users.
-After that, future published releases can be installed through Settings -> App Updates.
+After that, future published releases can be installed through Settings -> Updates.
 See [`docs/UPDATER_RELEASE.md`](../docs/UPDATER_RELEASE.md) for the operational checklist.
 
 ## CI/CD Workflows
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | Push/PR to `main`, manual dispatch | Rust format, Clippy, tests, Svelte/frontend checks, frontend/backend invoke checks, updater/workflow/provider-surface checks, Rust dependency audit, and Windows x64 backend build with the committed lockfile |
-| `release.yml` | Tag push (`v*`), manual dispatch | Version validation, release quality gates, Windows x64 Tauri release packaging, installer/portable/updater asset upload, optional publishing |
+| `ci.yml` | Push/PR to `main`, manual dispatch | Rust format, Clippy, tests, repo checks, Rust dependency audit, service build, WinUI tests |
+| `release.yml` | Tag push (`v*`), manual dispatch | Version validation, release quality gates, WinUI/NSIS/MSI packaging, asset upload, optional publishing |
 | `dependabot.yml` | Weekly schedule | Dependency update pull requests for Cargo, npm, and GitHub Actions |
 
 ## Code Signing

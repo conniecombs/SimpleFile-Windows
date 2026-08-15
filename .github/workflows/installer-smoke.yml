@@ -1,7 +1,7 @@
 name: Installer smoke
 
-# Builds unsigned Windows NSIS/MSI packages with tauri.local.conf.json and runs
-# the existing smoke scripts. Not on every PR: full packaging is expensive.
+# Builds unsigned WinUI NSIS/MSI packages and runs the WinUI smoke scripts.
+# Not on every PR: full packaging is expensive.
 # Trigger manually or via the nightly schedule before a release.
 
 on:
@@ -80,27 +80,6 @@ jobs:
           Write-Host "WiX on PATH: $wixBin"
           & (Join-Path $wixBin 'candle.exe') -? | Select-Object -First 1
 
-      - name: Install Svelte frontend dependencies
-        run: npm ci --prefix frontend
-
-      - name: Install Tauri CLI
-        uses: taiki-e/install-action@v2
-        with:
-          tool: tauri-cli
-
-      # Unsigned local package build (createUpdaterArtifacts disabled via tauri.local.conf.json).
-      - name: Build local Windows installers
-        run: npm run build:tauri:local
-
-      - name: Smoke release executable startup
-        run: npm run smoke:release
-
-      - name: Smoke MSI artifact extract and launch
-        run: npm run smoke:msi
-
-      - name: Smoke NSIS install, launch, and uninstall
-        run: npm run smoke:installer
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -131,9 +110,6 @@ jobs:
         with:
           name: simplefile-windows-installers
           path: |
-            src-tauri/target/release/simplefile.exe
-            src-tauri/target/release/bundle/nsis/*
-            src-tauri/target/release/bundle/msi/*
             dist/winui/SimpleFile_*_x64-winui-portable.zip
             dist/winui/SimpleFile_*_x64-winui-setup.exe
             dist/winui/SimpleFile_*_x64-winui.msi

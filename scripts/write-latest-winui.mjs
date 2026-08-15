@@ -25,7 +25,7 @@ const version = named.version;
 const setupName = named.setup;
 const outDir = named.out ? path.resolve(named.out) : path.join(repoRoot, 'dist', 'winui');
 const signature = named.signature ?? '';
-const notes = named.notes ?? 'WinUI host + Rust IPC service (dual-stack testers). Use the Tauri build for in-app updates until Gate 6.';
+const notes = named.notes ?? 'WinUI 3 host + Rust IPC service.';
 
 if (!version) {
   fail('Pass --version=1.1.0');

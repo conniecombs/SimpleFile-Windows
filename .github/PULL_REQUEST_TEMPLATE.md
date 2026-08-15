@@ -27,12 +27,12 @@ Closes #<!-- issue number -->
 - [ ] Other Windows version:
 
 **Windows build tools:**
-- [ ] Windows SDK `rc.exe` is on `PATH` for Rust/Tauri checks
+- [ ] .NET SDK 8 and stable Rust are available
 - [ ] Not applicable for this change
 
 **Run/install mode tested:**
-- [ ] Tauri dev
-- [ ] Local executable
+- [ ] `npm run dev:winui`
+- [ ] Unpackaged payload (`dist/winui/payload/SimpleFile.exe`)
 - [ ] NSIS installer
 - [ ] MSI installer
 - [ ] Not applicable for this change
@@ -58,8 +58,8 @@ Closes #<!-- issue number -->
 - [ ] I have run `npm run check:release` for release-level or migration changes
 - [ ] I have run the documented `cargo audit --deny warnings` command and there are no new advisories
 - [ ] I have tested on Windows or explained why runtime testing is not applicable
-- [ ] New Tauri commands validate path inputs via `validate_existing_path()` or `validate_name()`
-- [ ] No user-controlled data is passed to `innerHTML` or shell commands without sanitization
+- [ ] New IPC methods validate path inputs via `validate_existing_path()` or `validate_name()`
+- [ ] No user-controlled data is passed to shell commands without sanitization
 - [ ] Drive-listing changes preserve local and mapped network drive behavior
 - [ ] I have added tests for new backend behavior (or explained why tests are not applicable)
 - [ ] I have updated documentation if the change affects user-facing behavior

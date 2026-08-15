@@ -55,13 +55,12 @@ jobs:
             exit 1
           fi
 
-          MANIFEST_VERSION="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["version"])')"
-          CARGO_VERSION="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' src-tauri/Cargo.toml | head -n1)"
+          SERVICE_VERSION="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' crates/simplefile-service/Cargo.toml | head -n1)"
           WINUI_VERSION="$(python3 -c 'import re,sys; t=open("src-winui/Directory.Build.props").read(); print(re.search(r"<Version>([^<]+)</Version>", t).group(1))')"
           TAG_VERSION="${VERSION#v}"
 
-          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ] || [ "$CARGO_VERSION" != "$TAG_VERSION" ] || [ "$WINUI_VERSION" != "$TAG_VERSION" ]; then
-            echo "Version mismatch: tag=$TAG_VERSION tauri.conf.json=$MANIFEST_VERSION Cargo.toml=$CARGO_VERSION Directory.Build.props=$WINUI_VERSION" >&2
+          if [ "$SERVICE_VERSION" != "$TAG_VERSION" ] || [ "$WINUI_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: tag=$TAG_VERSION crates/simplefile-service/Cargo.toml=$SERVICE_VERSION Directory.Build.props=$WINUI_VERSION" >&2
             exit 1
           fi
 
@@ -108,10 +107,7 @@ jobs:
       - name: Run Rust tests
         run: cargo test --locked --all-features
 
-      - name: Install Svelte frontend dependencies
-        run: npm ci --prefix frontend
-
-      - name: Run frontend checks
+      - name: Run repo checks
         run: npm run check
 
       - name: Install cargo-audit
@@ -147,9 +143,6 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-
-      - name: Install Svelte frontend dependencies
-        run: npm ci --prefix frontend
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -191,85 +184,6 @@ jobs:
           Write-Host "WiX on PATH: $wixBin"
           & (Join-Path $wixBin 'candle.exe') -? | Select-Object -First 1
 
-      - name: Install Tauri CLI
-        uses: taiki-e/install-action@v2
-        with:
-          tool: tauri-cli
-
-      - name: Verify updater signing secret
-        shell: bash
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-        run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error::The TAURI_SIGNING_PRIVATE_KEY repository secret is required to build signed updater artifacts."
-            echo "::error::Generate it with 'cargo tauri signer generate --write-keys .secrets/simplefile-updater.key', then store the private key content as the secret."
-            exit 1
-          fi
-
-      - name: Build signed Windows installers and portable executable
-        working-directory: src-tauri
-        shell: pwsh
-        env:
-          TARGET_TRIPLE: ${{ matrix.target }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: cargo tauri build --ci --target $env:TARGET_TRIPLE --bundles nsis,msi
-
-      - name: Stage release assets
-        shell: pwsh
-        env:
-          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
-          TARGET_TRIPLE: ${{ matrix.target }}
-        run: |
-          $root = (Get-Location).Path
-          $version = $env:RELEASE_VERSION.TrimStart('v')
-          $assetsDir = Join-Path $root 'release-assets'
-          New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
-
-          $releaseRoots = @(
-            Join-Path $root "src-tauri\target\$env:TARGET_TRIPLE\release",
-            Join-Path $root 'src-tauri\target\release'
-          )
-          $releaseRoot = $releaseRoots |
-            Where-Object { Test-Path -LiteralPath (Join-Path $_ 'simplefile.exe') } |
-            Select-Object -First 1
-          if (-not $releaseRoot) {
-            throw "No release executable found under: $($releaseRoots -join ', ')"
-          }
-
-          $portableName = "SimpleFile_${version}_x64-portable.exe"
-          $portableExe = Join-Path $assetsDir $portableName
-          Copy-Item -LiteralPath (Join-Path $releaseRoot 'simplefile.exe') -Destination $portableExe -Force
-          Compress-Archive -LiteralPath $portableExe -DestinationPath (Join-Path $assetsDir "SimpleFile_${version}_x64-portable.zip") -Force
-
-          $bundleRoot = Join-Path $releaseRoot 'bundle'
-          $bundleFiles = Get-ChildItem -Path (Join-Path $bundleRoot 'nsis\*'), (Join-Path $bundleRoot 'msi\*') -File -ErrorAction SilentlyContinue
-          if (-not $bundleFiles) {
-            throw "No NSIS/MSI bundle files found under $bundleRoot."
-          }
-
-          foreach ($file in $bundleFiles) {
-            Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $assetsDir $file.Name) -Force
-          }
-
-          $assets = Get-ChildItem -LiteralPath $assetsDir -File
-          if (-not ($assets | Where-Object { $_.Name -like 'SimpleFile_*_x64-setup.exe' })) {
-            throw 'NSIS setup executable was not staged.'
-          }
-          if (-not ($assets | Where-Object { $_.Name -like 'SimpleFile_*_x64_en-US.msi' })) {
-            throw 'MSI installer was not staged.'
-          }
-          if (-not (Test-Path -LiteralPath (Join-Path $assetsDir "SimpleFile_${version}_x64-portable.zip"))) {
-            throw 'Portable zip was not staged.'
-          }
-          if (-not ($assets | Where-Object { $_.Name -eq 'latest.json' })) {
-            throw 'Updater latest.json was not staged.'
-          }
-          if (-not ($assets | Where-Object { $_.Extension -eq '.sig' })) {
-            throw 'Updater signature files were not staged.'
-          }
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -290,9 +204,11 @@ jobs:
           }
           Get-Command makensis.exe | Select-Object -ExpandProperty Source
 
-      - name: Build WinUI host, Rust IPC service, and dual-stack artifacts
+      - name: Build WinUI host, Rust IPC service, and installers
         shell: pwsh
         env:
+          SIMPLEFILE_SIGNING_PRIVATE_KEY: ${{ secrets.SIMPLEFILE_SIGNING_PRIVATE_KEY }}
+          SIMPLEFILE_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.SIMPLEFILE_SIGNING_PRIVATE_KEY_PASSWORD }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
@@ -348,11 +264,10 @@ jobs:
             ## SimpleFile ${{ needs.validate.outputs.version }}
 
             Windows installer and portable artifacts are attached below:
-            - NSIS setup executable for standard per-user installation.
-            - MSI installer for managed deployment.
-            - Portable zip containing the standalone executable.
-            - Signed updater artifacts, signatures, and latest.json.
-            - Dual-stack WinUI host artifacts: x64-winui-setup.exe, x64-winui.msi, x64-winui-portable.zip, and latest-winui.json.
+            - WinUI NSIS setup executable (`x64-winui-setup.exe`) for standard per-user installation.
+            - WinUI MSI installer (`x64-winui.msi`) for managed deployment.
+            - Portable zip (`x64-winui-portable.zip`) containing `SimpleFile.exe` and `simplefile-service.exe`.
+            - Updater metadata (`latest-winui.json`) and optional signatures.
 
             See [docs/CHANGELOG.md](https://github.com/conniecombs/SimpleFile-Windows/blob/main/docs/CHANGELOG.md) for release notes and upgrade details.
           draft: true

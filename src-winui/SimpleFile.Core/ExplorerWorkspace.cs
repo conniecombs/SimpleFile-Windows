@@ -70,6 +70,14 @@ public sealed class ExplorerWorkspace
     public List<SmartFolder> SmartFolders { get; private set; } = [];
     public List<Tag> AllTags { get; private set; } = [];
     public Dictionary<string, Tag> FileTags { get; private set; } = new();
+    public List<BookmarkItem> Bookmarks { get; private set; } = [];
+    public List<string> RecentPaths { get; private set; } = [];
+    public List<FolderTreeItem> FolderTreeRows { get; private set; } = [];
+    public ClipboardHistory ClipboardHistory { get; } = new();
+    public List<OperationRecord> OperationLog { get; } = [];
+    public long? ActiveTagFilter { get; private set; }
+    public bool PhotoFolderActive { get; private set; }
+    public TypeAheadBuffer TypeAheadBuffer { get; } = new();
 
     public IReadOnlyList<DriveInfo> Drives => _drives;
 
@@ -340,6 +348,8 @@ public sealed class ExplorerWorkspace
                 state.RecordHistory(listing.Path, historyMode);
                 state.SyncActiveTab();
                 StatusMessage = null;
+                RecentPaths = PlacesStore.RecordRecent(RecentPaths, listing.Path);
+                PhotoFolderActive = PhotoFolder.IsPhotoFolder(listing.Entries, Settings.PhotoFolderImageThreshold);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -523,6 +533,12 @@ public sealed class ExplorerWorkspace
 
         if (shouldNavigate == true)
         {
+            if (Settings.OpenInNewTab && !string.IsNullOrEmpty(Pane(target).Path))
+            {
+                await OpenNewTabAsync(target, path, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             await NavigatePaneAsync(target, path, HistoryMode.Push, activate: DualPaneEnabled, cancellationToken)
                 .ConfigureAwait(false);
             return;
@@ -818,12 +834,6 @@ public sealed class ExplorerWorkspace
         RaiseChanged();
     }
 
-    public IReadOnlyList<FileEntry> VisibleEntriesFor(PaneId pane)
-    {
-        var filter = Normalize(pane) == PaneId.Secondary ? "" : FilterQuery;
-        return Pane(pane).VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, filter);
-    }
-
     // --- Smart Folders ---
 
     private async Task LoadSmartFoldersAsync()
@@ -969,6 +979,254 @@ public sealed class ExplorerWorkspace
     public async Task RevealInFolderAsync(string path)
     {
         await RequireFileOps().RevealInFolderAsync(path).ConfigureAwait(false);
+    }
+
+    public void AddBookmark(string path)
+    {
+        Bookmarks = PlacesStore.AddBookmark(Bookmarks, path);
+        RaiseChanged();
+    }
+
+    public void RemoveBookmark(string path)
+    {
+        Bookmarks = PlacesStore.RemoveBookmark(Bookmarks, path);
+        RaiseChanged();
+    }
+
+    public void SetTagFilter(long? tagId)
+    {
+        ActiveTagFilter = tagId;
+        RaiseChanged();
+    }
+
+    public IReadOnlyList<FileEntry> VisibleEntriesFor(PaneId pane)
+    {
+        var filter = Normalize(pane) == PaneId.Secondary ? "" : FilterQuery;
+        var entries = Pane(pane).VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, filter);
+        if (ActiveTagFilter is long tagId)
+        {
+            var tagged = FileTags
+                .Where(pair => pair.Value.Id == tagId)
+                .Select(pair => pair.Key)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            entries = entries.Where(entry => tagged.Contains(entry.Path)).ToList();
+        }
+
+        return entries;
+    }
+
+    public async Task SaveCurrentSearchAsSmartFolderAsync(string name, SearchOptions options)
+    {
+        var folder = new SmartFolder
+        {
+            Id = Guid.NewGuid().ToString("n"),
+            Name = name,
+            Icon = "search",
+            SearchOptions = options,
+        };
+        await SaveSmartFolderAsync(folder).ConfigureAwait(false);
+    }
+
+    public async Task LoadTreeChildrenAsync(string path, CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var children = await FileOps.ListSubdirectoriesAsync(path, cancellationToken).ConfigureAwait(false);
+            var expanded = new HashSet<string>(
+                FolderTreeRows.Where(row => row.Expanded).Select(row => row.Path),
+                StringComparer.OrdinalIgnoreCase)
+            {
+                path,
+            };
+            var roots = FolderTreeRows.Count == 0
+                ? children.ToList()
+                : MergeTree(FolderTreeRows, path, children);
+            FolderTreeRows = FolderTree.Flatten(roots, expanded);
+        }
+        catch
+        {
+            // Tree is optional; listing still works.
+        }
+
+        RaiseChanged();
+    }
+
+    public void ToggleTreeExpanded(string path)
+    {
+        var expanded = new HashSet<string>(
+            FolderTreeRows.Where(row => row.Expanded).Select(row => row.Path),
+            StringComparer.OrdinalIgnoreCase);
+        if (!expanded.Add(path))
+        {
+            expanded.Remove(path);
+        }
+
+        var roots = ReconstructRoots(FolderTreeRows);
+        FolderTreeRows = FolderTree.Flatten(roots, expanded);
+        RaiseChanged();
+    }
+
+    public async Task ApplyGitStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null || !Settings.EnableGitIntegration)
+        {
+            return;
+        }
+
+        try
+        {
+            var statuses = await FileOps.GetGitFileStatusesAsync(Active.Path, cancellationToken).ConfigureAwait(false);
+            var map = statuses.ToDictionary(entry => entry.Path, entry => entry.GitStatus ?? "", StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in Active.Entries)
+            {
+                if (map.TryGetValue(entry.Path, out var status))
+                {
+                    entry.GitStatus = status;
+                }
+            }
+
+            RaiseChanged();
+        }
+        catch
+        {
+            // Git is optional.
+        }
+    }
+
+    public async Task FillFolderSizesAsync(CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null || !Settings.ShowFolderSizes)
+        {
+            return;
+        }
+
+        foreach (var entry in Active.Entries.Where(item => item.IsDir).Take(32))
+        {
+            try
+            {
+                entry.Size = await FileOps.CalculateFolderSizeAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Skip folders that cannot be measured.
+            }
+        }
+
+        RaiseChanged();
+    }
+
+    public void RememberClipboard()
+    {
+        if (Clipboard.HasItems)
+        {
+            ClipboardHistory.Push(Clipboard.Operation, Clipboard.SourcePaths);
+        }
+    }
+
+    public void RememberOperation(string kind, string description, string[] sources, string destination, bool move)
+    {
+        OperationLog.Insert(0, new OperationRecord
+        {
+            Kind = kind,
+            Description = description,
+            Sources = sources,
+            Destination = destination,
+            Move = move,
+        });
+        if (OperationLog.Count > 50)
+        {
+            OperationLog.RemoveRange(50, OperationLog.Count - 50);
+        }
+    }
+
+    public async Task RetryOperationAsync(OperationRecord record, CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null || record.Sources.Length == 0 || string.IsNullOrWhiteSpace(record.Destination))
+        {
+            return;
+        }
+
+        if (record.Move)
+        {
+            await FileOps.MoveAsync(record.Sources, record.Destination, "keep-both", ct: cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await FileOps.CopyAsync(record.Sources, record.Destination, "keep-both", ct: cancellationToken).ConfigureAwait(false);
+        }
+
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public FileEntry? MatchTypeAhead(char character)
+    {
+        var buffer = TypeAheadBuffer.Append(character, TimeSpan.FromSeconds(1));
+        var index = TypeAhead.MatchIndex(VisibleEntriesFor(ActivePane), buffer);
+        return index >= 0 ? VisibleEntriesFor(ActivePane)[index] : null;
+    }
+
+    public async Task UpdateTagAsync(long id, string name, string color)
+    {
+        await RequireFileOps().UpdateTagAsync(id, name, color).ConfigureAwait(false);
+        await LoadTagsAsync().ConfigureAwait(false);
+        RaiseChanged();
+    }
+
+    public async Task DeleteTagDefinitionAsync(long id)
+    {
+        await RequireFileOps().DeleteTagAsync(id).ConfigureAwait(false);
+        await LoadTagsAsync().ConfigureAwait(false);
+        RaiseChanged();
+    }
+
+    public IReadOnlyList<string> FilesWithTag(long tagId)
+    {
+        return FileTags.Where(pair => pair.Value.Id == tagId).Select(pair => pair.Key).ToList();
+    }
+
+    private static List<TreeNode> MergeTree(IReadOnlyList<FolderTreeItem> rows, string parent, TreeNode[] children)
+    {
+        var roots = ReconstructRoots(rows);
+        AttachChildren(roots, parent, children);
+        return roots;
+    }
+
+    private static List<TreeNode> ReconstructRoots(IReadOnlyList<FolderTreeItem> rows)
+    {
+        return rows
+            .Where(row => row.Depth == 0)
+            .Select(row => new TreeNode
+            {
+                Name = row.Name,
+                Path = row.Path,
+                HasChildren = row.HasChildren,
+            })
+            .ToList();
+    }
+
+    private static bool AttachChildren(IEnumerable<TreeNode> nodes, string parent, TreeNode[] children)
+    {
+        foreach (var node in nodes)
+        {
+            if (PathRules.PathsEqual(node.Path, parent))
+            {
+                node.Children = [.. children];
+                node.HasChildren = children.Length > 0;
+                return true;
+            }
+
+            if (AttachChildren(node.Children, parent, children))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public WorkspaceLayout CaptureLayout()

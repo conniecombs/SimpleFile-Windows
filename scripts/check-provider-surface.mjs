@@ -10,12 +10,9 @@ const ignoredDirectories = new Set([
   'dist',
   'build',
   'build_notes',
-  '.svelte-kit',
 ]);
 
 const ignoredFiles = new Set([
-  'frontend/package-lock.json',
-  'src-tauri/Cargo.lock',
   'Cargo.lock',
   'docs/CHANGELOG.md',
   'docs/changelog.md',
@@ -67,7 +64,6 @@ const searchableExtensions = new Set([
   '.mjs',
   '.ps1',
   '.rs',
-  '.svelte',
   '.toml',
   '.ts',
   '.txt',

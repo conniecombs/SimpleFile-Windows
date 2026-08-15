@@ -14,6 +14,8 @@ public static class ServiceLocator
         {
             foreach (var relative in new[]
             {
+                Path.Combine("target", "debug", "simplefile-service.exe"),
+                Path.Combine("target", "release", "simplefile-service.exe"),
                 Path.Combine("src-tauri", "target", "debug", "simplefile-service.exe"),
                 Path.Combine("src-tauri", "target", "release", "simplefile-service.exe"),
                 "simplefile-service.exe",

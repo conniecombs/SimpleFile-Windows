@@ -1,17 +1,12 @@
-# SimpleFile WinUI 3 host (migration)
+# SimpleFile WinUI 3 host
 
-Native shell for the Svelte/Tauri → WinUI 3 migration. The first UI slice is **primary-pane navigation**: drives, sidebar roots, directory listing, breadcrumbs / path entry, and open-folder-in-app.
+Native Windows file-manager UI. It starts `simplefile-service` (job object
+`KILL_ON_JOB_CLOSE`) and speaks named-pipe JSON-RPC.
 
-The existing Svelte/Tauri app remains the shipping UI. See `docs/winui-migration/parity-navigation.md` for the checklist and gaps.
-
-## What this host does
-
-- Starts `simplefile-service` (job object `KILL_ON_JOB_CLOSE`) and speaks named-pipe JSON-RPC.
-- `SimpleFile.Ipc` multiplexes request/response, `list_directory.chunk` notifications, transfer progress, watcher/search notifications, client-side cancellation, and typed `IpcException`s.
-- `SimpleFile.Core.ExplorerWorkspace` ports Svelte `loadDirectory` / history / `getParentPath` / Quick Access / drive status.
-- `SimpleFile.App` shows a dark explorer chrome: sidebar (Quick Access + My PC), dual pane (F6), pane-local tabs, back/forward/up, breadcrumbs, path edit, list columns.
-
-Native chrome now includes a command palette (Ctrl+Shift+P), full Svelte context-menu IDs, drag/drop transfers, resizable columns, light/dark theme, empty/loading states, keyboard-help / Quick Look / properties modals, and AutomationProperties names on the main chrome. Workspace tabs, dual-pane, sort, sidebar collapse, and settings persist through the Rust settings IPC. Tree expand is still incremental.
+`SimpleFile.Ipc` multiplexes request/response, `list_directory.chunk`
+notifications, transfer progress, watcher/search notifications, client-side
+cancellation, and typed `IpcException`s. `SimpleFile.Core.ExplorerWorkspace`
+owns dual-pane navigation, tabs, sidebar, transfers, search, and persistence.
 
 ## Projects
 
@@ -19,7 +14,7 @@ Native chrome now includes a command palette (Ctrl+Shift+P), full Svelte context
 | --- | --- |
 | `SimpleFile.App` | Unpackaged WinUI 3 explorer window |
 | `SimpleFile.Ipc` | Length-prefixed JSON-RPC named-pipe client |
-| `SimpleFile.Core` | Service lifetime + navigation workspace |
+| `SimpleFile.Core` | Service lifetime + explorer workspace |
 | `SimpleFile.Tests` | Framing, DTO, client, path, and navigation tests |
 
 Target: Windows 10 2004+ / Windows 11 x64, `net8.0-windows10.0.19041.0`, Windows App SDK self-contained.
@@ -46,20 +41,16 @@ npm run dev:winui
 
 ## Runnable folder (Release)
 
-The unpackaged exe needs `resources.pri` (WinUI theme map) and the `*.xbf` pages next to `SimpleFile.App.exe`. A normal `dotnet publish` omitted those; the project now copies them.
+The unpackaged exe needs `resources.pri` (WinUI theme map) and the `*.xbf` pages next to `SimpleFile.exe`. A normal `dotnet publish` omitted those; the project now copies them.
 
 ```powershell
-dotnet publish src-winui\SimpleFile.App\SimpleFile.App.csproj -c Release -r win-x64 --self-contained true
-Copy-Item src-tauri\target\release\simplefile-service.exe `
-  src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\ -Force
-Start-Process src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\SimpleFile.App.exe
+npm run build:winui:release
+Start-Process dist\winui\payload\SimpleFile.exe
 ```
 
 If the window never appears, check `%LOCALAPPDATA%\SimpleFile\startup.log`. The usual cause is a missing `resources.pri` or `MainWindow.xbf`.
 
-## Dual-stack packaging
-
-Tauri NSIS/MSI/`latest.json` remains the shipping updater until retirement. WinUI artifacts are extra:
+## Packaging
 
 ```powershell
 npm run build:winui:release
@@ -74,4 +65,3 @@ Writes `dist/winui/`:
 - `latest-winui.json`
 
 Smokes: `npm run smoke:winui`, `npm run smoke:winui-msi`, `npm run smoke:winui-installer`.
-The old `release:build` / `smoke:release` / `smoke:msi` / `smoke:installer` scripts stay until the Tauri retirement PR.

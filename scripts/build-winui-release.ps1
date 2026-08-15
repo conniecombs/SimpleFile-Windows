@@ -15,7 +15,7 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $distRoot = Join-Path $root "dist\winui"
 $payloadDir = Join-Path $distRoot "payload"
-$iconPath = Join-Path $root "src-tauri\icons\icon.ico"
+$iconPath = Join-Path $root "packaging\winui\icon.ico"
 $appProject = Join-Path $root "src-winui\SimpleFile.App\SimpleFile.App.csproj"
 
 function Write-Step {
@@ -44,23 +44,21 @@ function Invoke-Native {
     }
 }
 
-function Read-JsonFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-}
-
 function Get-ReleaseVersion {
-    $tauriConfig = Read-JsonFile (Join-Path $root "src-tauri\tauri.conf.json")
-    $tauriVersion = [string]$tauriConfig.version
     $props = Get-Content -LiteralPath (Join-Path $root "src-winui\Directory.Build.props") -Raw
     if ($props -notmatch '<Version>([^<]+)</Version>') {
         throw "Could not read Version from src-winui\Directory.Build.props."
     }
     $winuiVersion = $Matches[1]
-    if ($tauriVersion -ne $winuiVersion) {
-        throw "Version mismatch: tauri.conf.json=$tauriVersion Directory.Build.props=$winuiVersion"
+    $cargo = Get-Content -LiteralPath (Join-Path $root "crates\simplefile-service\Cargo.toml") -Raw
+    if ($cargo -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
+        throw "Could not read version from crates\simplefile-service\Cargo.toml."
     }
-    return $tauriVersion
+    $serviceVersion = $Matches[1]
+    if ($serviceVersion -ne $winuiVersion) {
+        throw "Version mismatch: simplefile-service=$serviceVersion Directory.Build.props=$winuiVersion"
+    }
+    return $winuiVersion
 }
 
 function Find-ServiceExecutable {
@@ -180,7 +178,7 @@ Invoke-Native cargo @("build", "-p", "simplefile-service", "--locked", "--releas
 
 $serviceExe = Find-ServiceExecutable
 if (-not $serviceExe) {
-    throw "simplefile-service.exe was not produced. Expected target\release or src-tauri\target\release."
+    throw "simplefile-service.exe was not produced. Expected target\release\simplefile-service.exe."
 }
 
 Write-Step "Publish WinUI unpackaged host"
@@ -295,10 +293,17 @@ if (-not $SkipInstaller) {
 }
 
 $signature = ""
-if ($builtSetup -and $env:TAURI_SIGNING_PRIVATE_KEY) {
+$signingKey = $env:SIMPLEFILE_SIGNING_PRIVATE_KEY
+if (-not $signingKey) { $signingKey = $env:TAURI_SIGNING_PRIVATE_KEY }
+if ($builtSetup -and $signingKey) {
     Write-Step "Sign WinUI setup for latest-winui.json"
     try {
-        Invoke-Native cargo @("tauri", "signer", "sign", "-f", $setupPath) (Join-Path $root "src-tauri")
+        if (Get-Command cargo-tauri -ErrorAction SilentlyContinue) {
+            Invoke-Native cargo @("tauri", "signer", "sign", "-f", $setupPath)
+        }
+        else {
+            Write-Warning "cargo-tauri signer is not installed; latest-winui.json will ship without a signature."
+        }
         $sigFile = Get-ChildItem -Path "$setupPath*.sig" -File -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($sigFile) {
             Copy-Item -LiteralPath $sigFile.FullName -Destination $distRoot -Force

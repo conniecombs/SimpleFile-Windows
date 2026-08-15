@@ -19,15 +19,20 @@ function readRepo(relativePath) {
   return readFileSync(fullPath, 'utf8');
 }
 
-function backendCommands(source) {
+function backendCommandsFromLib(source) {
   const handlerStart = source.indexOf('tauri::generate_handler![');
   const handlerEnd = source.indexOf('])', handlerStart);
   if (handlerStart === -1 || handlerEnd === -1) {
-    fail('Could not find tauri::generate_handler! in src-tauri/src/lib.rs');
-    return [];
+    return null;
   }
   return [
     ...source.slice(handlerStart, handlerEnd).matchAll(/(?:[a-zA-Z0-9_]+::)?([a-zA-Z0-9_]+)\s*,/g),
+  ].map((match) => match[1]);
+}
+
+function backendCommandsFromProtocol(source) {
+  return [
+    ...source.matchAll(/public const string \w+Method = "([a-z0-9_]+)"/g),
   ].map((match) => match[1]);
 }
 
@@ -36,9 +41,12 @@ function extractQuotedIds(source, pattern) {
 }
 
 const gate = readRepo(gatePath);
-const libRs = readRepo('src-tauri/src/lib.rs');
-const contextMenu = readRepo('frontend/src/lib/components/context-menus/ContextMenu.svelte');
-const palette = readRepo('frontend/src/lib/components/layout-shell/CommandPalette.svelte');
+const libRs = existsSync(join(repoRoot, 'src-tauri/src/lib.rs'))
+  ? readRepo('src-tauri/src/lib.rs')
+  : '';
+const protocolCs = readRepo('src-winui/SimpleFile.Ipc/Protocol.cs');
+const contextMenu = readRepo('src-winui/SimpleFile.Core/ContextMenuBuilder.cs');
+const palette = readRepo('src-winui/SimpleFile.Core/AppCommandCatalog.cs');
 const events = readRepo('ipc/schema/v1/events.json');
 const ipcClient = readRepo('src-winui/SimpleFile.Ipc/ISimpleFileIpc.cs');
 const packageJson = readRepo('package.json');
@@ -46,11 +54,14 @@ const packageJson = readRepo('package.json');
 if (!gate.includes('## Retirement lock')) {
   fail(`${gatePath} must include a "## Retirement lock" section.`);
 }
-if (!gate.includes('Do not delete')) {
-  fail(`${gatePath} must forbid deleting frontend/src-tauri until the gate passes.`);
+if (!gate.includes('Retirement completed')) {
+  fail(`${gatePath} must record that Svelte/Tauri retirement completed.`);
 }
 if (!gate.includes('frontend/') || !gate.includes('src-tauri/')) {
-  fail(`${gatePath} must name frontend/ and src-tauri/ as keep-until-retirement.`);
+  fail(`${gatePath} must name retired frontend/ and leftover src-tauri domain.`);
+}
+if (!gate.includes('crates/simplefile-core') || !gate.includes('crates/simplefile-service')) {
+  fail(`${gatePath} must keep reusable Rust crates named.`);
 }
 
 const statuses = ['PASS', 'MANUAL', 'OPEN', 'WAIVED'];
@@ -60,28 +71,30 @@ for (const status of statuses) {
   }
 }
 
-const commands = backendCommands(libRs);
+const commands = backendCommandsFromLib(libRs) ?? backendCommandsFromProtocol(protocolCs);
 if (commands.length !== 74) {
-  fail(`expected 74 generate_handler! commands, found ${commands.length}.`);
+  fail(`expected 74 domain commands, found ${commands.length}.`);
 }
 
 for (const command of commands) {
-  if (!gate.includes(`\`${command}\``) && !gate.includes(`| \`${command}\``) && !new RegExp(`\\|\\s*\`${command}\`\\s*\\|`).test(gate) && !gate.includes(`\`${command}\``)) {
-    fail(`${gatePath} must list command \`${command}\`.`);
-  }
   if (!gate.includes(command)) {
     fail(`${gatePath} must mention ${command}.`);
   }
 }
 
-const ctxIds = extractQuotedIds(contextMenu, /id:\s*'([^']+)'/g);
+const ctxIds = [...new Set([...contextMenu.matchAll(/ctx-[a-z0-9-]+/g)].map((match) => match[0]))];
 for (const id of ctxIds) {
   if (!gate.includes(id)) {
     fail(`${gatePath} must list context menu id ${id}.`);
   }
 }
 
-const paletteIds = extractQuotedIds(palette, /id:\s*'([^']+)'/g);
+const paletteIds = [
+  ...new Set([
+    ...extractQuotedIds(palette, /id:\s*'([^']+)'/g),
+    ...extractQuotedIds(palette, /new\("([^"]+)"/g),
+  ]),
+];
 for (const id of paletteIds) {
   if (!gate.includes(id)) {
     fail(`${gatePath} must list command palette id ${id}.`);
@@ -116,16 +129,15 @@ if (!ipcClient.includes('ListDirectoryAsync') || !ipcClient.includes('SearchFile
   fail('SimpleFile.Ipc must still expose list_directory and search_files clients.');
 }
 
-const openBlockers = [
-  'list_subdirectories',
-  'save_smart_folder',
-  'marquee',
-];
+const featureOpenLines = gate
+  .split(/\r?\n/)
+  .filter((line) => line.includes('| `OPEN` |') && !line.includes('Missing or only partial'));
 const retirement = gate.slice(gate.indexOf('## Retirement lock'));
-for (const blocker of openBlockers) {
-  if (!retirement.includes(blocker) && !retirement.includes(blocker.replaceAll('_', '-'))) {
-    fail(`Retirement lock must still call out OPEN blocker ${blocker}.`);
-  }
+if (!retirement.includes('Required `OPEN` rows: **none**')) {
+  fail('Retirement lock must state that required OPEN rows are none.');
+}
+if (featureOpenLines.length > 0) {
+  fail(`parity-gate.md still has required OPEN row(s): ${featureOpenLines[0]}`);
 }
 
 if (!process.exitCode) {

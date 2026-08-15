@@ -41,6 +41,7 @@
             <KeyboardAccelerator Key="Y" Modifiers="Control" Invoked="OnRedoAccelerator" />
             <KeyboardAccelerator Key="Z" Modifiers="Control,Shift" Invoked="OnRedoAccelerator" />
             <KeyboardAccelerator Key="F1" Invoked="OnKeyboardHelpAccelerator" />
+            <KeyboardAccelerator Key="Divide" Modifiers="Control" Invoked="OnKeyboardHelpAccelerator" />
             <KeyboardAccelerator Key="C" Modifiers="Control,Menu" Invoked="OnCopyToOtherPaneAccelerator" />
             <KeyboardAccelerator Key="M" Modifiers="Control,Menu" Invoked="OnMoveToOtherPaneAccelerator" />
         </Grid.KeyboardAccelerators>
@@ -134,7 +135,53 @@
 
                     <StackPanel Spacing="4">
                         <Grid>
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="Folders" />
+                            <Button HorizontalAlignment="Right" Padding="6,2" Content="↻" AutomationProperties.Name="Refresh folder tree" Click="OnRefreshFolderTree" ToolTipService.ToolTip="Refresh folder tree" />
+                        </Grid>
+                        <ListView x:Name="FolderTreeList" IsItemClickEnabled="True" ItemClick="OnFolderTreeClick" SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Padding="4">
+                                        <Button Content="▸" Padding="4,0" Click="OnFolderTreeToggle" Tag="{Binding Path}" />
+                                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <Grid>
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="Bookmarks" />
+                            <Button HorizontalAlignment="Right" Padding="6,2" Content="+" AutomationProperties.Name="Bookmark current folder" Click="OnAddBookmark" ToolTipService.ToolTip="Bookmark current folder" />
+                        </Grid>
+                        <ListView x:Name="BookmarksList" IsItemClickEnabled="True" ItemClick="OnBookmarkClick" SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="4">
+                                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                        <Button HorizontalAlignment="Right" Content="×" Padding="4,0" Click="OnRemoveBookmark" Tag="{Binding Path}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="Recent" />
+                        <ListView x:Name="RecentsList" IsItemClickEnabled="True" ItemClick="OnRecentClick" SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Padding="4" Text="{Binding}" Foreground="{ThemeResource SfTextPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <Grid>
                             <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="Smart Folders" />
+                            <Button HorizontalAlignment="Right" Padding="6,2" Content="Save" AutomationProperties.Name="Save current search as smart folder" Click="OnSaveSmartFolder" ToolTipService.ToolTip="Save current search" />
                         </Grid>
                         <ListView
                             x:Name="SmartFoldersList"

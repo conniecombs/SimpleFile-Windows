@@ -6,56 +6,60 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
-const tauriConfigPath = path.join(repoRoot, 'src-tauri', 'tauri.conf.json');
-const releaseWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'release.yml');
-
 function fail(message) {
-    console.error(`Updater config check failed: ${message}`);
-    process.exitCode = 1;
+  console.error(`Updater config check failed: ${message}`);
+  process.exitCode = 1;
 }
 
-function readText(filePath) {
-    return fs.readFileSync(filePath, 'utf8');
+function readText(relativePath) {
+  return fs.readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
-const tauriConfig = JSON.parse(readText(tauriConfigPath));
-const releaseWorkflow = readText(releaseWorkflowPath);
+const writer = readText('scripts/write-latest-winui.mjs');
+const releaseWorkflow = readText('.github/workflows/release.yml');
+const props = readText('src-winui/Directory.Build.props');
+const serviceCargo = readText('crates/simplefile-service/Cargo.toml');
 
-const updater = tauriConfig.plugins?.updater ?? {};
-const endpoints = updater.endpoints ?? [];
-const expectedEndpoint = 'https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json';
+const expectedEndpoint =
+  'https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/';
 
-if (tauriConfig.bundle?.createUpdaterArtifacts !== true) {
-    fail('src-tauri/tauri.conf.json must set bundle.createUpdaterArtifacts to true.');
+if (!writer.includes('latest-winui.json')) {
+  fail('scripts/write-latest-winui.mjs must write latest-winui.json.');
+}
+if (!writer.includes(expectedEndpoint)) {
+  fail(`scripts/write-latest-winui.mjs must publish under ${expectedEndpoint}.`);
+}
+if (!writer.includes('windows-x86_64')) {
+  fail('scripts/write-latest-winui.mjs must include the windows-x86_64 platform.');
 }
 
-if (typeof updater.pubkey !== 'string' || updater.pubkey.trim().length < 40) {
-    fail('src-tauri/tauri.conf.json must contain the Tauri updater public key.');
-}
-
-if (!endpoints.includes(expectedEndpoint)) {
-    fail(`src-tauri/tauri.conf.json must include updater endpoint ${expectedEndpoint}.`);
-}
-
-if (updater.windows?.installMode !== 'passive') {
-    fail('src-tauri/tauri.conf.json should set plugins.updater.windows.installMode to passive.');
+const propsMatch = props.match(/<Version>([^<]+)<\/Version>/);
+const cargoMatch = serviceCargo.match(/^version\s*=\s*"([^"]+)"/m);
+if (!propsMatch || !cargoMatch) {
+  fail('Could not read versions from Directory.Build.props and simplefile-service Cargo.toml.');
+} else if (propsMatch[1] !== cargoMatch[1]) {
+  fail(
+    `Version mismatch: Directory.Build.props=${propsMatch[1]} simplefile-service=${cargoMatch[1]}`,
+  );
 }
 
 const requiredWorkflowSnippets = [
-    'TAURI_SIGNING_PRIVATE_KEY',
-    'cargo tauri build --ci',
-    'latest.json',
-    "Extension -eq '.sig'",
-    'latest-winui.json',
-    'x64-winui-setup.exe',
+  'latest-winui.json',
+  'x64-winui-setup.exe',
+  'build-winui-release.ps1',
+  'Directory.Build.props',
 ];
 
 for (const snippet of requiredWorkflowSnippets) {
-    if (!releaseWorkflow.includes(snippet)) {
-        fail(`.github/workflows/release.yml must include ${snippet}.`);
-    }
+  if (!releaseWorkflow.includes(snippet)) {
+    fail(`.github/workflows/release.yml must include ${snippet}.`);
+  }
+}
+
+if (releaseWorkflow.includes('tauri.conf.json')) {
+  fail('.github/workflows/release.yml should not still validate tauri.conf.json.');
 }
 
 if (!process.exitCode) {
-    console.log('Updater release configuration is enabled.');
+  console.log(`Updater release configuration is enabled (WinUI ${propsMatch[1]}).`);
 }

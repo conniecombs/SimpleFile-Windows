@@ -8,7 +8,7 @@
 ![License](https://img.shields.io/badge/license-proprietary-444444)
 
 **SimpleFile** is a modern, high-performance file manager for **Windows 10+ (x64)**.  
-It is built with [Tauri 2](https://v2.tauri.app/), [Rust](https://www.rust-lang.org/), and [Svelte 5](https://svelte.dev/).
+It is built with [WinUI 3](https://learn.microsoft.com/windows/apps/winui/winui3/) and a Rust named-pipe IPC service.
 
 If Windows File Explorer feels limited for power workflows — dual panes, tabs per pane, batch rename, archives, search, previews, checksums, Git status, cleanup tools — SimpleFile puts those tools in one native desktop app.
 
@@ -138,8 +138,8 @@ If Windows File Explorer feels limited for power workflows — dual panes, tabs 
 | Images | PNG, JPG, GIF, SVG, WebP, BMP, ICO, TIFF (+ EXIF where available) |
 | Video | MP4, WebM, AVI, MOV, MKV, FLV, WMV, OGG |
 | Audio | MP3, WAV, FLAC, OGG, AAC, WMA, M4A, AIFF |
-| Code & text | Syntax highlighting via [highlight.js](https://highlightjs.org/) (40+ languages) |
-| Documents | PDF preview; Markdown rendered with [marked](https://marked.js.org/) and HTML sanitization |
+| Code & text | Plain-text and common source-file previews |
+| Documents | PDF metadata/preview and Markdown text preview |
 | Fonts | TTF, OTF, WOFF, WOFF2 |
 
 **Also available:**
@@ -191,9 +191,9 @@ Download the latest Windows installer or portable package from **[GitHub Release
 
 | Artifact | Best for |
 | --- | --- |
-| `SimpleFile_1.1.0_x64-setup.exe` | **Recommended** — NSIS per-user install |
-| `SimpleFile_1.1.0_x64_en-US.msi` | Enterprise / GPO-style MSI deployment |
-| `SimpleFile_1.1.0_x64-portable.zip` | Portable use without running an installer |
+| `SimpleFile_1.1.0_x64-winui-setup.exe` | **Recommended** — NSIS per-user install |
+| `SimpleFile_1.1.0_x64-winui.msi` | Enterprise / GPO-style MSI deployment |
+| `SimpleFile_1.1.0_x64-winui-portable.zip` | Portable use without running an installer |
 
 **Requirements:** Windows 10 or later, x64.
 
@@ -201,10 +201,10 @@ After the first manual install, check for later versions from **Settings → Upd
 
 ### What the release ships
 
-- Windows x64 NSIS setup executable
-- Windows x64 MSI package
-- Windows x64 portable executable zip
-- Signed updater artifacts and `latest.json` (production releases)
+- Windows x64 WinUI NSIS setup executable
+- Windows x64 WinUI MSI package
+- Windows x64 portable zip (`SimpleFile.exe` + `simplefile-service.exe`)
+- Updater metadata `latest-winui.json` (production releases)
 
 ---
 
@@ -317,12 +317,12 @@ Workspace layout (dual pane, active pane, tabs per pane, view mode, and related 
 
 | Tool | Version | Purpose |
 | --- | --- | --- |
-| [Node.js](https://nodejs.org/) | **24+** | Frontend tooling and repo scripts |
-| [Rust](https://rustup.rs/) | Stable | Backend compilation |
-| Tauri CLI v2 | via frontend npm deps | Desktop packaging |
-| Windows SDK (`rc.exe` on `PATH`) | — | Resource stamping for Rust/Tauri tests |
-| [.NET SDK](https://dotnet.microsoft.com/download) | **8+** (SDK 10 is fine) | WinUI 3 migration host |
-| [WiX Toolset](https://wixtoolset.org/) | Optional | Local MSI validation |
+| [Node.js](https://nodejs.org/) | **24+** | Repo check scripts |
+| [Rust](https://rustup.rs/) | Stable | `simplefile-service` and core crates |
+| [.NET SDK](https://dotnet.microsoft.com/download) | **8+** | WinUI 3 host |
+| Windows SDK | — | WinUI / Windows App SDK targeting |
+| [NSIS](https://nsis.sourceforge.io/) | Optional | Local setup.exe |
+| [WiX Toolset](https://wixtoolset.org/) | Optional | Local MSI |
 
 ### Quick start
 
@@ -331,27 +331,13 @@ Workspace layout (dual pane, active pane, tabs per pane, view mode, and related 
 git clone https://github.com/conniecombs/SimpleFile-Windows.git
 cd SimpleFile-Windows
 
-# 2. Install frontend dependencies
-npm ci --prefix frontend
-
-# 3. Development app (Tauri + hot rebuild of frontend assets)
+# 2. Development app (Rust IPC service + WinUI 3 host)
 npm run dev
 
-# 4. Quality gates used by contributors and CI
+# 3. Quality gates used by contributors and CI
 npm run check
+npm run check:winui
 npm run check:rust
-```
-
-Frontend-only Vite dev (without the full desktop shell) is available as:
-
-```powershell
-npm --prefix frontend run dev
-```
-
-The WinUI 3 migration host is a separate, incomplete shell. It starts `simplefile-service` and checks health/version only — file-manager UI is still Svelte/Tauri:
-
-```powershell
-npm run dev:winui
 ```
 
 See [src-winui/README.md](src-winui/README.md).
@@ -362,31 +348,25 @@ Run from the **repository root** with `npm run <script>`.
 
 | Script | Description |
 | --- | --- |
-| `dev` | Start Tauri development (`tauri dev`) |
-| `dev:winui` | Build `simplefile-service` and run the minimal WinUI 3 host |
+| `dev` / `dev:winui` | Build `simplefile-service` and run the WinUI 3 host |
+| `build` / `build:winui:release` | Publish WinUI payload, portable zip, and installers |
 | `build:winui` | `dotnet build src-winui/SimpleFile.sln` |
-| `check:winui` | `dotnet test src-winui/SimpleFile.sln` |
-| `build` | Production frontend build (`vite build` → `frontend/dist`) |
-| `check` | Full frontend gate: migration/API/behavior guards, Svelte check, settings UI smoke, production build |
-| `check:frontend` | Same as frontend package `check` |
-| `check:js` | JavaScript syntax scan for shared scripts |
-| `check:invokes` | Frontend invoke wrappers must match Rust commands |
-| `check:tauri-surface` | Renderer Tauri access stays on the typed boundary |
-| `check:updater` | Updater config and release wiring stay valid |
+| `check` | IPC schema, updater, workflows, packaging, parity gate |
+| `check:winui` | WinUI xUnit tests |
+| `check:ipc-schema` | 74-command schema vs Rust/C# |
+| `check:updater` | WinUI updater metadata wiring |
 | `check:workflows` | GitHub workflow sanity checks |
 | `check:provider-surface` | Guards out-of-scope provider/mount surfaces |
 | `check:windows-assets` | Packaging assets remain Windows-correct |
+| `check:winui-packaging` | NSIS / MSI / release script surface |
+| `check:winui-parity-gate` | Parity gate statuses stay PASS/WAIVED |
 | `check:rust` | `cargo fmt --check`, tests, Clippy (`-D warnings`) |
 | `check:security` | Rust dependency audit (`cargo-audit`) |
 | `check:release` | `check` + `check:rust` + `check:security` |
-| `build:tauri:local` | Local unsigned NSIS + MSI via `tauri.local.conf.json` |
-| `release:build` | Full local release pipeline: deps, checks, installers, smokes, artifact list |
-| `release:local` | `check:release` then local Tauri bundle |
-| `smoke:settings` | Startup + settings persistence smoke |
-| `smoke:settings-ui` | Settings UI structural smoke (frontend) |
-| `smoke:release` | Built executable launch smoke |
-| `smoke:msi` | MSI extract/launch smoke |
-| `smoke:installer` | NSIS install → launch → uninstall smoke |
+| `release:build` / `release:local` | Local WinUI release pipeline |
+| `smoke:winui` | Built payload launch smoke |
+| `smoke:winui-msi` | MSI extract/launch smoke |
+| `smoke:winui-installer` | NSIS install → launch → uninstall smoke |
 
 ---
 
@@ -394,64 +374,18 @@ Run from the **repository root** with `npm run <script>`.
 
 ```text
 SimpleFile-Windows/
-├── frontend/                     Svelte 5 + Vite + TypeScript UI
-│   ├── index.html
-│   ├── package.json
-│   ├── svelte.config.js
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   ├── public/                   Static assets (favicon, etc.)
-│   ├── scripts/                  Migration, parity, and behavior guard checks
-│   ├── dist/                     Production frontend build output
-│   └── src/
-│       ├── main.ts               App bootstrap
-│       ├── App.svelte            Root component
-│       ├── css/                  Themes and component styles
-│       ├── lib/
-│       │   ├── api.ts            Typed frontend → Rust API wrappers
-│       │   ├── tauri.ts          IPC boundary + browser-dev fallback
-│       │   ├── types.ts          Shared TypeScript models
-│       │   ├── app/              Workflows, setup, modal/UI state
-│       │   ├── components/       Svelte UI components
-│       │   └── …                 Navigation, transfers, search, selection, etc.
-│       └── vanilla-js/runtime/   Shared typed runtime helpers
-│                                 (path: frontend/src/vanilla-js/runtime/)
-│
-├── src-tauri/                    Rust backend (Tauri 2)
-│   ├── Cargo.toml / Cargo.lock
-│   ├── tauri.conf.json           Production Tauri config
-│   ├── tauri.local.conf.json     Local unsigned packaging config
-│   ├── capabilities/             Tauri v2 permission grants
-│   ├── icons/                    App icons
-│   └── src/
-│       ├── main.rs / lib.rs      Entry + command registration
-│       ├── models.rs / state.rs  IPC models and app state
-│       ├── fs_ops.rs             Create, rename, copy, move, delete, sizes
-│       ├── progress.rs           Cancellable copy/move + progress events
-│       ├── dir_list.rs           Directory listing / sorting helpers
-│       ├── drives.rs             Windows drives & mapped shares
-│       ├── search.rs             Recursive + content search
-│       ├── smart_folders.rs      Saved smart folder criteria
-│       ├── archive.rs            ZIP / TAR / GZ / RAR
-│       ├── rar_installer.rs      Optional RAR tooling install
-│       ├── preview.rs            Open, reveal, preview, thumbnails
-│       ├── metadata.rs           EXIF, PDF, audio/video/Office metadata
-│       ├── checksum.rs           MD5 / SHA-1 / SHA-256
-│       ├── compare.rs            Text file comparison
-│       ├── cleanup.rs            Disk cleanup + duplicate detection
-│       ├── git.rs                Status, branch, pull, push
-│       ├── tags.rs               Color labels / tags
-│       ├── terminal.rs           Terminal / admin PowerShell launch
-│       ├── open_with.rs          Open With handling
-│       ├── updater.rs            Version + update commands
-│       ├── watcher.rs            Filesystem change notifications
-│       ├── native_accel.rs       Native keyboard accelerators
-│       ├── db.rs                 SQLite-backed settings/persistence
-│       └── utils.rs              Shared helpers
-│
-├── src-winui/                    WinUI 3 migration host (minimal shell; not the shipping UI)
-├── crates/                       simplefile-core / simplefile-ipc / simplefile-service
+├── src-winui/                    WinUI 3 unpackaged host
+│   ├── SimpleFile.App/           Explorer window, settings, chrome
+│   ├── SimpleFile.Core/          Workspace, menus, transfers, settings
+│   ├── SimpleFile.Ipc/           Named-pipe JSON-RPC client
+│   └── SimpleFile.Tests/         xUnit navigation / IPC / polish tests
+├── crates/
+│   ├── simplefile-core/          Host-independent file-manager domain
+│   ├── simplefile-ipc/           Framing + JSON-RPC types
+│   └── simplefile-service/       Named-pipe IPC service process
+├── src-tauri/src/                Leftover domain modules not yet in core
 ├── ipc/schema/                   Named-pipe JSON-RPC contract
+├── packaging/winui/              NSIS + WiX + app icon
 ├── scripts/                      Repo-level checks, release, and smokes
 ├── docs/                         User/dev docs, changelog, screenshots
 ├── build_notes/                  Internal hardening / migration notes
@@ -463,45 +397,42 @@ SimpleFile-Windows/
 
 **Entry points**
 
-- Shipping UI bootstrap: `frontend/src/main.ts`
-- Shared typed runtime helpers: `frontend/src/vanilla-js/runtime/`
-- Desktop shell: `src-tauri` via Tauri 2
-- Frontend dist consumed by Tauri: `frontend/dist` (see `src-tauri/tauri.conf.json`)
+- Shipping UI: `src-winui/SimpleFile.App`
+- IPC client: `src-winui/SimpleFile.Ipc`
+- Backend service: `crates/simplefile-service`
+- Reusable domain: `crates/simplefile-core`
 
 ---
 
 ## Architecture
 
-SimpleFile uses a strict **frontend ↔ backend** split over Tauri IPC:
+SimpleFile uses a **WinUI 3 UI process** plus a **Rust IPC service**:
 
 ```text
 ┌──────────────────────────────────────────────────────┐
-│                 Svelte 5 Frontend                    │
+│                 WinUI 3 host                         │
 │                                                      │
-│  Components → App workflows → api.ts → tauri.ts      │
-│                              │                       │
-│                     invoke / events                  │
+│  ExplorerWorkspace → ISimpleFileIpc                  │
+│                      named-pipe JSON-RPC             │
 └──────────────────────────────┬───────────────────────┘
                                │
                                ▼
 ┌──────────────────────────────────────────────────────┐
-│                   Rust Backend                       │
+│            simplefile-service (Rust)                 │
 │                                                      │
-│  lib.rs command table                                │
-│    fs_ops / progress / drives / search / archive     │
-│    preview / metadata / checksum / compare / cleanup │
-│    git / tags / terminal / updater / watcher / db    │
+│  dispatch.rs → simplefile-core                       │
+│    file_ops / progress / drives / search / archive   │
+│    preview / metadata / checksum / compare / watcher │
 └──────────────────────────────────────────────────────┘
 ```
 
 ### Design rules that matter in practice
 
-- **No `__TAURI__` global** — renderer access goes through `frontend/src/lib/tauri.ts`, with a browser-dev mock path for UI work without the shell.
-- **Typed API surface** — `api.ts` wraps commands; automated checks keep invokes aligned with `generate_handler!` in `lib.rs`.
+- **Typed IPC surface** — `SimpleFile.Ipc.Protocol` and `ipc/schema/v1` stay aligned with the 74 domain commands.
 - **Transfer safety** — copy/cut/paste/drag/drop/dual-pane transfers share a transfer manager with stable operation IDs, progress events, cancel, and conflict resolution.
-- **HTML safety** — modal bodies and Markdown preview sanitize untrusted HTML before insertion.
+- **Host-owned pickers** — folder browse is WinUI `FolderPicker`; the service returns `HOST_OWNED:`.
 - **Windows-first filesystem APIs** — drive labels, mapped shares, trash, and process launching stay in dedicated Rust modules.
-- **CSP locked down** — production window CSP defaults to `'self'` for scripts/resources (see `tauri.conf.json`).
+- **Job-object lifetime** — the UI starts `simplefile-service` and kills it when the window exits.
 
 ---
 
@@ -511,32 +442,29 @@ SimpleFile uses a strict **frontend ↔ backend** split over Tauri IPC:
 
 | Command | Covers |
 | --- | --- |
-| `npm run check` | Frontend migration/API/behavior guards, huge-folder & marquee checks, transfer/navigation stages, `svelte-check`, settings UI smoke, production build |
+| `npm run check` | IPC schema, updater, workflows, provider surface, Windows assets, WinUI packaging, parity gate |
+| `npm run check:winui` | WinUI xUnit tests for navigation, transfers, and polish |
 | `npm run check:rust` | Format, unit/integration tests, Clippy with warnings denied |
 | `npm run check:security` | Rust dependency audit |
 | `npm run check:release` | All of the above — release-quality gate |
-| `npm run release:build` | Local release build + installer smokes + artifact listing |
+| `npm run release:build` | Local WinUI release build + installer smokes + artifact listing |
 
 ### Smoke tests
 
 | Command | Validates |
 | --- | --- |
-| `npm run smoke:settings` | Startup and settings persistence |
-| `npm run smoke:settings-ui` | Settings UI structure/wiring |
-| `npm run smoke:release` | Built release executable launches |
-| `npm run smoke:msi` | MSI artifact extract/launch |
-| `npm run smoke:installer` | Full NSIS install → launch → uninstall |
+| `npm run smoke:winui` | Built payload executable launches |
+| `npm run smoke:winui-msi` | MSI artifact extract/launch |
+| `npm run smoke:winui-installer` | Full NSIS install → launch → uninstall |
 
 ### Architectural guards
 
 The `check` pipeline also enforces project invariants:
 
 - Out-of-scope provider/mount management surfaces stay excluded
-- Renderer Tauri access is only through `frontend/src/lib/tauri.ts`
-- Global `__TAURI__` bridge stays disabled
-- Modal/Markdown HTML paths sanitize before insertion
 - Packaging assets and bundle targets stay Windows-only
-- Registered Rust commands stay aligned with typed frontend wrappers
+- The 74-command IPC schema stays aligned with C# / leftover Rust command names
+- WinUI parity-gate required rows stay `PASS` or `WAIVED`
 
 > **Note:** Full installer packaging is intentionally slow. PR CI focuses on fast gates; run the **Installer Smoke** workflow (nightly or manual) or `npm run release:build` before cutting a release.
 
@@ -548,22 +476,24 @@ The `check` pipeline also enforces project invariants:
 
 | Format | Artifact pattern | Notes |
 | --- | --- | --- |
-| NSIS | `SimpleFile_<version>_x64-setup.exe` | Per-user install; recommended for most users |
-| MSI | `SimpleFile_<version>_x64_en-US.msi` | Per-machine style deployment |
-| Portable | `SimpleFile_<version>_x64-portable.zip` | Standalone executable package |
+| NSIS | `SimpleFile_<version>_x64-winui-setup.exe` | Per-user install; recommended for most users |
+| MSI | `SimpleFile_<version>_x64-winui.msi` | Per-user style deployment |
+| Portable | `SimpleFile_<version>_x64-winui-portable.zip` | `SimpleFile.exe` + `simplefile-service.exe` |
 
 ### Config files
 
 | File | Role |
 | --- | --- |
-| `src-tauri/tauri.conf.json` | Production config: NSIS + MSI, updater artifacts enabled |
-| `src-tauri/tauri.local.conf.json` | Local packaging without updater signing secrets |
+| `packaging/winui/simplefile-winui.nsi` | Per-user NSIS setup |
+| `packaging/winui/Product.wxs` | Per-user WiX MSI |
+| `src-winui/Directory.Build.props` | WinUI version |
+| `crates/simplefile-service/Cargo.toml` | Service version |
 
 ### Auto-updater
 
-Production builds publish signed updater metadata to:
+Production builds publish updater metadata to:
 
-`https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest.json`
+`https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest-winui.json`
 
 Users install the first release manually, then use **Settings → Updates**.  
 Operational details: [docs/UPDATER_RELEASE.md](docs/UPDATER_RELEASE.md).
@@ -581,8 +511,8 @@ Operational details: [docs/UPDATER_RELEASE.md](docs/UPDATER_RELEASE.md).
 
 Keep these in sync when bumping a release:
 
-- `src-tauri/tauri.conf.json` → `version`
-- `src-tauri/Cargo.toml` → package `version` (and committed `Cargo.lock`)
+- `src-winui/Directory.Build.props` → `<Version>`
+- `crates/simplefile-service/Cargo.toml` → package `version` (and committed `Cargo.lock`)
 - README version badge
 - `docs/CHANGELOG.md` (and release notes as needed)
 
@@ -611,12 +541,10 @@ Additional design/history notes live under `docs/` and `build_notes/` for mainta
 ## Security
 
 - **Do not commit** signing keys, updater private keys, `.env` files, local secrets, personal settings exports, or logs with private paths.
-- Modal HTML and Markdown preview content are sanitized before insertion ([sanitize-html](https://www.npmjs.com/package/sanitize-html)).
-- Content Security Policy restricts script/resource loading to the app origin.
 - Archive extraction re-validates destination paths; TAR extraction skips symlink/special entries that could escape the target tree.
 - Report vulnerabilities as described in [docs/SECURITY.md](docs/SECURITY.md).
 
-Sensitive paths ignored by the repo include `.secrets/`, `src-tauri/.secrets/`, `*.key`, `.env`, and `.env.*`.
+Sensitive paths ignored by the repo include `.secrets/`, `*.key`, `.env`, and `.env.*`.
 
 ---
 
@@ -648,7 +576,7 @@ Before opening an issue:
 1. Confirm you are on a Windows release or a build from this repo’s Windows-focused `main` branch.
 2. Note SimpleFile version from **Settings → About** (or the About dialog).
 3. Capture whether the problem is in dev, an unpacked build, NSIS, or MSI.
-4. For installers, run `npm run smoke:installer` / `npm run smoke:msi` when possible.
+4. For installers, run `npm run smoke:winui-installer` / `npm run smoke:winui-msi` when possible.
 5. Redact personal paths from logs and screenshots.
 
 More detail: [docs/SUPPORT.md](docs/SUPPORT.md).

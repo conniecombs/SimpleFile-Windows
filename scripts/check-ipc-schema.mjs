@@ -40,40 +40,6 @@ function backendCommands(source) {
   );
 }
 
-function typedCommandMap(source) {
-  const mapStart = source.indexOf('export interface TauriCommandMap');
-  const mapEnd = source.indexOf('export type TauriCommandName', mapStart);
-  if (mapStart === -1 || mapEnd === -1) {
-    throw new Error('Could not find TauriCommandMap in frontend/src/lib/types.ts');
-  }
-  const mapBlock = source.slice(mapStart, mapEnd);
-  const commands = new Map();
-  const pattern =
-    /^\s*([a-zA-Z0-9_]+):\s*CommandContract<((?:[^<>]|<[^<>]*>)+),\s*([^>]+)>/gm;
-  for (const match of mapBlock.matchAll(pattern)) {
-    commands.set(match[1], { args: match[2].trim(), result: match[3].trim() });
-  }
-  return commands;
-}
-
-function typedEventNames(source) {
-  const mapStart = source.indexOf('export interface TauriEventMap');
-  const mapEnd = source.indexOf('export type CommandContract', mapStart);
-  if (mapStart === -1 || mapEnd === -1) {
-    throw new Error('Could not find TauriEventMap in frontend/src/lib/types.ts');
-  }
-  return new Set(
-    [...source.slice(mapStart, mapEnd).matchAll(/^\s*'([^']+)':/gm)].map((match) => match[1]),
-  );
-}
-
-function topLevelArgKeys(argsText) {
-  if (argsText === 'NoArgs') return [];
-  const objectMatch = argsText.match(/^\{([\s\S]*)\}$/);
-  if (!objectMatch) return [];
-  return [...objectMatch[1].matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*[?:]/g)].map((match) => match[1]);
-}
-
 function rustStructFields(source, structName) {
   const start = source.indexOf(`pub struct ${structName}`);
   if (start === -1) return null;
@@ -81,17 +47,6 @@ function rustStructFields(source, structName) {
   const end = source.indexOf('\n}', brace);
   if (brace === -1 || end === -1) return null;
   return [...source.slice(brace, end).matchAll(/pub\s+([a-zA-Z0-9_]+)\s*:/g)].map((match) => match[1]);
-}
-
-function tsInterfaceFields(source, interfaceName) {
-  const start = source.indexOf(`export interface ${interfaceName}`);
-  if (start === -1) return null;
-  const brace = source.indexOf('{', start);
-  const end = source.indexOf('\n}', brace);
-  if (brace === -1 || end === -1) return null;
-  return [...source.slice(brace, end).matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\??:/gm)].map(
-    (match) => match[1],
-  );
 }
 
 const protocol = readJson('protocol.json');
@@ -102,18 +57,25 @@ if (!protocol || !types || !commands || !events) {
   process.exit(1);
 }
 
-const rustLib = readRepo('src-tauri/src/lib.rs');
-const typedContracts = readRepo('frontend/src/lib/types.ts');
+const rustLib = existsSync(join(repoRoot, 'src-tauri/src/lib.rs'))
+  ? readRepo('src-tauri/src/lib.rs')
+  : '';
+const protocolCs = readRepo('src-winui/SimpleFile.Ipc/Protocol.cs');
 const models = readRepo('crates/simplefile-core/src/models.rs');
 
-const handlers = backendCommands(rustLib);
-const typed = typedCommandMap(typedContracts);
+const handlers = rustLib
+  ? backendCommands(rustLib)
+  : new Set(
+      [...protocolCs.matchAll(/public const string \w+Method = "([a-z0-9_]+)"/g)].map(
+        (match) => match[1],
+      ),
+    );
 const schemaMethods = new Set(
   Object.keys(commands.methods || {}).filter((name) => !name.startsWith('ipc.')),
 );
 
 if (handlers.size !== 74) {
-  fail(`expected 74 Tauri handlers, found ${handlers.size}`);
+  fail(`expected 74 domain handlers, found ${handlers.size}`);
 }
 if (commands.domainMethodCount !== 74) {
   fail(`commands.json domainMethodCount must be 74, found ${commands.domainMethodCount}`);
@@ -123,16 +85,18 @@ if (protocol.protocolVersion !== 1 || commands.protocolVersion !== 1) {
 }
 
 for (const name of setDifference(handlers, schemaMethods)) {
-  fail(`schema missing Tauri handler: ${name}`);
+  fail(`schema missing domain handler: ${name}`);
 }
 for (const name of setDifference(schemaMethods, handlers)) {
   fail(`schema has extra domain method: ${name}`);
 }
-for (const name of setDifference(new Set(typed.keys()), schemaMethods)) {
-  fail(`TauriCommandMap command missing from schema: ${name}`);
-}
-for (const name of setDifference(schemaMethods, new Set(typed.keys()))) {
-  fail(`schema method missing from TauriCommandMap: ${name}`);
+const csharpMethods = new Set(
+  [...protocolCs.matchAll(/=\s*"([a-z0-9_.]+)"/g)]
+    .map((match) => match[1])
+    .filter((name) => schemaMethods.has(name)),
+);
+for (const name of setDifference(schemaMethods, csharpMethods)) {
+  fail(`schema method missing from SimpleFile.Ipc Protocol.cs: ${name}`);
 }
 
 if (!commands.methods['ipc.handshake']) {
@@ -142,20 +106,7 @@ if (protocol.handshake.method !== 'ipc.handshake') {
   fail('protocol handshake method must be ipc.handshake');
 }
 
-for (const [name, spec] of typed) {
-  const schema = commands.methods[name];
-  if (!schema) continue;
-  const expectedKeys = topLevelArgKeys(spec.args).filter((key) => {
-    const omitted = schema.omittedFromParams || [];
-    return !omitted.includes(key);
-  });
-  const actualKeys = schema.params ? Object.keys(schema.params) : [];
-  if (JSON.stringify(expectedKeys) !== JSON.stringify(actualKeys)) {
-    fail(
-      `${name} top-level params mismatch: types.ts [${expectedKeys.join(', ')}] vs schema [${actualKeys.join(', ')}]`,
-    );
-  }
-}
+
 
 const requiredEmitted = [
   'file-change',
@@ -175,15 +126,7 @@ for (const name of ['operation-complete', 'operation-error']) {
     fail(`events.json must list ${name} under typedNotEmitted`);
   }
 }
-const typedEvents = typedEventNames(typedContracts);
-for (const name of ['tauri://drag-enter', 'tauri://drag-drop', 'tauri://drag-leave']) {
-  if (!typedEvents.has(name)) {
-    fail(`TauriEventMap missing host event ${name}`);
-  }
-  if (!events.hostOnly?.[name]) {
-    fail(`events.json must list ${name} under hostOnly`);
-  }
-}
+
 
 const rustCheckedTypes = [
   'FileEntry',
@@ -207,19 +150,7 @@ for (const typeName of rustCheckedTypes) {
   }
 }
 
-const extras = types.frontendOnlyFields || {};
-for (const [typeName, extraFields] of Object.entries(extras)) {
-  const tsFields = tsInterfaceFields(typedContracts, typeName);
-  if (!tsFields) {
-    fail(`could not read TypeScript interface ${typeName}`);
-    continue;
-  }
-  for (const field of extraFields) {
-    if (!tsFields.includes(field)) {
-      fail(`${typeName}.${field} marked frontend-only but missing from types.ts`);
-    }
-  }
-}
+
 
 const requiredGoldens = [
   'ipc.handshake.request.json',

@@ -5,39 +5,36 @@ This branch targets the Windows SimpleFile release. Keep changes aligned with lo
 ## Development Setup
 
 ```powershell
-npm ci --prefix frontend
+npm run dev
 npm run check
+npm run check:winui
 npm run check:rust
 ```
 
-Use Node.js 24 or newer, stable Rust, and the Windows SDK Resource Compiler
-(`rc.exe`) on `PATH`. Tauri resource builds and `cargo test --all-features`
-need `rc.exe` when compiling the Windows desktop target.
+Use Node.js 24 or newer, stable Rust, and .NET SDK 8 or newer.
 
 ## Project Layout
 
-- `frontend/src/main.ts` starts the Svelte app.
-- `frontend/src/lib/components/` contains Svelte components.
-- `frontend/src/lib/app/` contains workflow orchestration.
-- `frontend/src/lib/api.ts` defines typed frontend API wrappers.
-- `frontend/src/lib/tauri.ts` owns the typed Tauri invoke wrapper and browser-dev fallback.
-- `frontend/src/vanilla-js/runtime/` contains typed runtime helpers still shared by the Svelte app.
-- `src-tauri/src/` contains Rust command modules.
-- `scripts/` and `frontend/scripts/` contain release and migration checks.
+- `src-winui/SimpleFile.App` is the WinUI 3 explorer host.
+- `src-winui/SimpleFile.Core` owns workspace, menus, transfers, and settings.
+- `src-winui/SimpleFile.Ipc` is the named-pipe JSON-RPC client.
+- `crates/simplefile-service` is the shipping Rust backend process.
+- `crates/simplefile-core` holds reusable domain logic.
+- Leftover `src-tauri/src` modules stay until they are extracted into core.
+- `scripts/` contains release and parity checks.
 
 ## Backend Boundaries
 
-Keep Tauri commands explicit in `src-tauri/src/lib.rs` and mirrored in `frontend/src/lib/types.ts`. After changing a command, run:
+Keep IPC methods explicit in `ipc/schema/v1` and mirrored in
+`src-winui/SimpleFile.Ipc/Protocol.cs`. After changing a command, run:
 
 ```powershell
-node scripts/check-tauri-invokes.mjs
+npm run check:ipc-schema
 ```
 
-Windows drive behavior belongs in `src-tauri/src/drives.rs`. Preserve mapped network share naming through the Windows APIs already in that module.
-
-## Frontend Boundaries
-
-Prefer typed helpers from `frontend/src/lib/api.ts` over direct Tauri invokes. Keep folder navigation in-app by preserving directory intent through file-list, breadcrumb, tree, and Quick Access events.
+Windows drive behavior belongs in `crates/simplefile-core/src/drives.rs`.
+Preserve mapped network share naming through the Windows APIs already in that
+module.
 
 ## Checks
 
@@ -45,6 +42,7 @@ Before opening a PR:
 
 ```powershell
 npm run check
+npm run check:winui
 npm run check:rust
 npm run check:security
 ```

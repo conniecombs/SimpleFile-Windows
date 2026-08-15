@@ -167,6 +167,11 @@ public sealed class FileOperationService
         return _ipc.GetEntryInfoAsync(path, ct);
     }
 
+    public Task<TreeNode[]> ListSubdirectoriesAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.ListSubdirectoriesAsync(path, ct);
+    }
+
     public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default)
     {
         return _ipc.CalculateFolderSizeAsync(path, ct);
@@ -178,6 +183,9 @@ public sealed class FileOperationService
     }
 
     public Task GitPullAsync(string path, CancellationToken ct = default) => _ipc.GitPullAsync(path, ct);
+
+    public Task<FileEntry[]> GetGitFileStatusesAsync(string path, CancellationToken ct = default)
+        => _ipc.GetGitFileStatusesAsync(path, ct);
 
     public Task GitPushAsync(string path, CancellationToken ct = default) => _ipc.GitPushAsync(path, ct);
 

@@ -1,9 +1,10 @@
 # SimpleFile WinUI 3 Migration Inventory
 
 **Date:** 2026-08-14  
+**Status:** Historical inventory. Svelte/Tauri UI and packaging were retired after the parity gate closed.  
 **Source tree:** `R:\Repos\SimpleFile-Windows`  
 **Goal:** replace the Svelte/Tauri renderer with a native C# WinUI 3 application while keeping the Rust backend as an IPC service.  
-**Constraint:** do not delete or retire Svelte/Tauri runtime code until an explicit later retirement step. This document is inventory only; it does not change runtime code.
+**Constraint at write time:** do not delete or retire Svelte/Tauri runtime code until an explicit later retirement step. That retirement step is complete.
 
 Inspected sources:
 

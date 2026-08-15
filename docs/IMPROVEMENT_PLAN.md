@@ -1,5 +1,9 @@
 # Improvement Plan
 
+**Historical:** file paths under `frontend/` and `src-tauri/` below describe
+the pre-retirement Svelte/Tauri tree. The shipping host is now WinUI 3 +
+`simplefile-service`. Product goals in this plan still apply.
+
 This document expands the seven highest-value improvement areas for the
 Windows-focused SimpleFile branch. The intent is to keep the product direction
 tight: local files, Windows drives, mapped network drives, archives, search,

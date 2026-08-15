@@ -7,9 +7,6 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     groups:
-      tauri:
-        patterns:
-          - "tauri*"
       minor-and-patch:
         update-types:
           - "minor"
@@ -38,12 +35,4 @@ updates:
       - "dependencies"
       - "npm"
 
-  # NPM dependencies in frontend
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "npm"
+

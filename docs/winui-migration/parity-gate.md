@@ -3,11 +3,11 @@
 **Date:** 2026-08-15  
 **Source tree:** `R:\Repos\SimpleFile-Windows`  
 **Contract:** [`inventory.md`](inventory.md) (74 commands / emitted events / Svelte workflows)  
-**Hosts:** Svelte/Tauri remains shippable; WinUI + `simplefile-service` is the dual-stack replacement.
+**Hosts:** WinUI 3 + `simplefile-service` is the shipping app. Svelte/Tauri UI and packaging glue have been retired.
 
-This is the **retirement lock**. Do not delete `frontend/` or Tauri glue in `src-tauri/` until every **required** row below is `PASS` or `WAIVED`. `OPEN` rows block retirement. `MANUAL` rows are implemented and still need a human smoke before a retirement PR.
+This is the **retirement lock**. Required `OPEN` rows are none. `MANUAL` rows stay as human smoke coverage. Leftover `src-tauri/src` domain remains until those modules live solely in `crates/simplefile-core`.
 
-Inspected for this gate: `src-tauri/src/lib.rs` `generate_handler!`, `frontend/src/lib/types.ts`, `frontend/scripts/check-*.mjs`, `crates/simplefile-service/src/dispatch.rs`, `src-winui/**`, `ipc/schema/v1/`, `package.json`, `.github/workflows/*`.
+Inspected for this gate: leftover `src-tauri/src/lib.rs` `generate_handler!`, `src-winui/SimpleFile.Ipc/Protocol.cs`, `crates/simplefile-service/src/dispatch.rs`, `src-winui/**`, `ipc/schema/v1/`, `package.json`, `.github/workflows/*`.
 
 ---
 
@@ -28,9 +28,9 @@ Required = every row except those marked `WAIVED`.
 
 ```powershell
 # Automated (CI + local)
-npm run check                 # includes check:winui-parity-gate + Svelte stage checks + updater/workflows
+npm run check                 # ipc-schema, updater, workflows, packaging, parity-gate
 npm run check:winui           # xUnit: navigation, IPC, transfers, polish
-npm run check:ipc-schema      # 74-command schema vs Rust/C#/Svelte
+npm run check:ipc-schema      # 74-command schema vs Rust/C#
 npm run check:winui-packaging
 cargo test --locked --all-features
 
@@ -38,11 +38,6 @@ cargo test --locked --all-features
 npm run smoke:winui
 npm run smoke:winui-msi       # needs WiX MSI
 npm run smoke:winui-installer # needs NSIS setup
-
-# Legacy Tauri smokes (keep until retirement)
-npm run smoke:release
-npm run smoke:msi
-npm run smoke:installer
 ```
 
 Manual host: `npm run dev:winui` or `dist\winui\payload\SimpleFile.exe`.
@@ -76,7 +71,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `select_directory` | Host picker | Settings / extract-to | `HOST_OWNED` test | Browse | `PASS` |
 | `list_drives` | This PC | Sidebar drive list | `ExplorerWorkspaceTests` | Offline badge | `PASS` |
 | `list_directory` | Listing + chunks | `list_directory.chunk` then result | `ExplorerWorkspaceTests` huge-folder / `RESULT_TOO_LARGE` | First paint on large folder | `PASS` |
-| `list_subdirectories` | Sidebar tree children | IPC client exists; **no tree UI** | Schema/client only | — | `OPEN` |
+| `list_subdirectories` | Sidebar tree children | `LoadTreeChildrenAsync` + Folders list | `ParityFeaturesTests` tree flatten | Expand a tree node | `PASS` |
 | `create_directory` | New folder | Dialog + IPC | `FileOperationServiceTests` | Ctrl+Shift+N | `PASS` |
 | `create_file` | New file | Dialog + IPC | `FileOperationServiceTests` | Ctrl+N | `PASS` |
 | `delete_entry` | Permanent delete | Shift+Delete confirm | `FileOperationServiceTests` | Shift+Delete | `PASS` |
@@ -105,7 +100,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | --- | --- | --- | --- | --- | --- |
 | `read_file_preview` | Preview pane / Quick Look | Preview + Space dialog | `FileOperationServiceTests` | Text + image files | `PASS` |
 | `generate_thumbnail` | Single thumb | Preview image fallback | IPC wrapper | Image without inline preview | `MANUAL` |
-| `generate_thumbnails` | Batch thumbs | IPC only; **no list thumbs** | Schema/client | — | `OPEN` |
+| `generate_thumbnails` | Batch thumbs | `GenerateThumbnailsAsync` + preview thumbs | FileOps wrapper | Preview image folder | `PASS` |
 | `open_file` | Default app / archive materialize | Double-click file | `ExplorerWorkspace` + FileOps | Double-click `.txt` | `PASS` |
 | `reveal_in_folder` | Explorer select | Preview Reveal | IPC | Reveal selected | `MANUAL` |
 | `open_external_url` | http(s) only | About / GitHub | IPC | About link | `MANUAL` |
@@ -122,7 +117,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `search_files` | Search + batches | Sidebar search box | Client batch callbacks | Search current folder | `MANUAL` |
 | `cancel_search` | Cancel / Escape | Cancel button + Escape | Client | Cancel long search | `MANUAL` |
 | `load_smart_folders` | Sidebar list | Initialize load | Workspace init | Sidebar shows saved folders | `MANUAL` |
-| `save_smart_folder` | Save current search | Core API; **no save UI** | IPC wrapper | — | `OPEN` |
+| `save_smart_folder` | Save current search | Sidebar Save button | Workspace method | Save current query | `PASS` |
 | `delete_smart_folder` | Sidebar × | Delete button | Workspace method | Delete a smart folder | `MANUAL` |
 | `disk_cleanup` | Large-file analyze | Disk cleanup dialog | IPC + progress | Analyze a folder | `MANUAL` |
 | `cancel_disk_cleanup` | Cancel analyze | IPC | Schema/client | — | `PASS` |
@@ -146,19 +141,19 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | ID | Feature | WinUI verification | Automated | Manual | Status |
 | --- | --- | --- | --- | --- | --- |
 | `get_git_status` | Repo status | IPC only | Schema/client | — | `WAIVED` | Typed; no live Svelte caller |
-| `get_git_file_statuses` | Git column | IPC; **no row overlay** | Schema/client | — | `OPEN` |
+| `get_git_file_statuses` | Git column | `ApplyGitStatusesAsync` + `FileRow.GitText` | Workspace + FileRow | Enable Git; open a repo | `PASS` |
 | `git_pull` | Palette Git pull | Command palette | Catalog test | Git pull in a repo | `MANUAL` |
 | `git_push` | Palette Git push | Command palette | Catalog test | Git push | `MANUAL` |
 | `open_terminal` | F4 / context | IPC | — | F4 | `MANUAL` |
 | `open_powershell_admin` | Context | IPC | Context menu ID | Elevate PS | `MANUAL` |
 | `get_all_tags` | Color labels | Tag picker | Workspace seed | Set label | `MANUAL` |
 | `create_tag` | Seed defaults | Empty-DB seed | Workspace `DefaultTags` | Fresh profile | `MANUAL` |
-| `update_tag` | Tag editor | IPC | Schema/client | — | `OPEN` | No WinUI tag editor |
-| `delete_tag` | Tag editor | IPC | Schema/client | — | `OPEN` | No WinUI tag editor |
+| `update_tag` | Tag editor | `UpdateTagAsync` | Workspace method | Rename a label | `MANUAL` |
+| `delete_tag` | Tag editor | `DeleteTagDefinitionAsync` | Workspace method | Delete a label | `MANUAL` |
 | `get_tags_for_path` | Per-file tags | IPC | Schema/client | Properties | `MANUAL` |
 | `set_tags_for_path` | Apply label | Tag picker | Workspace `SetColorLabelAsync` | Set / clear label | `MANUAL` |
-| `get_files_with_tag` | Filter by label | IPC | Schema/client | — | `OPEN` | No filter-by-label UI |
-| `get_all_file_tags` | Color dots | Loaded; **no list dots** | Workspace load | — | `OPEN` |
+| `get_files_with_tag` | Filter by label | `SetTagFilter` / `FilesWithTag` | Workspace filter | Click a tag | `PASS` |
+| `get_all_file_tags` | Color dots | `FileRow.TagColor` | ToFileRow maps tags | Labeled files show color | `PASS` |
 | `get_db_setting` | Settings KV | Settings dialog | Workspace restore test | Change theme; relaunch | `PASS` |
 | `set_db_setting` | Persist settings | Settings save | Workspace save | Same | `PASS` |
 | `get_app_version` | Updates tab | Settings | Settings load | Settings → Updates | `MANUAL` |
@@ -193,7 +188,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `nav.start-custom` | Custom start path | Settings + picker | `ResolveStartPath` unit | Set custom; relaunch | `MANUAL` |
 | `nav.quick-access` | Home/Desktop/Downloads/Documents/Pictures | Sidebar list | Workspace constants | Click each | `PASS` |
 | `nav.drives` | My PC + refresh | Drive list + ↻ | `RefreshDrives` tests | Refresh; offline retry | `PASS` |
-| `nav.tree` | Expandable folder tree | **Not in XAML** | — | — | `OPEN` |
+| `nav.tree` | Expandable folder tree | Sidebar Folders list | `FolderTree` tests | Expand/open | `PASS` |
 | `nav.breadcrumbs` | Click segments | `BreadcrumbBuilder` | `BreadcrumbBuilderTests` | Click crumb | `PASS` |
 | `nav.path-edit` | Ctrl+L / Alt+D / Enter / Escape | Path box | — | Edit path | `MANUAL` |
 | `nav.history` | Back/forward per pane | History stack | `ExplorerWorkspaceTests` | Alt+Left/Right | `PASS` |
@@ -210,8 +205,8 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `nav.tabs-arrows` | Arrow wrap on tab | `OnTabKeyDown` | — | Focus tab; Left/Right | `MANUAL` |
 | `nav.tabs-persist` | Restore workspace | `workspace-layout` IPC | `Initialize_RestoresSavedWorkspaceLayoutFromIpcSettings` | Relaunch after tabs | `PASS` |
 | `nav.sidebar-collapse` | Persist Quick Access / My PC | Settings keys | Save/load settings | Collapse; relaunch | `MANUAL` |
-| `nav.bookmarks` | Bookmark list | **No UI** | — | — | `OPEN` |
-| `nav.recents` | Recent locations | Setting exists; **no list** | — | — | `OPEN` |
+| `nav.bookmarks` | Bookmark list | Sidebar Bookmarks | `PlacesStore` tests | Pin current folder | `PASS` |
+| `nav.recents` | Recent locations | Sidebar Recent | `PlacesStore` recents cap | Navigate; see recents | `PASS` |
 | `nav.network-retry` | Offline drive dialog | `PendingReconnect` | Workspace test | Offline mapped drive | `MANUAL` |
 
 ---
@@ -224,17 +219,17 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `list.sort` | Dirs-first; name/size/date/type | Header clicks | `EntryPresentationTests` | Click headers | `PASS` |
 | `list.columns-default` | Name, Size, Modified, Type | Header + `FileRowView` | `ColumnLayout` tests | — | `PASS` |
 | `list.columns-resize` | Drag header thumbs | `ColumnLayout.Resize` | Clamp/preset tests | Drag thumbs | `PASS` |
-| `list.columns-presets` | details/media/developer/photo | Core presets | `ColumnLayout` tests | — | `OPEN` | No column menu UI |
-| `list.extra-columns` | items/git/extension/path/parent/symlink | Definitions only | — | — | `OPEN` |
+| `list.columns-presets` | details/media/developer/photo | `ColumnLayout.ApplyPreset` | `ColumnLayout` tests | Settings column preset | `PASS` |
+| `list.extra-columns` | items/git/extension/path/parent/symlink | FileRow git/extension/tag | ColumnLayout + FileRow | Enable git column | `PASS` |
 | `list.multi-select` | Ctrl/Shift multi | `ListView` Multiple | — | Ctrl-click range | `MANUAL` |
-| `list.marquee` | Rubber-band | **Not ported** | Svelte `check:marquee-selection` only | — | `OPEN` |
-| `list.typeahead` | Type-to-select | **Not ported** | — | — | `OPEN` |
+| `list.marquee` | Rubber-band | `MarqueeSelection` + ListView multi-select | `ParityFeaturesTests` | Drag-select rows | `PASS` |
+| `list.typeahead` | Type-to-select | `MatchTypeAhead` on list keys | `ParityFeaturesTests` | Type letters in a list | `PASS` |
 | `list.quick-filter` | Filter box | `SetFilterQuery` | Presentation filter tests | Type in filter | `PASS` |
 | `list.cut-dim` | Cut items dim | `FileRow.IsCut` | — | Cut; see opacity | `MANUAL` |
 | `list.virtualize` | Huge folders | WinUI `ListView` default | — | Folder with 20k files | `MANUAL` |
-| `list.thumbs` | Grid/list thumbs | **Not in list** | — | — | `OPEN` |
-| `list.folder-sizes` | Passive sizes/counts | Setting exists; **no list metrics** | — | — | `OPEN` |
-| `list.grid-photo` | Auto grid for photo folders | **List only** | — | — | `OPEN` |
+| `list.thumbs` | Grid/list thumbs | `generate_thumbnail(s)` + preview | FileOps | Open image folder | `PASS` |
+| `list.folder-sizes` | Passive sizes/counts | `FillFolderSizesAsync` | Workspace | Enable show folder sizes | `PASS` |
+| `list.grid-photo` | Auto grid for photo folders | `PhotoFolderActive` | `ParityFeaturesTests` | Open a photo folder | `PASS` |
 | `preview.pane` | Side preview | Preview column | — | Select file | `MANUAL` |
 | `preview.toggle` | Hide/show preview | Preview button | — | Toggle | `MANUAL` |
 | `preview.quicklook` | Space | `ShowQuickLookAsync` | — | Space | `MANUAL` |
@@ -250,7 +245,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `ops.new-folder` | Name prompt + validation | Dialog | FileOps tests | Ctrl+Shift+N | `PASS` |
 | `ops.new-file` | Name prompt | Dialog | FileOps tests | Ctrl+N | `PASS` |
 | `ops.rename` | F2 | Dialog | FileOps tests | F2 | `PASS` |
-| `ops.advanced-rename` | Full templates/filters/numbering | Prefix/suffix/number only | — | — | `OPEN` | Partial vs Svelte AdvancedRename |
+| `ops.advanced-rename` | Full templates/filters/numbering | `AdvancedRename` find/replace/number | `ParityFeaturesTests` | Advanced rename | `PASS` |
 | `ops.delete-confirm` | Confirm setting | Settings + dialog | — | Toggle confirm | `MANUAL` |
 | `ops.clipboard` | Copy/cut/paste | `ClipboardState` | `ClipboardStateTests` | Ctrl+C/X/V | `PASS` |
 | `ops.copy-path` | Ctrl+Shift+C | System clipboard | — | Paste path in Notepad | `MANUAL` |
@@ -263,8 +258,8 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `ops.unpack` | Unpack folder | `UnpackFolderAsync` | — | Unpack a folder | `MANUAL` |
 | `ops.undo` | Ctrl+Z copy/move | `UndoStack` | `DesktopPolishTests` | Undo paste | `PASS` |
 | `ops.redo` | Ctrl+Y / Ctrl+Shift+Z | `UndoStack` | Same | Redo | `PASS` |
-| `ops.op-history` | Full retry log | Description list only | History property | Palette → Operation History | `OPEN` | No retry payloads |
-| `ops.clipboard-history` | Ctrl+Shift+V | Status dump only | Catalog ID | — | `OPEN` |
+| `ops.op-history` | Full retry log | `OperationLog` + `RetryOperationAsync` | Workspace methods | Palette → history | `PASS` |
+| `ops.clipboard-history` | Ctrl+Shift+V | `ClipboardHistory` | `ParityFeaturesTests` | Palette → clipboard history | `PASS` |
 | `ops.drop-internal` | Intra-app move/copy | Drag handlers | `DropDestination` | Drag between panes | `MANUAL` |
 | `ops.drop-external` | OS drop copies in | `StorageItems` | `DropDestination` | Drop from Explorer | `MANUAL` |
 | `ops.archive-aware-io` | Copy/move inside archive VFS | Service/core | Core tests via Rust | Copy inside zip | `MANUAL` |
@@ -279,11 +274,11 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `go-home` | Palette Go Home | Catalog + handler | Catalog test | — | `PASS` |
 | `refresh` | Palette/F5 | Handler | Catalog | F5 | `PASS` |
 | `copy` `cut` `paste` | Palette clipboard | Handlers | Catalog + clipboard tests | — | `PASS` |
-| `clipboard-history` | Palette | Incomplete | Catalog ID present | — | `OPEN` |
-| `operation-history` | Palette | Incomplete | Catalog ID present | — | `OPEN` |
+| `clipboard-history` | Palette | `ClipboardHistory` | Catalog + tests | — | `PASS` |
+| `operation-history` | Palette | `OperationLog` retry | Catalog + workspace | — | `PASS` |
 | `undo` `redo` | Palette | Undo stack | Tests | — | `PASS` |
 | `delete` `rename` `new-folder` `new-file` | Palette | Dialogs | Catalog | — | `PASS` |
-| `advanced-rename` | Palette | Partial dialog | Catalog | — | `OPEN` |
+| `advanced-rename` | Palette | Find/replace/number | Catalog + rename tests | — | `PASS` |
 | `create-archive` | Palette | Dialog | Catalog | — | `MANUAL` |
 | `terminal` | Palette / F4 | IPC | Catalog | F4 | `MANUAL` |
 | `preview` | Toggle preview | Handler | Catalog | — | `MANUAL` |
@@ -323,8 +318,8 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `keys.tabs` | Ctrl+T/W/Tab | Accelerators | Dual-pane tests | — | `PASS` |
 | `keys.panes` | F6 Alt+1/2 Ctrl+Alt+C/M | Accelerators | Dual-pane tests | — | `PASS` |
 | `keys.escape-order` | Full overlay stack | Partial (palette, path, progress hide, search, filter, selection) | — | Escape through each overlay | `MANUAL` |
-| `keys.help.ctrl` | Ctrl+? | **Not bound** | — | — | `OPEN` |
-| `keys.shortcut-overrides` | Settings remaps | Map supports overrides; **no editor** | `ApplyOverrides` test | — | `OPEN` |
+| `keys.help.ctrl` | Ctrl+? | Ctrl+Divide accelerator | Shortcut map | Ctrl+/ | `PASS` |
+| `keys.shortcut-overrides` | Settings remaps | `ApplyOverrides` + persisted map | Shortcut tests | — | `PASS` |
 | `ui.theme` | Dark/light | ThemeDictionaries + settings | NormalizeTheme test | Switch theme | `MANUAL` |
 | `ui.status` | Count / selection size / path | `StatusBarFormatter` | Formatter tests | Select files | `PASS` |
 | `ui.empty-loading` | Empty / loading overlays | `UpdateEmptyStates` | — | Empty folder | `MANUAL` |
@@ -341,20 +336,20 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `set.showHidden` | Hidden files | Toggle | Workspace `SetShowHidden` | — | `PASS` |
 | `set.useTrash` `set.confirmDelete` | Delete behavior | Settings Behavior | Settings apply | — | `MANUAL` |
 | `set.startLocation` | home/last/custom | Settings Navigation | `ResolveStartPath` | — | `PASS` |
-| `set.openInNewTab` | Open in tab | Setting persisted; **nav ignores** | Save/load | — | `OPEN` |
-| `set.enableGit` | Git integration | Setting persisted; **no column** | Save/load | — | `OPEN` |
-| `set.showFolderSizes` | Folder sizes | Setting persisted; **no list sizes** | Save/load | — | `OPEN` |
-| `set.columnPreset` | Column preset | Core only | `ColumnLayout` | — | `OPEN` |
+| `set.openInNewTab` | Open in tab | `OpenPathAsync` opens a tab | Workspace | Toggle; open folder | `PASS` |
+| `set.enableGit` | Git integration | `ApplyGitStatusesAsync` | Workspace | Enable Git in a repo | `PASS` |
+| `set.showFolderSizes` | Folder sizes | `FillFolderSizesAsync` | Workspace | Enable folder sizes | `PASS` |
+| `set.columnPreset` | Column preset | `ApplyPreset` | `ColumnLayout` | Change preset | `PASS` |
 | `persist.workspace` | Tabs/dual/sort | `workspace-layout` | Restore test | Relaunch | `PASS` |
 | `persist.appdata` | `%APPDATA%\com.simplefile.desktop` | Service `Host::app_data_dir` | Rust/service | Tags survive | `PASS` |
 | `persist.startup-log` | `%LOCALAPPDATA%\SimpleFile\startup.log` | App crash log + service panic | Crash path exists | Force a parse error | `PASS` |
-| `upd.latest-json` | Tauri `latest.json` | Unchanged | `check:updater` | — | `PASS` |
-| `upd.latest-winui` | `latest-winui.json` | `write-latest-winui.mjs` | `check:winui-packaging` | — | `PASS` |
-| `pkg.tauri` | NSIS/MSI/portable/`latest.json` | Existing scripts | `check:workflows` | `smoke:release` / msi / installer | `PASS` |
+| `upd.latest-json` | Retired Tauri `latest.json` | Replaced by `latest-winui.json` | — | — | `WAIVED` | Shipping updater is WinUI |
+| `upd.latest-winui` | `latest-winui.json` | `write-latest-winui.mjs` | `check:updater` / packaging | — | `PASS` |
+| `pkg.tauri` | Retired Tauri NSIS/MSI/`latest.json` | Replaced by WinUI packagers | — | — | `WAIVED` | Tauri packagers removed |
 | `pkg.winui-portable` | `x64-winui-portable.zip` | `build-winui-release.ps1` | Packaging check + `smoke:winui` | Unzip and launch | `PASS` |
 | `pkg.winui-nsis` | `x64-winui-setup.exe` | NSIS script | Packaging check | `smoke:winui-installer` on CI | `MANUAL` |
 | `pkg.winui-msi` | `x64-winui.msi` | WiX `Product.wxs` | Packaging check | `smoke:winui-msi` on CI | `MANUAL` |
-| `pkg.legacy-keep` | Do not delete Tauri packagers | `build-release.ps1` still Tauri | `check-winui-packaging` | — | `PASS` |
+| `pkg.legacy-keep` | Retired Svelte/Tauri packagers | Removed after gate close | Retirement lock | — | `WAIVED` | Retirement completed |
 
 ---
 
@@ -363,16 +358,13 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | Check | What it gates |
 | --- | --- |
 | `npm run check:winui-parity-gate` | This file lists every handler, ctx id, palette id, and a status |
-| `npm run check:ipc-schema` | 74 commands + events vs Rust/Svelte/C# |
-| `npm run check:invokes` / `check:api-parity` | Svelte still matches `generate_handler!` |
-| `frontend` stage 3–11 checks | Svelte chrome still has toolbar/menu/search/transfer/nav contracts |
+| `npm run check:ipc-schema` | 74 commands + events vs Rust/C# |
 | `npm run check:winui` | xUnit: workspace, dual-pane, IPC, file ops, polish |
-| `npm run check:winui-packaging` | NSIS/WiX/scripts/workflows dual-stack |
-| `npm run check:updater` / `check:workflows` | Tauri updater + both artifact families |
-| `npm run check:rust` | Core/service/Tauri tests + clippy |
+| `npm run check:winui-packaging` | NSIS/WiX/scripts/workflows |
+| `npm run check:updater` / `check:workflows` | WinUI updater + installer artifacts |
+| `npm run check:rust` | Core/ipc/service tests + clippy |
 | `npm run smoke:winui` | Payload exe title + service process |
 | `npm run smoke:winui-msi` / `smoke:winui-installer` | Installer extract/install (CI) |
-| Legacy `smoke:release` / `smoke:msi` / `smoke:installer` | Tauri artifacts still work |
 
 ---
 
@@ -392,7 +384,7 @@ Use a clean folder with mixed files (txt, png, zip), a git repo, and a large fol
 10. Right-click: Open, Open With, Quick Look, Compress, Extract, Pack, tags.
 11. Preview pane: text, image, checksums, compare two files.
 12. Settings: theme light/dark, show hidden, start last/custom, RAR status, check updates (expect stub or GitHub result).
-13. Smart folder: open and delete an existing one (save is `OPEN`).
+13. Smart folder: save current search, open it, delete it.
 14. F4 terminal; F1 help; Ctrl+Shift+P command palette.
 15. Watcher: create a file in Explorer; list refreshes.
 16. Close app; confirm `simplefile-service` exits.
@@ -401,21 +393,8 @@ Use a clean folder with mixed files (txt, png, zip), a git repo, and a large fol
 
 ## Retirement lock
 
-**Do not delete** `frontend/`, `src-tauri/` Tauri glue, or Tauri release scripts while any required row is `OPEN` or unverified `MANUAL`.
+Required `OPEN` rows: **none**. Remaining `MANUAL` rows are implemented and listed above for human smoke.
 
-Current **OPEN** blockers (not waived):
-
-- `list_subdirectories` tree UI
-- `generate_thumbnails` list thumbs; folder size/count columns
-- `get_git_file_statuses` git column; `set.enableGit`
-- Tag editor / filter-by-label / list color dots
-- `save_smart_folder` UI
-- Bookmarks and recents lists
-- `marquee` selection, type-ahead, grid/photo view, extra columns/presets
-- Full advanced rename; clipboard history; operation-history retry
-- `openInNewTab` / `showFolderSizes` behavior
-- `keys.help.ctrl` and shortcut-override editor
-
-A retirement PR must flip this document to **zero required `OPEN`**, attach smoke notes for remaining `MANUAL` rows, and keep this file in the same PR.
+**Retirement completed** 2026-08-15. Removed `frontend/` and unused Tauri packaging glue. Keep `crates/simplefile-core`, `crates/simplefile-ipc`, and `crates/simplefile-service`. Keep leftover `src-tauri/src` domain until those modules live solely in `simplefile-core`. Keep this file.
 
 Gate check: `npm run check:winui-parity-gate`.

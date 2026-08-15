@@ -1,28 +1,25 @@
 # Code Analysis
 
-SimpleFile is split across a Svelte frontend and a Rust/Tauri backend.
+SimpleFile is split across a WinUI 3 host and a Rust IPC service.
 
-## Frontend
+## UI host
 
-- `frontend/src/main.ts` mounts the app.
-- `frontend/src/App.svelte` owns the shell bridge and legacy overlay injection.
-- `frontend/src/lib/app/` coordinates workflows.
-- `frontend/src/lib/components/` contains Svelte UI components.
-- `frontend/src/lib/api.ts` and `frontend/src/lib/tauri.ts` centralize Tauri commands.
+- `src-winui/SimpleFile.App` is the unpackaged explorer window.
+- `src-winui/SimpleFile.Core` owns workspace, menus, transfers, search, and settings.
+- `src-winui/SimpleFile.Ipc` is the length-prefixed named-pipe JSON-RPC client.
+- `src-winui/SimpleFile.Tests` covers navigation, IPC, transfers, and polish.
 
 ## Backend
 
-- `src-tauri/src/lib.rs` registers all Tauri commands.
-- `src-tauri/src/fs_ops.rs` handles local filesystem operations.
-- `src-tauri/src/drives.rs` handles Windows drive enumeration and mapped network share names.
-- `src-tauri/src/progress.rs` handles progress-aware transfers.
-- `src-tauri/src/archive.rs` handles archive virtual paths.
-- `src-tauri/src/preview.rs` handles previews, thumbnails, external opens, and reveal-in-folder.
-- `src-tauri/src/updater.rs` exposes updater checks and installation.
+- `crates/simplefile-service` is the shipping named-pipe process.
+- `crates/simplefile-core` holds reusable filesystem, archive, preview, and settings domain.
+- `crates/simplefile-ipc` holds framing, protocol constants, and schema tests.
+- Leftover `src-tauri/src` modules remain until tags, smart folders, git,
+  cleanup, terminal, RAR, and db live solely in `simplefile-core`.
 
 ## Important Contracts
 
-- Every backend command must appear in `frontend/src/lib/types.ts`.
-- Every literal frontend invoke must have a backend handler.
-- Folder navigation must keep directory intent until it reaches `openEntryPath`.
+- Every domain command must appear in `ipc/schema/v1/commands.json` and
+  `src-winui/SimpleFile.Ipc/Protocol.cs`.
+- Folder navigation must keep directory intent until it reaches the in-app open path.
 - Mapped network drives are normal Windows filesystem entries and must remain visible in drive listing.

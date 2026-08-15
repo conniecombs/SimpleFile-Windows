@@ -2,31 +2,37 @@
 
 ## Current State
 
-The Windows-focused branch has a local-file UI backed by typed Tauri commands. The active surface includes drive listing, directory browsing, dual-pane navigation, tabs, transfers, archive operations, search, smart folders, previews, metadata, checksums, Git status, cleanup tools, updater actions, and Windows installer support.
+The Windows-focused branch ships a WinUI 3 host plus a Rust named-pipe IPC
+service. The active surface includes drive listing, directory browsing,
+dual-pane navigation, tabs, transfers, archive operations, search, smart
+folders, previews, metadata, checksums, Git status, cleanup tools, updater
+actions, and Windows installer support.
 
 ## Strengths
 
-- Tauri command registration and frontend command contracts are checked by `scripts/check-tauri-invokes.mjs`.
-- The renderer bridge keeps `withGlobalTauri` disabled and routes active
-  frontend Tauri access through the typed local wrapper.
-- Shared modal HTML is sanitized before insertion, and
-  `frontend/scripts/check-html-sink-safety.mjs` guards that boundary.
+- The 74-command IPC schema is checked by `npm run check:ipc-schema` against
+  `SimpleFile.Ipc.Protocol` and leftover `src-tauri/src/lib.rs` command names.
+- WinUI parity-gate required rows stay `PASS` or `WAIVED`.
 - Windows drive display names use native volume and mapped-share lookups.
-- Directory opens from file list, tree, and breadcrumb events carry directory intent.
+- Directory opens from file list, tree, and breadcrumb events stay in-app.
 - Archive paths are handled before normal filesystem commands.
 - Release checks cover updater metadata and workflow configuration.
 
 ## Risks
 
-- Generated migration-audit artifacts can drift from live Svelte source.
+- Leftover `src-tauri/src` domain (tags, smart folders, git, cleanup, terminal,
+  RAR, db) is not a workspace crate yet; some methods still fall through the
+  IPC MVP dispatcher.
 - Large local folders can still make metadata operations expensive.
-- Installer and updater behavior need smoke testing on real Windows machines before release.
+- Installer and updater behavior need smoke testing on real Windows machines
+  before release.
 
 ## Recommended Checks
 
 ```powershell
 npm run check
+npm run check:winui
 npm run check:rust
 npm run check:security
-npm run build:tauri:local
+npm run build:winui:release
 ```

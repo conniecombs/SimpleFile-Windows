@@ -19,6 +19,7 @@ public sealed class UiSettings
     public bool PreviewVisible { get; set; } = true;
     public bool QuickAccessCollapsed { get; set; }
     public bool MyPcCollapsed { get; set; }
+    public int PhotoFolderImageThreshold { get; set; } = 70;
     public string ColumnPreset { get; set; } = "default";
     public Dictionary<string, double> ColumnWidths { get; set; } = new(StringComparer.Ordinal);
     public Dictionary<string, string> ShortcutOverrides { get; set; } = new(StringComparer.Ordinal);

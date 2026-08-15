@@ -8,55 +8,46 @@ function fail(message) {
   process.exitCode = 1;
 }
 
-function readJson(path) {
-  return JSON.parse(readFileSync(resolve(repoRoot, path), 'utf8'));
-}
-
-function assertMissing(path) {
-  if (existsSync(resolve(repoRoot, path))) {
-    fail(`${path} should not be tracked in the Windows-only package surface.`);
+function assertMissing(relativePath) {
+  if (existsSync(resolve(repoRoot, relativePath))) {
+    fail(`${relativePath} should not be tracked in the Windows-only package surface.`);
   }
 }
 
-for (const path of [
+function assertExists(relativePath) {
+  if (!existsSync(resolve(repoRoot, relativePath))) {
+    fail(`${relativePath} must exist for WinUI packaging.`);
+  }
+}
+
+for (const relativePath of [
   'src-tauri/icons/icon.icns',
   'src-tauri/icons/android',
   'src-tauri/icons/ios',
   'src-tauri/gen/schemas/linux-schema.json',
+  'src-tauri/tauri.conf.json',
 ]) {
-  assertMissing(path);
+  assertMissing(relativePath);
 }
 
-const tauriConfig = readJson('src-tauri/tauri.conf.json');
-const icons = tauriConfig.bundle?.icon ?? [];
-const forbiddenIconFragments = [
-  'icon.icns',
-  'icons/android/',
-  'icons/ios/',
-];
-
-for (const icon of icons) {
-  const normalized = String(icon).replaceAll('\\', '/');
-  for (const fragment of forbiddenIconFragments) {
-    if (normalized.includes(fragment)) {
-      fail(`src-tauri/tauri.conf.json bundle.icon should not include ${icon}.`);
-    }
-  }
+for (const relativePath of [
+  'packaging/winui/icon.ico',
+  'packaging/winui/simplefile-winui.nsi',
+  'packaging/winui/Product.wxs',
+]) {
+  assertExists(relativePath);
 }
 
-const targets = tauriConfig.bundle?.targets ?? [];
-const expectedTargets = ['nsis', 'msi'];
-const unexpectedTargets = targets.filter((target) => !expectedTargets.includes(target));
-const missingTargets = expectedTargets.filter((target) => !targets.includes(target));
+const nsis = readFileSync(resolve(repoRoot, 'packaging/winui/simplefile-winui.nsi'), 'utf8');
+const wxs = readFileSync(resolve(repoRoot, 'packaging/winui/Product.wxs'), 'utf8');
 
-if (unexpectedTargets.length) {
-  fail(`src-tauri/tauri.conf.json has non-Windows bundle targets: ${unexpectedTargets.join(', ')}.`);
+if (!nsis.includes('SimpleFile (WinUI)') || !nsis.includes('RequestExecutionLevel user')) {
+  fail('packaging/winui/simplefile-winui.nsi must remain a per-user Windows NSIS installer.');
 }
-
-if (missingTargets.length) {
-  fail(`src-tauri/tauri.conf.json is missing Windows bundle targets: ${missingTargets.join(', ')}.`);
+if (!wxs.includes('InstallScope="perUser"') || !wxs.includes('SimpleFileWinUIFiles')) {
+  fail('packaging/winui/Product.wxs must remain a per-user Windows MSI.');
 }
 
 if (!process.exitCode) {
-  console.log('Windows packaging assets are scoped to NSIS/MSI.');
+  console.log('Windows packaging assets are scoped to WinUI NSIS/MSI.');
 }

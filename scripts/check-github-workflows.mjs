@@ -57,14 +57,13 @@ const ciSnippets = [
     'components: rustfmt, clippy',
     'uses: actions/setup-node@v6',
     'node-version: 24',
-    'npm ci --prefix frontend',
     'npm run check',
     'cargo fmt --all -- --check',
     'cargo clippy --locked --all-targets --all-features -- -D warnings',
     'cargo test --locked --all-features',
     'node scripts/cargo-audit-release.mjs',
     'x86_64-pc-windows-msvc',
-    'cargo build --locked --release --all-features --target ${{ matrix.target }}',
+    'cargo build -p simplefile-service --locked --release --target ${{ matrix.target }}',
     'uses: actions/setup-dotnet@v4',
     'dotnet-version: 8.0.x',
     'npm run check:winui',
@@ -82,35 +81,27 @@ const releaseSnippets = [
     'contents: write',
     'Validate release version',
     'Version must look like v1.0.0 or v1.0.0-beta.1',
-    'tauri.conf.json',
-    'Cargo.toml',
+    'Directory.Build.props',
+    'crates/simplefile-service/Cargo.toml',
     'components: rustfmt, clippy',
     'uses: actions/setup-node@v6',
     'node-version: 24',
-    'npm ci --prefix frontend',
     'npm run check',
     'cargo fmt --all -- --check',
     'cargo clippy --locked --all-targets --all-features -- -D warnings',
     'cargo test --locked --all-features',
     'node scripts/cargo-audit-release.mjs',
-    'TAURI_SIGNING_PRIVATE_KEY',
     'Install WiX Toolset (MSI)',
     'function Resolve-WixBin',
-    'tool: tauri-cli',
-    'cargo tauri build --ci --target $env:TARGET_TRIPLE --bundles nsis,msi',
-    'SimpleFile_${version}_x64-portable.exe',
-    'SimpleFile_${version}_x64-portable.zip',
-    'release-assets/*',
-    'latest.json',
-    "Extension -eq '.sig'",
-    'softprops/action-gh-release@v3',
-    'fail_on_unmatched_files: true',
-    'Windows installer and portable artifacts are attached below:',
     'build-winui-release.ps1',
     'latest-winui.json',
     'x64-winui-portable.zip',
     'x64-winui-setup.exe',
     'x64-winui.msi',
+    'release-assets/*',
+    'softprops/action-gh-release@v3',
+    'fail_on_unmatched_files: true',
+    'Windows installer and portable artifacts are attached below:',
 ];
 
 for (const snippet of releaseSnippets) {
@@ -130,11 +121,8 @@ const releaseBuildSnippets = [
     'uses: actions/setup-node@v6',
     'node-version: 24',
     'tool: cargo-audit',
-    'tool: tauri-cli',
-    "npm run release:build -- $($releaseArgs -join ' ')",
-    "src-tauri/target/release/bundle/nsis/*",
-    "src-tauri/target/release/bundle/msi/*",
     'dist/winui',
+    'build-winui-release.ps1',
     'uses: actions/upload-artifact@v4',
     'retention-days: 30',
 ];
@@ -154,18 +142,11 @@ const installerSmokeSnippets = [
     'uses: dtolnay/rust-toolchain@stable',
     'uses: actions/setup-node@v6',
     'node-version: 24',
-    'npm ci --prefix frontend',
-    'npm run build:tauri:local',
-    'npm run smoke:release',
-    'npm run smoke:msi',
-    'npm run smoke:installer',
     'smoke:winui',
-    'tauri.local.conf.json',
     'Install WiX Toolset (MSI)',
     'function Resolve-WixBin',
     'Get-Command candle.exe',
     'choco install wixtoolset -y --no-progress',
-    'tool: tauri-cli',
     'uses: actions/upload-artifact@v4',
 ];
 
@@ -248,7 +229,7 @@ for (const snippet of dependabotSnippets) {
     requireSnippet(dependabot, dependabotPath, snippet);
 }
 
-requireOccurrenceCount(dependabot, dependabotPath, 'directory: "/frontend"', 1);
+requireOccurrenceCount(dependabot, dependabotPath, 'directory: "/frontend"', 0);
 
 if (!process.exitCode) {
     console.log('GitHub workflow configuration is wired.');

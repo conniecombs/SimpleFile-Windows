@@ -54,7 +54,6 @@ const ciYml = readText('.github/workflows/ci.yml');
 const releaseBuildYml = readText('.github/workflows/release-build.yml');
 const installerSmokeYml = readText('.github/workflows/installer-smoke.yml');
 const appCsproj = readText('src-winui/SimpleFile.App/SimpleFile.App.csproj');
-const tauriBuild = readText('scripts/build-release.ps1');
 
 const nsisSnippets = [
   'SimpleFile (WinUI)',
@@ -102,16 +101,14 @@ const npmSnippets = [
   '"smoke:winui-msi"',
   '"smoke:winui-installer"',
   '"release:build"',
-  '"build:tauri:local"',
+  '"dev:winui"',
 ];
 
 for (const snippet of npmSnippets) {
   requireSnippet(packageJson, 'package.json', snippet);
 }
 
-if (!tauriBuild.includes('"tauri"') || !tauriBuild.includes('tauri.local.conf.json')) {
-  fail('scripts/build-release.ps1 must keep the Tauri release path until retirement.');
-}
+
 
 requireSnippet(appCsproj, 'SimpleFile.App.csproj', 'CopyWindowsAppSdkMergedPri');
 requireSnippet(appCsproj, 'SimpleFile.App.csproj', 'PublishUnpackagedXamlPayload');
@@ -123,7 +120,7 @@ const workflowSnippets = [
   ['release.yml', releaseYml, 'build-winui-release.ps1'],
   ['release.yml', releaseYml, 'latest-winui.json'],
   ['release.yml', releaseYml, 'x64-winui-portable.zip'],
-  ['release.yml', releaseYml, 'cargo tauri build --ci --target $env:TARGET_TRIPLE --bundles nsis,msi'],
+  ['release.yml', releaseYml, 'build-winui-release.ps1'],
   ['release-build.yml', releaseBuildYml, 'dist/winui'],
   ['installer-smoke.yml', installerSmokeYml, 'smoke:winui'],
 ];
@@ -132,6 +129,10 @@ for (const [file, source, snippet] of workflowSnippets) {
   requireSnippet(source, file, snippet);
 }
 
+if (packageJson.includes('build:tauri') || packageJson.includes('smoke:release')) {
+  fail('package.json still exposes retired Tauri package scripts.');
+}
+
 if (!process.exitCode) {
-  console.log('WinUI packaging surface is wired; Tauri release scripts remain.');
+  console.log('WinUI packaging surface is wired.');
 }

@@ -12,21 +12,21 @@ This file tracks current Windows-focused follow-up areas.
 | Archives | Virtual archive paths must not bypass destination validation. |
 | Preview | Large files should respect preview limits and avoid blocking the UI. |
 | Installer smoke | NSIS and MSI artifacts should be verified before release. |
-| Updater | Release metadata should prefer the Windows installer path and passive install mode. |
+| Updater | Release metadata should prefer the Windows installer path. |
 
 ## Useful Commands
 
 ```powershell
 npm run check
+npm run check:winui
 npm run check:rust
-npm run smoke:settings
-npm run smoke:release
-npm run smoke:msi
-npm run smoke:installer
+npm run smoke:winui
+npm run smoke:winui-msi
+npm run smoke:winui-installer
 ```
 
 ## Regression Notes
 
-- When drive labels regress, start in `src-tauri/src/drives.rs`.
-- When folder clicks open Windows Explorer, check whether the frontend passed `isDir` into the shared open handler.
-- When settings regress, check `frontend/src/lib/components/settings-body/SettingsBody.svelte` and `frontend/src/lib/app/setup.ts`.
+- When drive labels regress, start in `crates/simplefile-core/src/drives.rs`.
+- When folder clicks open Windows Explorer, check `src-winui/SimpleFile.Core/ExplorerWorkspace.cs` and `crates/simplefile-core/src/preview.rs`.
+- When settings regress, check `src-winui/SimpleFile.Core` workspace/settings persistence and `crates/simplefile-core/src/settings_store.rs`.

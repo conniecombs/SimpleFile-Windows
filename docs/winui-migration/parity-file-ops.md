@@ -1,5 +1,7 @@
 # File Operations Parity: Tauri/Svelte → WinUI/IPC
 
+**Status:** Historical parity notes. Svelte/Tauri is no longer the shipping UI.
+
 Tracking file operation feature parity between the Tauri/Svelte frontend
 and the WinUI 3 native app.
 

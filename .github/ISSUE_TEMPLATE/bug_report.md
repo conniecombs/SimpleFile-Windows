@@ -16,9 +16,9 @@ supported release target.
 |-------|-------|
 | **Windows version/build** | <!-- e.g. Windows 11 24H2 build 26100 --> |
 | **SimpleFile version** | <!-- e.g. v1.1.0 - check About dialog or release page --> |
-| **Install/source** | <!-- e.g. NSIS installer, MSI installer, local executable, Tauri dev --> |
+| **Install/source** | <!-- e.g. NSIS installer, MSI installer, portable zip, `npm run dev:winui` --> |
 | **Affected storage** | <!-- e.g. local NTFS path, mapped network drive, UNC path, removable drive --> |
-| **Rust/Tauri version** | <!-- For local/dev builds only; otherwise write N/A --> |
+| **Rust/.NET version** | <!-- For local/dev builds only; otherwise write N/A --> |
 
 ---
 
@@ -44,4 +44,4 @@ supported release target.
 
 <!-- Anything else that might be relevant: file types involved, directory size, network drives, etc. -->
 
-<!-- To capture backend logs, run: cargo tauri dev and reproduce the issue in the terminal output. -->
+<!-- Startup diagnostics: %LOCALAPPDATA%\SimpleFile\startup.log -->

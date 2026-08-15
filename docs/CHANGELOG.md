@@ -8,6 +8,12 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [Unreleased]
 
+### Changed
+- Shipping UI is now the WinUI 3 host plus the Rust `simplefile-service` IPC
+  process. The Svelte/Tauri renderer, Tauri packaging hooks, and unused Tauri
+  glue have been retired. Reusable Rust domain remains in `crates/` and leftover
+  `src-tauri/src` modules.
+
 ### Fixed
 - Cancelling a copy/move no longer races operation history into "Completed".
   History stays cancelled, partial results can be undone, and success toasts are

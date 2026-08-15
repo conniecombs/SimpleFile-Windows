@@ -1,25 +1,27 @@
 # Startup fix notes
 
-This file records historical startup fixes and the current Windows updater
-status.
+This file records Windows startup diagnostics for the shipping WinUI 3 host
+and Rust IPC service.
 
-Startup changes made:
+## Current host
 
-1. `src-tauri/tauri.conf.json` now starts the main window with `visible: true`.
-2. `frontend/src/main.ts` mounts the Svelte shell from `frontend/src/App.svelte`
-   as the shipping frontend entry point.
-3. Frontend startup and settings recovery live in `frontend/src/lib/app/setup.ts`
-   and `frontend/src/vanilla-js/runtime/startup-location.ts`.
-4. The configured CSP allows the Svelte/Vite bundle while keeping object,
-   frame, form, worker, and remote script surfaces closed.
-5. The updater plugin now has production configuration in
-   `src-tauri/tauri.conf.json`: updater artifacts are enabled, a public key is
-   present, and the endpoint points at the Windows release channel on GitHub.
-6. `src-tauri/src/main.rs` writes Rust panics to
-   `%LOCALAPPDATA%\SimpleFile\startup.log` on Windows.
+- `src-winui/SimpleFile.App` is the unpackaged WinUI 3 window.
+- `BackendSession` starts `simplefile-service` under a job object
+  (`KILL_ON_JOB_CLOSE`) and completes `ipc.handshake` before UI work.
+- Unpackaged launches need `resources.pri` and `*.xbf` beside `SimpleFile.exe`.
+  `scripts/build-winui-release.ps1` stages those in `dist/winui/payload`.
+- Override the service path with `SIMPLEFILE_SERVICE_PATH` when needed.
 
-Production updater releases still require the
-`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` GitHub
-secrets described in `.github/RELEASE.md`. Local `build:tauri:local` builds use
-`src-tauri/tauri.local.conf.json` to disable updater artifact generation without
-changing the production release configuration.
+## Logs
+
+Host and service panics are appended to:
+
+`%LOCALAPPDATA%\SimpleFile\startup.log`
+
+If the window never appears, that file is the first place to look. The usual
+unpackaged cause is a missing `resources.pri` or `MainWindow.xbf`.
+
+## Updates
+
+Production updater metadata is `latest-winui.json` on GitHub Releases. See
+[`UPDATER_RELEASE.md`](UPDATER_RELEASE.md) and [`.github/RELEASE.md`](../.github/RELEASE.md).

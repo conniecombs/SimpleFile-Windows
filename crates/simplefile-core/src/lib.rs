@@ -1,7 +1,8 @@
 //! Host-independent SimpleFile backend types and utilities.
 //!
-//! This crate is the first extract from `src-tauri`. Tauri-specific commands,
-//! `AppHandle`, and plugin glue stay in the Tauri package until later PRs.
+//! Domain still waiting to move out of leftover `src-tauri/src` modules
+//! (tags, smart folders, git, cleanup, terminal, rar, db) stays there until
+//! a later extract. The shipping host is WinUI 3 + `simplefile-service`.
 
 pub mod archive;
 pub mod checksum;

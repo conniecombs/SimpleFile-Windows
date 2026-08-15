@@ -1,8 +1,9 @@
 # Rust Core Extraction Plan
 
 **Date:** 2026-08-14  
+**Status:** Historical extraction plan. Svelte/Tauri UI is retired. Leftover `src-tauri/src` domain still waits to move into `simplefile-core`.  
 **Source tree:** `R:\Repos\SimpleFile-Windows`  
-**Constraint:** classify and plan only. Do **not** move files in this step. Do **not** delete Svelte/Tauri.  
+**Constraint at write time:** classify and plan only. Do **not** move files in this step. Do **not** delete Svelte/Tauri.  
 **Contract:** [`inventory.md`](inventory.md) (74 commands) and [`architecture.md`](architecture.md) (named-pipe JSON-RPC, `Host` in `simplefile-core` from PR 3).
 
 Inspected: every module under `src-tauri/src/` (`lib.rs`, `main.rs`, and the 23 domain files). Classification is from the current signatures and `use` lines, not from the architecture doc alone.

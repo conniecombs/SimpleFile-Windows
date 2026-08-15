@@ -11,8 +11,11 @@ $installer = Get-ChildItem -Path $bundleDir -Filter "SimpleFile_*_x64-winui-setu
     Select-Object -First 1
 
 $expectedTitle = "SimpleFile - File Explorer"
-$tauriConfig = Get-Content -Path (Join-Path $root "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json
-$expectedVersion = $tauriConfig.version
+$props = Get-Content -Path (Join-Path $root "src-winui\Directory.Build.props") -Raw
+if ($props -notmatch '<Version>([^<]+)</Version>') {
+    throw "Could not read Version from src-winui\Directory.Build.props."
+}
+$expectedVersion = $Matches[1]
 $timeoutSeconds = 25
 $process = $null
 

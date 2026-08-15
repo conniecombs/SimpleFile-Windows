@@ -15,9 +15,13 @@ public sealed class FileRow
     public string TypeText { get; set; } = "";
     public bool IsCut { get; set; }
     public ulong Size { get; set; }
+    public string Extension { get; set; } = "";
+    public string GitText { get; set; } = "";
+    public string TagColor { get; set; } = "";
+    public string TagName { get; set; } = "";
     public string AutomationName => IsDir ? $"Folder {Name}" : $"File {Name}";
 
-    public static FileRow From(FileEntry entry, bool isCut = false)
+    public static FileRow From(FileEntry entry, bool isCut = false, Tag? tag = null)
     {
         return new FileRow
         {
@@ -30,6 +34,10 @@ public sealed class FileRow
             TypeText = EntryPresentation.FileType(entry),
             IsCut = isCut,
             Size = entry.Size,
+            Extension = entry.Extension ?? "",
+            GitText = entry.GitStatus ?? "",
+            TagColor = tag?.Color ?? "",
+            TagName = tag?.Name ?? "",
         };
     }
 }

@@ -16,9 +16,6 @@ dist/
 build/
 **/bin/
 **/obj/
-/frontend/dist/
-.svelte-kit/
-.vite/
 .eslintcache
 *.tsbuildinfo
 
@@ -50,12 +47,8 @@ Desktop.ini
 desktop.ini
 $RECYCLE.BIN/
 
-# Tauri
-/src-tauri/WixTools/
-
 # Local release/update signing secrets. Never commit updater private keys.
 /.secrets/
-/src-tauri/.secrets/
 *.key
 .env
 .env.*

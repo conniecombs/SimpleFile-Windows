@@ -1,5 +1,7 @@
 # WinUI Migration — Remaining Workflows Parity
 
+**Status:** Historical parity notes. Svelte/Tauri is no longer the shipping UI.
+
 Tracks feature parity between the Svelte/Tauri frontend and the WinUI 3 native app
 for the 9 remaining workflow areas.
 

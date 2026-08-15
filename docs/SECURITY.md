@@ -14,7 +14,7 @@ Do not commit:
 - Personal settings exports.
 - Paths or logs containing private user data unless redacted.
 
-The repository ignores `.secrets/`, `src-tauri/.secrets/`, `*.key`, `.env`, and `.env.*`.
+The repository ignores `.secrets/`, `*.key`, `.env`, and `.env.*`.
 
 ## Reporting
 
@@ -29,21 +29,7 @@ When reporting a vulnerability, include:
 
 - Path validation and symlink handling before delete, rename, copy, move, folder size, and metadata operations.
 - Archive virtual paths and extraction destination validation.
-- Modal HTML rendering through `sanitizeModalHtml` before any shared dialog
-  body insertion.
-- Tauri renderer bridge scope: keep `__TAURI__` disabled and route active
-  frontend Tauri access through the local typed wrapper.
 - Updater signature configuration and release artifact handling.
 - Windows elevated PowerShell launch behavior.
 - Mapped network drive naming and filesystem probing.
 - File preview limits for large or untrusted files.
-
-## Release Security Checklist
-
-- `npm run check`
-- `npm run check:rust`
-- `npm run check:security`
-- `npm run check:release`
-- `npm run smoke:release`
-- `npm run smoke:msi`
-- `npm run smoke:installer`

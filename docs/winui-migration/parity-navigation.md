@@ -1,5 +1,7 @@
 # Navigation parity checklist (WinUI slices 1–2)
 
+**Status:** Historical parity notes. Svelte/Tauri is no longer the shipping UI.
+
 WinUI 3 feature slices so far:
 
 1. Drives, sidebar root, directory listing, breadcrumbs / path entry, primary-pane navigation, open folder in-app.

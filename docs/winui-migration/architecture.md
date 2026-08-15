@@ -5,12 +5,12 @@
 | **Title** | SimpleFile-Windows WinUI 3 + Rust IPC Architecture |
 | **Author** | SimpleFile Team |
 | **Date** | 2026-08-14 |
-| **Status** | Draft (revised 2026-08-14) |
+| **Status** | Historical design (Svelte/Tauri UI retired 2026-08-15) |
 | **Source tree** | `R:\Repos\SimpleFile-Windows` |
 | **Contract source** | [`docs/winui-migration/inventory.md`](inventory.md) |
 | **Current product** | SimpleFile 1.1.0 (`com.simplefile.desktop`) |
 
-This is a design-only document. It does not change runtime code. It does not delete or retire Svelte/Tauri. The 74-command / 5-event inventory is the behavioral contract; this document must not contradict it.
+This is a historical design document from before the Svelte/Tauri UI was retired. The 74-command / 5-event inventory remains the behavioral contract.
 
 ---
 

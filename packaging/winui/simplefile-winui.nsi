@@ -13,7 +13,7 @@ Unicode True
   !error "OUTFILE must be defined."
 !endif
 !ifndef ICON
-  !define ICON "..\..\src-tauri\icons\icon.ico"
+  !define ICON "icon.ico"
 !endif
 
 Name "SimpleFile (WinUI)"

@@ -174,6 +174,9 @@ public sealed partial class MainWindow : Window
         QuickAccessCollapseButton.Content = _quickAccessCollapsed ? "▸" : "▾";
         MyPcCollapseButton.Content = _myPcCollapsed ? "▸" : "▾";
         RefreshSmartFolders();
+        FolderTreeList.ItemsSource = _workspace.FolderTreeRows;
+        BookmarksList.ItemsSource = _workspace.Bookmarks;
+        RecentsList.ItemsSource = _workspace.RecentPaths;
         ApplyPreviewVisibility();
         ApplyColumnWidths();
         ApplyTheme(_workspace.Settings.Theme);
@@ -398,7 +401,9 @@ public sealed partial class MainWindow : Window
     {
         var cut = _workspace?.Clipboard is { Operation: ClipboardOperation.Cut, HasItems: true } clipboard
             && clipboard.SourcePaths.Any(path => PathRules.PathsEqual(path, entry.Path));
-        return FileRow.From(entry, cut);
+        Tag? tag = null;
+        _workspace?.FileTags.TryGetValue(entry.Path, out tag);
+        return FileRow.From(entry, cut, tag);
     }
 
     private FileRow SearchRowFrom(SearchResult result)
@@ -751,13 +756,23 @@ public sealed partial class MainWindow : Window
 
     private async Task HandleFileKey(KeyRoutedEventArgs e, ListView list, PaneId pane)
     {
-        if (e.Key != VirtualKey.Enter)
+        if (e.Key == VirtualKey.Enter)
         {
+            e.Handled = true;
+            await OpenSelectedFile(list, pane);
             return;
         }
 
-        e.Handled = true;
-        await OpenSelectedFile(list, pane);
+        var letter = e.Key.ToString();
+        if (_workspace is not null && letter.Length == 1 && char.IsLetterOrDigit(letter[0]))
+        {
+            var match = _workspace.MatchTypeAhead(letter[0]);
+            if (match is not null)
+            {
+                e.Handled = true;
+                _workspace.SelectPath(match.Path, pane);
+            }
+        }
     }
 
     private async Task OpenSelectedFile(ListView list, PaneId pane)
@@ -1740,6 +1755,7 @@ public sealed partial class MainWindow : Window
         if (paths is not null && paths.Length > 0)
         {
             _workspace?.Clipboard.SetCopy(paths);
+            _workspace?.RememberClipboard();
             StatusText.Text = $"Copied {paths.Length} item(s)";
         }
     }
@@ -1750,6 +1766,7 @@ public sealed partial class MainWindow : Window
         if (paths is not null && paths.Length > 0)
         {
             _workspace?.Clipboard.SetCut(paths);
+            _workspace?.RememberClipboard();
             StatusText.Text = $"Cut {paths.Length} item(s)";
         }
     }
@@ -2285,6 +2302,112 @@ public sealed partial class MainWindow : Window
         {
             if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
                 StatusText.Text = ex.Message;
+        }
+    }
+
+    private async void OnRefreshFolderTree(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var root = _workspace.Active.Path;
+        if (string.IsNullOrEmpty(root))
+        {
+            root = _workspace.HomePath;
+        }
+
+        await _workspace.LoadTreeChildrenAsync(root);
+    }
+
+    private async void OnFolderTreeClick(object sender, ItemClickEventArgs e)
+    {
+        if (_workspace is not null && e.ClickedItem is FolderTreeItem item)
+        {
+            await _workspace.NavigateToAsync(item.Path);
+        }
+    }
+
+    private async void OnFolderTreeToggle(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is null || sender is not FrameworkElement { Tag: string path })
+        {
+            return;
+        }
+
+        _workspace.ToggleTreeExpanded(path);
+        await _workspace.LoadTreeChildrenAsync(path);
+    }
+
+    private void OnAddBookmark(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is not null && !string.IsNullOrEmpty(_workspace.Active.Path))
+        {
+            _workspace.AddBookmark(_workspace.Active.Path);
+        }
+    }
+
+    private void OnRemoveBookmark(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is not null && sender is FrameworkElement { Tag: string path })
+        {
+            _workspace.RemoveBookmark(path);
+        }
+    }
+
+    private async void OnBookmarkClick(object sender, ItemClickEventArgs e)
+    {
+        if (_workspace is not null && e.ClickedItem is BookmarkItem item)
+        {
+            await _workspace.NavigateToAsync(item.Path);
+        }
+    }
+
+    private async void OnRecentClick(object sender, ItemClickEventArgs e)
+    {
+        if (_workspace is not null && e.ClickedItem is string path)
+        {
+            await _workspace.NavigateToAsync(path);
+        }
+    }
+
+    private async void OnSaveSmartFolder(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var nameBox = new TextBox { PlaceholderText = "Smart folder name", Text = SearchBox.Text.Trim() };
+        var dialog = new ContentDialog
+        {
+            Title = "Save Smart Folder",
+            Content = nameBox,
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            XamlRoot = Content.XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(nameBox.Text))
+        {
+            return;
+        }
+
+        var options = new SearchOptions
+        {
+            Query = SearchBox.Text.Trim(),
+            SearchPath = _workspace.Active.Path,
+            IncludeHidden = _workspace.Settings.ShowHidden,
+            SearchId = $"smart_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
+        };
+        try
+        {
+            await _workspace.SaveCurrentSearchAsSmartFolderAsync(nameBox.Text.Trim(), options);
+            RefreshSmartFolders();
+        }
+        catch (Exception exception)
+        {
+            ShowMessage("Smart folder", exception.Message, InfoBarSeverity.Error);
         }
     }
 
