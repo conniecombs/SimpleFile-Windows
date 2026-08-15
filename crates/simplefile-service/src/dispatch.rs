@@ -8,7 +8,7 @@ use simplefile_ipc::{
     ERR_METHOD_NOT_FOUND, HANDSHAKE_METHOD, HEALTH_METHOD, PREFIX_HOST_OWNED, PROTOCOL_VERSION,
     SHUTDOWN_METHOD,
 };
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -20,6 +20,9 @@ pub struct SessionState {
     pub shutdown: bool,
     pub duplicate_check_cancel: Arc<AtomicBool>,
     pub disk_cleanup_cancel: Arc<AtomicBool>,
+    pub folder_size_cancel: Arc<AtomicBool>,
+    pub folder_item_count_cancel: Arc<AtomicBool>,
+    pub count_items_cancel: Arc<AtomicBool>,
 }
 
 #[derive(Debug)]
@@ -73,6 +76,9 @@ pub(crate) enum Dispatch {
         operation_id: Option<String>,
     },
     CancelDiskCleanup {
+        id: Option<Value>,
+    },
+    InstallUpdate {
         id: Option<Value>,
     },
     Shutdown(JsonRpcResponse),
@@ -242,6 +248,58 @@ struct DiskCleanupParams {
     operation_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ConfirmationTokenParams {
+    #[serde(rename = "confirmationToken")]
+    confirmation_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TagCreateParams {
+    name: String,
+    color: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TagUpdateParams {
+    id: i64,
+    name: String,
+    color: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TagIdParams {
+    id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct TagForPathParams {
+    path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SetTagsForPathParams {
+    path: String,
+    #[serde(rename = "tagIds")]
+    tag_ids: Vec<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetFilesWithTagParams {
+    #[serde(rename = "tagId")]
+    tag_id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct SmartFolderParams {
+    folder: simplefile_core::models::SmartFolder,
+}
+
+#[derive(Debug, Deserialize)]
+struct SmartFolderIdParams {
+    id: String,
+}
+
 pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Dispatch {
     if request.jsonrpc != simplefile_ipc::JSONRPC_VERSION {
         return Dispatch::Reply(JsonRpcResponse::error(
@@ -273,6 +331,24 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             request.id.clone(),
             json!(APP_VERSION),
         )),
+        "get_app_about_info" => Dispatch::Reply(JsonRpcResponse::result(
+            request.id.clone(),
+            serde_json::to_value(simplefile_core::updater::get_app_about_info())
+                .unwrap_or(Value::Null),
+        )),
+        "check_for_update" => match simplefile_core::updater::check_for_update() {
+            Ok(update) => Dispatch::Reply(JsonRpcResponse::result(
+                request.id.clone(),
+                serde_json::to_value(update).unwrap_or(Value::Null),
+            )),
+            Err(message) => Dispatch::Reply(JsonRpcResponse::application_error(
+                request.id.clone(),
+                message,
+            )),
+        },
+        "install_update" => Dispatch::InstallUpdate {
+            id: request.id.clone(),
+        },
         "get_home_dir" => match dirs_home() {
             Ok(path) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(path))),
             Err(message) => Dispatch::Reply(JsonRpcResponse::application_error(
@@ -480,6 +556,66 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             },
             Err(r) => Dispatch::Reply(r),
         },
+        "open_terminal" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::terminal::open_terminal(p.path) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "open_powershell_admin" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::terminal::open_powershell_admin(p.path) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_git_status" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::git::get_git_status(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_git_file_statuses" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::git::get_git_file_statuses(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "git_pull" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::git::git_pull(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(r))),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "git_push" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::git::git_push(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(r))),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
         "list_archive" => match parse_params::<PathParams>(request) {
             Ok(p) => match simplefile_core::archive::list_archive(p.path) {
                 Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
@@ -513,6 +649,35 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
                     }
                 }
             }
+            Err(r) => Dispatch::Reply(r),
+        },
+        "check_rar_installed" => Dispatch::Reply(JsonRpcResponse::result(
+            request.id.clone(),
+            json!(simplefile_core::rar::check_rar_installed()),
+        )),
+        "prepare_rar_install" => match simplefile_core::rar::prepare_rar_install() {
+            Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                request.id.clone(),
+                serde_json::to_value(r).unwrap_or(Value::Null),
+            )),
+            Err(m) => Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m)),
+        },
+        "discard_rar_install" => match parse_params::<ConfirmationTokenParams>(request) {
+            Ok(p) => match simplefile_core::rar::discard_rar_install(p.confirmation_token) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "install_rar" => match parse_params::<ConfirmationTokenParams>(request) {
+            Ok(p) => match simplefile_core::rar::install_rar(p.confirmation_token) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(r))),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
             Err(r) => Dispatch::Reply(r),
         },
         "read_file_preview" => match parse_params::<PreviewParams>(request) {
@@ -602,8 +767,11 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
         },
         "calculate_folder_size" => match parse_params::<PathParams>(request) {
             Ok(p) => {
-                let cancel = AtomicBool::new(false);
-                match simplefile_core::file_ops::calculate_folder_size(&p.path, &cancel) {
+                state.folder_size_cancel.store(false, Ordering::Relaxed);
+                match simplefile_core::file_ops::calculate_folder_size(
+                    &p.path,
+                    &state.folder_size_cancel,
+                ) {
                     Some(size) => {
                         Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(size)))
                     }
@@ -617,8 +785,14 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
         },
         "count_folder_items" => match parse_params::<PathParams>(request) {
             Ok(p) => {
-                let cancel = AtomicBool::new(false);
-                match simplefile_core::file_ops::count_folder_items(&p.path, &cancel) {
+                state
+                    .folder_item_count_cancel
+                    .store(false, Ordering::Relaxed);
+                state.count_items_cancel.store(false, Ordering::Relaxed);
+                match simplefile_core::file_ops::count_folder_items(
+                    &p.path,
+                    &state.folder_item_count_cancel,
+                ) {
                     Some(count) => {
                         Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(count)))
                     }
@@ -630,6 +804,23 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             }
             Err(r) => Dispatch::Reply(r),
         },
+        "cancel_folder_size" => {
+            state.folder_size_cancel.store(true, Ordering::Relaxed);
+            Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
+        }
+        "cancel_folder_item_count" => {
+            state
+                .folder_item_count_cancel
+                .store(true, Ordering::Relaxed);
+            Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
+        }
+        "cancel_count_items" => {
+            state.count_items_cancel.store(true, Ordering::Relaxed);
+            state
+                .folder_item_count_cancel
+                .store(true, Ordering::Relaxed);
+            Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
+        }
         "copy_with_progress" => match parse_params::<ProgressCopyMoveParams>(request) {
             Ok(params) => Dispatch::CopyWithProgress {
                 id: request.id.clone(),
@@ -699,6 +890,117 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
         },
         "cancel_disk_cleanup" => Dispatch::CancelDiskCleanup {
             id: request.id.clone(),
+        },
+        "get_all_tags" => match simplefile_core::tags::get_all_tags() {
+            Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                request.id.clone(),
+                serde_json::to_value(r).unwrap_or(Value::Null),
+            )),
+            Err(m) => Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m)),
+        },
+        "create_tag" => match parse_params::<TagCreateParams>(request) {
+            Ok(p) => match simplefile_core::tags::create_tag(p.name, p.color) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "update_tag" => match parse_params::<TagUpdateParams>(request) {
+            Ok(p) => match simplefile_core::tags::update_tag(p.id, p.name, p.color) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "delete_tag" => match parse_params::<TagIdParams>(request) {
+            Ok(p) => match simplefile_core::tags::delete_tag(p.id) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_tags_for_path" => match parse_params::<TagForPathParams>(request) {
+            Ok(p) => match simplefile_core::tags::get_tags_for_path(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "set_tags_for_path" => match parse_params::<SetTagsForPathParams>(request) {
+            Ok(p) => match simplefile_core::tags::set_tags_for_path(p.path, p.tag_ids) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_all_file_tags" => match simplefile_core::tags::get_all_file_tags() {
+            Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                request.id.clone(),
+                serde_json::to_value(r).unwrap_or(Value::Null),
+            )),
+            Err(m) => Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m)),
+        },
+        "get_files_with_tag" => match parse_params::<GetFilesWithTagParams>(request) {
+            Ok(p) => match simplefile_core::tags::get_files_with_tag(p.tag_id) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "load_smart_folders" => match simplefile_core::smart_folders::load_smart_folders() {
+            Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                request.id.clone(),
+                serde_json::to_value(r).unwrap_or(Value::Null),
+            )),
+            Err(m) => Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m)),
+        },
+        "save_smart_folder" => match parse_params::<SmartFolderParams>(request) {
+            Ok(p) => match simplefile_core::smart_folders::save_smart_folder(p.folder) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "delete_smart_folder" => match parse_params::<SmartFolderIdParams>(request) {
+            Ok(p) => match simplefile_core::smart_folders::delete_smart_folder(p.id) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
         },
         _ => Dispatch::Reply(JsonRpcResponse::error(
             request.id.clone(),
@@ -894,10 +1196,7 @@ mod tests {
             other => panic!("expected DuplicateCheck, got {other:?}"),
         }
 
-        let cancel = dispatch(
-            &mut state,
-            &request("cancel_duplicate_check", 5, json!({})),
-        );
+        let cancel = dispatch(&mut state, &request("cancel_duplicate_check", 5, json!({})));
         assert!(matches!(cancel, Dispatch::CancelDuplicateCheck { .. }));
 
         let cleanup = dispatch(

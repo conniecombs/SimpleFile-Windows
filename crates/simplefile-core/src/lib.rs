@@ -1,8 +1,7 @@
 //! Host-independent SimpleFile backend types and utilities.
 //!
-//! Domain still waiting to move out of leftover `src-tauri/src` modules
-//! (tags, smart folders, git, cleanup, terminal, rar, db) stays there until
-//! a later extract. The shipping host is WinUI 3 + `simplefile-service`.
+//! Shared domain logic lives here so the WinUI 3 named-pipe service can use it
+//! without depending on the legacy Svelte/Tauri host.
 
 pub mod archive;
 pub mod checksum;
@@ -11,11 +10,17 @@ pub mod compare;
 pub mod dir_list;
 pub mod drives;
 pub mod file_ops;
+pub mod git;
 pub mod metadata;
 pub mod models;
 pub mod native_accel;
 pub mod open_with;
 pub mod preview;
+pub mod rar;
 pub mod settings_store;
+pub mod smart_folders;
 pub mod state;
+pub mod tags;
+pub mod terminal;
+pub mod updater;
 pub mod utils;

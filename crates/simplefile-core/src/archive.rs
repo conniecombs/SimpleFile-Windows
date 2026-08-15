@@ -1411,7 +1411,7 @@ fn add_dir_to_zip<W: std::io::Write + std::io::Seek>(
     Ok(())
 }
 
-fn resolve_rar_binary() -> Option<String> {
+pub fn resolve_rar_binary() -> Option<String> {
     if let Ok(path) = std::env::var("SIMPLEFILE_RAR") {
         let trimmed = path.trim();
         if !trimmed.is_empty() && Path::new(trimmed).exists() {

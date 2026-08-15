@@ -3,25 +3,25 @@
   "emitted": {
     "file-change": {
       "params": "FileChangeEvent",
-      "source": "src-tauri/src/watcher.rs"
+      "source": "crates/simplefile-service/src/watcher.rs"
     },
     "operation-progress": {
       "params": "ProgressUpdate",
-      "source": ["src-tauri/src/progress.rs", "src-tauri/src/cleanup.rs"],
+      "source": ["crates/simplefile-service/src/progress.rs", "crates/simplefile-service/src/session.rs"],
       "statusValues": ["running", "completed", "error", "cancelled"]
     },
     "search-results-batch": {
       "params": { "type": "array", "items": "SearchResult" },
-      "source": "src-tauri/src/search.rs"
+      "source": "crates/simplefile-service/src/search.rs"
     },
     "search-complete": {
       "params": { "type": "number", "meaning": "result count" },
-      "source": "src-tauri/src/search.rs",
-      "notes": "Emitted; current Svelte UI waits on search_files return instead of this wrapper."
+      "source": "crates/simplefile-service/src/search.rs",
+      "notes": "Emitted for WinUI clients subscribed during search_files."
     },
     "update-chunk": {
       "params": { "type": "tuple", "items": ["number", "number|null"] },
-      "source": "src-tauri/src/updater.rs",
+      "source": "crates/simplefile-service/src/session.rs",
       "notes": "Positional array [bytesDownloaded, totalBytes|null] matching UpdateChunkPayload."
     },
     "list_directory.chunk": {

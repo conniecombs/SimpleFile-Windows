@@ -156,6 +156,13 @@ pub struct SmartFolder {
     pub search_options: SearchOptions,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct Tag {
+    pub id: i64,
+    pub name: String,
+    pub color: String,
+}
+
 // ============================================================================
 // Disk Cleanup Types
 // ============================================================================
@@ -228,6 +235,38 @@ pub struct GitStatus {
     pub untracked: u32,
     pub ahead: u32,
     pub behind: u32,
+}
+
+// ============================================================================
+// App / Installer Types
+// ============================================================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RarInstallPlan {
+    pub confirmation_token: String,
+    pub download_url: String,
+    pub file_name: String,
+    pub installer_path: String,
+    pub publisher: String,
+    pub sha256: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AppAboutInfo {
+    pub name: String,
+    pub version: String,
+    pub identifier: String,
+    pub os: String,
+    pub arch: String,
+    pub authors: String,
+    pub repository: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UpdateInfo {
+    pub version: String,
+    pub date: Option<String>,
+    pub body: Option<String>,
 }
 
 // ============================================================================

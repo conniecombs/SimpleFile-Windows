@@ -19,20 +19,9 @@ function readRepo(relativePath) {
   return readFileSync(fullPath, 'utf8');
 }
 
-function backendCommandsFromLib(source) {
-  const handlerStart = source.indexOf('tauri::generate_handler![');
-  const handlerEnd = source.indexOf('])', handlerStart);
-  if (handlerStart === -1 || handlerEnd === -1) {
-    return null;
-  }
+function activeServiceCommands(source) {
   return [
-    ...source.slice(handlerStart, handlerEnd).matchAll(/(?:[a-zA-Z0-9_]+::)?([a-zA-Z0-9_]+)\s*,/g),
-  ].map((match) => match[1]);
-}
-
-function backendCommandsFromProtocol(source) {
-  return [
-    ...source.matchAll(/public const string \w+Method = "([a-z0-9_]+)"/g),
+    ...source.matchAll(/^\s*"([a-z0-9_]+)"\s*=>/gm),
   ].map((match) => match[1]);
 }
 
@@ -41,10 +30,7 @@ function extractQuotedIds(source, pattern) {
 }
 
 const gate = readRepo(gatePath);
-const libRs = existsSync(join(repoRoot, 'src-tauri/src/lib.rs'))
-  ? readRepo('src-tauri/src/lib.rs')
-  : '';
-const protocolCs = readRepo('src-winui/SimpleFile.Ipc/Protocol.cs');
+const serviceDispatch = readRepo('crates/simplefile-service/src/dispatch.rs');
 const contextMenu = readRepo('src-winui/SimpleFile.Core/ContextMenuBuilder.cs');
 const palette = readRepo('src-winui/SimpleFile.Core/AppCommandCatalog.cs');
 const events = readRepo('ipc/schema/v1/events.json');
@@ -71,7 +57,7 @@ for (const status of statuses) {
   }
 }
 
-const commands = backendCommandsFromLib(libRs) ?? backendCommandsFromProtocol(protocolCs);
+const commands = activeServiceCommands(serviceDispatch);
 if (commands.length !== 74) {
   fail(`expected 74 domain commands, found ${commands.length}.`);
 }

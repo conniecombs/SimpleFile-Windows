@@ -27,17 +27,14 @@ function setDifference(left, right) {
   return [...left].filter((value) => !right.has(value)).sort();
 }
 
-function backendCommands(source) {
-  const handlerStart = source.indexOf('tauri::generate_handler![');
-  const handlerEnd = source.indexOf('])', handlerStart);
-  if (handlerStart === -1 || handlerEnd === -1) {
-    throw new Error('Could not find tauri::generate_handler! in src-tauri/src/lib.rs');
+function activeServiceCommands(source) {
+  const commands = [
+    ...source.matchAll(/^\s*"([a-z0-9_]+)"\s*=>/gm),
+  ].map((match) => match[1]);
+  if (commands.length === 0) {
+    throw new Error('Could not find JSON-RPC method arms in crates/simplefile-service/src/dispatch.rs');
   }
-  return new Set(
-    [...source.slice(handlerStart, handlerEnd).matchAll(/(?:[a-zA-Z0-9_]+::)?([a-zA-Z0-9_]+)\s*,/g)].map(
-      (match) => match[1],
-    ),
-  );
+  return new Set(commands);
 }
 
 function rustStructFields(source, structName) {
@@ -57,19 +54,11 @@ if (!protocol || !types || !commands || !events) {
   process.exit(1);
 }
 
-const rustLib = existsSync(join(repoRoot, 'src-tauri/src/lib.rs'))
-  ? readRepo('src-tauri/src/lib.rs')
-  : '';
+const serviceDispatch = readRepo('crates/simplefile-service/src/dispatch.rs');
 const protocolCs = readRepo('src-winui/SimpleFile.Ipc/Protocol.cs');
 const models = readRepo('crates/simplefile-core/src/models.rs');
 
-const handlers = rustLib
-  ? backendCommands(rustLib)
-  : new Set(
-      [...protocolCs.matchAll(/public const string \w+Method = "([a-z0-9_]+)"/g)].map(
-        (match) => match[1],
-      ),
-    );
+const handlers = activeServiceCommands(serviceDispatch);
 const schemaMethods = new Set(
   Object.keys(commands.methods || {}).filter((name) => !name.startsWith('ipc.')),
 );
@@ -136,7 +125,11 @@ const rustCheckedTypes = [
   'SearchOptions',
   'SearchResult',
   'SmartFolder',
+  'Tag',
   'ArchiveInfo',
+  'RarInstallPlan',
+  'AppAboutInfo',
+  'UpdateInfo',
 ];
 for (const typeName of rustCheckedTypes) {
   const schemaFields = types.types?.[typeName]?.fields;

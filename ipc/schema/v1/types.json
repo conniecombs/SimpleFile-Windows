@@ -13,7 +13,7 @@
   },
   "frontendOnlyFields": {
     "FileEntry": ["itemCount"],
-    "ColorLabelTag": ["emoji", "label"]
+    "Tag": ["emoji", "label"]
   },
   "types": {
     "FileEntry": {
@@ -57,6 +57,10 @@
     "SmartFolder": {
       "source": "crates/simplefile-core/src/models.rs",
       "fields": ["id", "name", "icon", "search_options"]
+    },
+    "Tag": {
+      "source": "crates/simplefile-core/src/models.rs",
+      "fields": ["id", "name", "color"]
     },
     "DuplicateGroup": {
       "source": "crates/simplefile-core/src/models.rs",
@@ -123,7 +127,7 @@
       "fields": ["md5", "sha1", "sha256"]
     },
     "RarInstallPlan": {
-      "source": "src-tauri/src/rar_installer.rs",
+      "source": "crates/simplefile-core/src/models.rs",
       "fields": ["confirmation_token", "download_url", "file_name", "installer_path", "publisher", "sha256"]
     },
     "DiffRow": {
@@ -135,17 +139,12 @@
       "fields": ["left_path", "right_path", "left_name", "right_name", "left_size", "right_size", "identical", "added", "removed", "changed", "rows"]
     },
     "UpdateInfo": {
-      "source": "src-tauri/src/updater.rs",
-      "fields": ["version", "notes"]
+      "source": "crates/simplefile-core/src/models.rs",
+      "fields": ["version", "date", "body"]
     },
     "AppAboutInfo": {
-      "source": "src-tauri/src/updater.rs",
-      "fields": ["product_name", "version", "identifier", "description", "authors", "repository", "framework", "runtime", "platform", "architecture", "build_profile"]
-    },
-    "ColorLabelTag": {
-      "source": "src-tauri/src/tags.rs",
-      "wireName": "Tag",
-      "fields": ["id", "name", "color"]
+      "source": "crates/simplefile-core/src/models.rs",
+      "fields": ["name", "version", "identifier", "os", "arch", "authors", "repository"]
     },
     "DirectoryListingChunkNotification": {
       "source": "architecture list_directory.chunk",

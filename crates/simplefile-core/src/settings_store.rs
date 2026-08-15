@@ -19,7 +19,7 @@ pub fn set_db_setting(key: String, value: String) -> Result<(), String> {
     set_db_setting_at(&path, &key, &value)
 }
 
-fn metadata_db_path() -> Result<PathBuf, String> {
+pub fn metadata_db_path() -> Result<PathBuf, String> {
     if let Some(path) = std::env::var_os(METADATA_DB_ENV).filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(path));
     }
@@ -38,6 +38,19 @@ fn metadata_db_path() -> Result<PathBuf, String> {
     }
 
     Ok(candidates[0].join(METADATA_DB_NAME))
+}
+
+pub fn app_data_dir() -> Result<PathBuf, String> {
+    let candidates = app_data_dir_candidates();
+    if candidates.is_empty() {
+        return Err("Could not resolve an app data directory".to_string());
+    }
+
+    if let Some(existing) = candidates.iter().find(|candidate| candidate.exists()) {
+        return Ok(existing.clone());
+    }
+
+    Ok(candidates[0].clone())
 }
 
 fn app_data_dir_candidates() -> Vec<PathBuf> {
@@ -99,12 +112,20 @@ fn validate_key(key: &str) -> Result<(), String> {
     Ok(())
 }
 
+pub fn open_metadata_db() -> Result<Connection, String> {
+    let path = metadata_db_path()?;
+    open_metadata_db_at(&path)
+}
+
 fn open_metadata_db_at(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
 
     let connection = Connection::open(path).map_err(|error| error.to_string())?;
+    connection
+        .execute("PRAGMA foreign_keys = ON", [])
+        .map_err(|error| error.to_string())?;
     init_schema(&connection).map_err(|error| error.to_string())?;
     Ok(connection)
 }
@@ -117,6 +138,47 @@ fn init_schema(connection: &Connection) -> rusqlite::Result<()> {
         )",
         [],
     )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT NOT NULL
+        )",
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS file_tags (
+            file_path TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (file_path, tag_id),
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    seed_default_tags(connection)?;
+
+    Ok(())
+}
+
+fn seed_default_tags(connection: &Connection) -> rusqlite::Result<()> {
+    let count: i64 = connection.query_row("SELECT COUNT(*) FROM tags", [], |row| row.get(0))?;
+    if count > 0 {
+        return Ok(());
+    }
+
+    for (name, color) in [
+        ("Important", "#ff3b30"),
+        ("Work", "#ff9500"),
+        ("Personal", "#4cd964"),
+        ("To Do", "#5ac8fa"),
+        ("Later", "#007aff"),
+    ] {
+        connection.execute(
+            "INSERT INTO tags (name, color) VALUES (?1, ?2)",
+            [name, color],
+        )?;
+    }
 
     Ok(())
 }

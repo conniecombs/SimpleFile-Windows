@@ -4,19 +4,17 @@ use simplefile_ipc::frame::{decode_length, encode_frame, FrameError};
 use simplefile_ipc::rpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use simplefile_ipc::{
     FILE_CHANGE, LIST_DIRECTORY_CHUNK, MAX_FRAME_BYTES, OPERATION_PROGRESS,
-    PREFIX_RESULT_TOO_LARGE, SEARCH_COMPLETE, SEARCH_RESULTS_BATCH,
+    PREFIX_RESULT_TOO_LARGE, SEARCH_COMPLETE, SEARCH_RESULTS_BATCH, UPDATE_CHUNK,
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::dispatch::{dispatch, Dispatch, ProgressCopyMoveParams, SessionState};
-use simplefile_core::cleanup::{
-    scan_disk_cleanup, scan_duplicate_check, DuplicateScanOptions,
-};
+use crate::progress::OperationRegistry;
+use crate::watcher::WatcherState;
+use simplefile_core::cleanup::{scan_disk_cleanup, scan_duplicate_check, DuplicateScanOptions};
 use simplefile_core::models::ProgressUpdate;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use crate::progress::OperationRegistry;
-use crate::watcher::WatcherState;
 
 #[derive(Clone)]
 struct EventSink {
@@ -145,9 +143,7 @@ where
                 );
             }
             Dispatch::CancelDuplicateCheck { id } => {
-                state
-                    .duplicate_check_cancel
-                    .store(true, Ordering::Relaxed);
+                state.duplicate_check_cancel.store(true, Ordering::Relaxed);
                 write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
             }
             Dispatch::DiskCleanup {
@@ -170,6 +166,9 @@ where
                 state.disk_cleanup_cancel.store(true, Ordering::Relaxed);
                 write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
             }
+            Dispatch::InstallUpdate { id } => {
+                spawn_install_update(writer.clone(), events.clone(), id);
+            }
             Dispatch::Shutdown(response) => {
                 crate::watcher::unwatch_directory(&mut watcher_state);
                 write_json(&writer, &response).await?;
@@ -178,6 +177,31 @@ where
             }
         }
     }
+}
+
+fn spawn_install_update<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    events: EventSink,
+    id: Option<Value>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let join = tokio::task::spawn_blocking(move || {
+            simplefile_core::updater::install_update_with_progress(|downloaded, total| {
+                events.emit(UPDATE_CHUNK, &[downloaded, total]);
+            })
+        });
+
+        let response = match join.await {
+            Ok(Ok(())) => JsonRpcResponse::result(id, Value::Null),
+            Ok(Err(message)) => JsonRpcResponse::application_error(id, message),
+            Err(error) => {
+                JsonRpcResponse::application_error(id, format!("update task failed: {error}"))
+            }
+        };
+        let _ = write_json(&writer, &response).await;
+    });
 }
 
 async fn list_directory_and_reply<W>(

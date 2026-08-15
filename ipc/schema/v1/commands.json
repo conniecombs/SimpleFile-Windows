@@ -121,14 +121,14 @@
     "check_for_update": { "params": null, "result": "UpdateInfo?" },
     "install_update": { "params": null, "result": "null" },
     "show_main_window": { "params": null, "result": "null", "hostOwned": true },
-    "get_git_file_statuses": { "params": { "path": "string" }, "result": "stringMap" },
-    "get_all_tags": { "params": null, "result": "ColorLabelTag[]" },
-    "create_tag": { "params": { "name": "string", "color": "string" }, "result": "ColorLabelTag" },
-    "update_tag": { "params": { "id": "number", "name": "string", "color": "string" }, "result": "null" },
+    "get_git_file_statuses": { "params": { "path": "string" }, "result": "FileEntry[]" },
+    "get_all_tags": { "params": null, "result": "Tag[]" },
+    "create_tag": { "params": { "name": "string", "color": "string" }, "result": "Tag" },
+    "update_tag": { "params": { "id": "number", "name": "string", "color": "string" }, "result": "Tag" },
     "delete_tag": { "params": { "id": "number" }, "result": "null" },
     "set_tags_for_path": { "params": { "path": "string", "tagIds": "number[]" }, "result": "null" },
-    "get_tags_for_path": { "params": { "path": "string" }, "result": "ColorLabelTag[]" },
-    "get_all_file_tags": { "params": null, "result": "ColorLabelTagMap" },
+    "get_tags_for_path": { "params": { "path": "string" }, "result": "Tag[]" },
+    "get_all_file_tags": { "params": null, "result": "TagMap" },
     "get_files_with_tag": { "params": { "tagId": "number" }, "result": "string[]" }
   }
 }
