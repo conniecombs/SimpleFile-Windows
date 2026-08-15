@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using SimpleFile.Core;
 using SimpleFile.Ipc;
 using DriveInfo = SimpleFile.Ipc.DriveInfo;
@@ -49,11 +50,23 @@ public sealed class DriveRow
     public string Icon { get; set; } = "";
     public string Badge { get; set; } = "";
     public string Description { get; set; } = "";
+    public string UsageText { get; set; } = "";
+    public double UsedPercent { get; set; }
+    public bool ShowUsage { get; set; }
     public bool IsActive { get; set; }
     public DriveInfo Source { get; set; } = new();
+    public Visibility UsageVisibility => ShowUsage ? Visibility.Visible : Visibility.Collapsed;
 
     public static DriveRow From(DriveInfo drive, string currentPath)
     {
+        var usedPercent = 0d;
+        var showUsage = drive.TotalSpace > 0;
+        if (showUsage)
+        {
+            var used = drive.TotalSpace > drive.FreeSpace ? drive.TotalSpace - drive.FreeSpace : 0;
+            usedPercent = 100d * used / drive.TotalSpace;
+        }
+
         return new DriveRow
         {
             Name = string.IsNullOrEmpty(drive.Name) ? drive.Path : drive.Name,
@@ -61,6 +74,11 @@ public sealed class DriveRow
             Icon = DrivePresentation.Icon(drive),
             Badge = DrivePresentation.Badge(drive),
             Description = DrivePresentation.Description(drive),
+            UsageText = showUsage
+                ? $"{EntryPresentation.FormatFileSize(drive.FreeSpace)} free"
+                : "",
+            UsedPercent = usedPercent,
+            ShowUsage = showUsage,
             IsActive = PathRules.PathContains(drive.Path, currentPath)
                 || PathRules.PathsEqual(drive.Path, currentPath),
             Source = drive,
@@ -73,4 +91,36 @@ public sealed class QuickAccessRow
     public string Name { get; set; } = "";
     public string Icon { get; set; } = "";
     public string Command { get; set; } = "";
+    public string Path { get; set; } = "";
+
+    public static string ResolvePath(string command, string homePath)
+    {
+        try
+        {
+            var paths = Windows.Storage.UserDataPaths.GetDefault();
+            return command switch
+            {
+                "navigateHome" => string.IsNullOrWhiteSpace(homePath) ? paths.Profile : homePath,
+                "navigateDesktop" => paths.Desktop,
+                "navigateDocuments" => paths.Documents,
+                "navigateDownloads" => paths.Downloads,
+                "navigatePictures" => paths.Pictures,
+                _ => homePath,
+            };
+        }
+        catch
+        {
+            return command switch
+            {
+                "navigateHome" => homePath,
+                "navigateDesktop" => Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                "navigateDocuments" => Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                "navigateDownloads" => System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Downloads"),
+                "navigatePictures" => Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+                _ => homePath,
+            };
+        }
+    }
 }

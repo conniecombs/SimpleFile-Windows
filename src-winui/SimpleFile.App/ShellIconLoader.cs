@@ -29,7 +29,22 @@ internal static class ShellIconLoader
 
     public static BitmapImage? ForPath(string path)
     {
-        return Cache.GetOrAdd("path:" + path, _ => Load(path, isDirectory: false, useAttributes: false) ?? new BitmapImage());
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        return Cache.GetOrAdd("path:" + path, _ =>
+        {
+            var loaded = Load(path, isDirectory: false, useAttributes: false);
+            if (loaded is not null)
+            {
+                return loaded;
+            }
+
+            var treatAsDirectory = path.EndsWith('\\') || path.EndsWith('/') || Directory.Exists(path);
+            return Load(path, treatAsDirectory, useAttributes: true) ?? new BitmapImage();
+        });
     }
 
     private static BitmapImage? Load(string path, bool isDirectory, bool useAttributes = true)
@@ -86,4 +101,46 @@ internal static class ShellIconLoader
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
+}
+
+public sealed class ShellIconImage : Microsoft.UI.Xaml.Controls.UserControl
+{
+    public static readonly Microsoft.UI.Xaml.DependencyProperty PathProperty =
+        Microsoft.UI.Xaml.DependencyProperty.Register(
+            nameof(Path),
+            typeof(string),
+            typeof(ShellIconImage),
+            new Microsoft.UI.Xaml.PropertyMetadata(null, OnPathChanged));
+
+    private readonly Microsoft.UI.Xaml.Controls.Image _image = new()
+    {
+        Stretch = Microsoft.UI.Xaml.Media.Stretch.Uniform,
+        HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Center,
+        VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Center,
+    };
+
+    public ShellIconImage()
+    {
+        Content = _image;
+        IsTabStop = false;
+        IsHitTestVisible = false;
+        Width = 16;
+        Height = 16;
+    }
+
+    public string? Path
+    {
+        get => (string?)GetValue(PathProperty);
+        set => SetValue(PathProperty, value);
+    }
+
+    private static void OnPathChanged(Microsoft.UI.Xaml.DependencyObject sender, Microsoft.UI.Xaml.DependencyPropertyChangedEventArgs args)
+    {
+        if (sender is ShellIconImage image)
+        {
+            image._image.Source = string.IsNullOrWhiteSpace(image.Path)
+                ? null
+                : ShellIconLoader.ForPath(image.Path);
+        }
+    }
 }

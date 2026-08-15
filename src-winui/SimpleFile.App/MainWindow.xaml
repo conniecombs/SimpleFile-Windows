@@ -128,10 +128,18 @@
                             SelectionMode="None"
                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
                             ScrollViewer.VerticalScrollMode="Disabled">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="28" />
+                                    <Setter Property="Padding" Value="4,2" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:QuickAccessRow">
-                                    <StackPanel Orientation="Horizontal" Spacing="8" Padding="4">
-                                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" Foreground="{ThemeResource SfAccentBrush}" VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8" Padding="2,2">
+                                        <local:ShellIconImage Width="16" Height="16" Path="{x:Bind Path}" VerticalAlignment="Center" />
                                         <TextBlock Text="{x:Bind Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </DataTemplate>
@@ -145,11 +153,20 @@
                             <Button HorizontalAlignment="Right" Padding="6,2" Content="↻" AutomationProperties.Name="Refresh folder tree" Click="OnRefreshFolderTree" ToolTipService.ToolTip="Refresh folder tree" />
                         </Grid>
                         <ListView x:Name="FolderTreeList" IsItemClickEnabled="True" ItemClick="OnFolderTreeClick" SelectionMode="None">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="26" />
+                                    <Setter Property="Padding" Value="2,1" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" Spacing="6" Padding="4">
-                                        <Button Content="▸" Padding="4,0" Click="OnFolderTreeToggle" Tag="{Binding Path}" />
-                                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Padding="2">
+                                        <Button Content="▸" Padding="4,0" Click="OnFolderTreeToggle" Tag="{Binding Path}" Background="Transparent" BorderThickness="0" />
+                                        <local:ShellIconImage Width="16" Height="16" Path="{Binding Path=Path}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
@@ -162,11 +179,25 @@
                             <Button HorizontalAlignment="Right" Padding="6,2" Content="+" AutomationProperties.Name="Bookmark current folder" Click="OnAddBookmark" ToolTipService.ToolTip="Bookmark current folder" />
                         </Grid>
                         <ListView x:Name="BookmarksList" IsItemClickEnabled="True" ItemClick="OnBookmarkClick" SelectionMode="None">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="28" />
+                                    <Setter Property="Padding" Value="4,2" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Padding="4">
-                                        <TextBlock Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
-                                        <Button HorizontalAlignment="Right" Content="×" Padding="4,0" Click="OnRemoveBookmark" Tag="{Binding Path}" />
+                                    <Grid Padding="2" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <local:ShellIconImage Width="16" Height="16" Path="{Binding Path=Path}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <Button Grid.Column="2" HorizontalAlignment="Right" Content="×" Padding="4,0" Click="OnRemoveBookmark" Tag="{Binding Path}" Background="Transparent" BorderThickness="0" />
                                     </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
@@ -202,7 +233,7 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Text="🔍" VerticalAlignment="Center" />
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE721;" FontSize="14" VerticalAlignment="Center" Foreground="{ThemeResource SfTextMutedBrush}" />
                                         <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
                                         <Button Grid.Column="2" Content="×" Padding="4,2" AutomationProperties.Name="Delete smart folder" Click="OnDeleteSmartFolderClicked" Tag="{Binding Id}" Background="Transparent" BorderThickness="0" />
                                     </Grid>
@@ -213,7 +244,7 @@
 
                     <StackPanel Spacing="4">
                         <Grid>
-                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="My PC" />
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="This PC" />
                             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4">
                                 <Button
                                     x:Name="RefreshDrivesButton"
@@ -237,20 +268,45 @@
                             SelectionMode="None"
                             ScrollViewer.VerticalScrollBarVisibility="Disabled"
                             ScrollViewer.VerticalScrollMode="Disabled">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="MinHeight" Value="36" />
+                                    <Setter Property="Padding" Value="4,4" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:DriveRow">
-                                    <StackPanel Padding="4" Spacing="2">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" Foreground="{ThemeResource SfAccentBrush}" VerticalAlignment="Center" />
-                                            <TextBlock Text="{x:Bind Name}" TextWrapping="NoWrap" Foreground="{ThemeResource SfTextPrimaryBrush}" />
-                                            <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="{ThemeResource SfTextMutedBrush}" />
+                                    <Grid ColumnSpacing="8" Padding="2,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <local:ShellIconImage Width="16" Height="16" Path="{x:Bind Path}" VerticalAlignment="Top" Margin="0,2,0,0" />
+                                        <StackPanel Grid.Column="1" Spacing="3">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{x:Bind Name}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                                <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="{ThemeResource SfTextMutedBrush}" />
+                                            </StackPanel>
+                                            <ProgressBar
+                                                Height="4"
+                                                Minimum="0"
+                                                Maximum="100"
+                                                Value="{x:Bind UsedPercent}"
+                                                Visibility="{x:Bind UsageVisibility}" />
+                                            <TextBlock
+                                                FontSize="11"
+                                                Foreground="{ThemeResource SfTextMutedBrush}"
+                                                Text="{x:Bind UsageText}"
+                                                Visibility="{x:Bind UsageVisibility}" />
+                                            <TextBlock
+                                                FontSize="11"
+                                                Foreground="{ThemeResource SfTextMutedBrush}"
+                                                Text="{x:Bind Description}"
+                                                TextWrapping="Wrap" />
                                         </StackPanel>
-                                        <TextBlock
-                                            FontSize="11"
-                                            Foreground="{ThemeResource SfTextMutedBrush}"
-                                            Text="{x:Bind Description}"
-                                            TextWrapping="Wrap" />
-                                    </StackPanel>
+                                    </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -366,7 +422,7 @@
                             </Button>
                         </StackPanel>
                     </Grid>
-                    <Grid x:Name="PrimaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
+                    <Grid x:Name="PrimaryColumnHeader" Grid.Row="2" Padding="8,2,8,2" Background="{ThemeResource SfBgPrimaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,0,0,1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="PrimaryNameCol" Width="*" />
                             <ColumnDefinition Width="6" />
@@ -376,12 +432,18 @@
                             <ColumnDefinition Width="6" />
                             <ColumnDefinition x:Name="PrimaryTypeCol" Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
-                        <Border Grid.Column="1" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name" />
+                        <Button Style="{StaticResource SfColumnHeaderButtonStyle}" Padding="24,4,8,4" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
+                        <Border Grid.Column="1" Background="Transparent" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name">
+                            <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource SfBorderBrush}" />
+                        </Border>
                         <Button Grid.Column="2" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
-                        <Border Grid.Column="3" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size" />
-                        <Button Grid.Column="4" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
-                        <Border Grid.Column="5" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date" />
+                        <Border Grid.Column="3" Background="Transparent" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size">
+                            <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource SfBorderBrush}" />
+                        </Border>
+                        <Button Grid.Column="4" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Date modified" />
+                        <Border Grid.Column="5" Background="Transparent" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date">
+                            <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource SfBorderBrush}" />
+                        </Border>
                         <Button Grid.Column="6" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
                     </Grid>
                     <Grid Grid.Row="3">
@@ -509,7 +571,7 @@
                             </Button>
                         </StackPanel>
                     </Grid>
-                    <Grid x:Name="SecondaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
+                    <Grid x:Name="SecondaryColumnHeader" Grid.Row="2" Padding="8,2,8,2" Background="{ThemeResource SfBgPrimaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,0,0,1">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="SecondaryNameCol" Width="*" />
                             <ColumnDefinition Width="6" />
@@ -519,12 +581,18 @@
                             <ColumnDefinition Width="6" />
                             <ColumnDefinition x:Name="SecondaryTypeCol" Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
-                        <Border Grid.Column="1" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name" />
+                        <Button Style="{StaticResource SfColumnHeaderButtonStyle}" Padding="24,4,8,4" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
+                        <Border Grid.Column="1" Background="Transparent" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name">
+                            <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource SfBorderBrush}" />
+                        </Border>
                         <Button Grid.Column="2" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
-                        <Border Grid.Column="3" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size" />
-                        <Button Grid.Column="4" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
-                        <Border Grid.Column="5" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date" />
+                        <Border Grid.Column="3" Background="Transparent" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size">
+                            <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource SfBorderBrush}" />
+                        </Border>
+                        <Button Grid.Column="4" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Date modified" />
+                        <Border Grid.Column="5" Background="Transparent" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date">
+                            <Rectangle Width="1" HorizontalAlignment="Center" Fill="{ThemeResource SfBorderBrush}" />
+                        </Border>
                         <Button Grid.Column="6" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
                     </Grid>
                     <Grid Grid.Row="3">

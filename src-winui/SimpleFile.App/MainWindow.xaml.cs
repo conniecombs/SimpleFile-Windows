@@ -180,6 +180,7 @@ public sealed partial class MainWindow : Window
                 Name = item.Name,
                 Icon = item.Icon,
                 Command = item.Command,
+                Path = QuickAccessRow.ResolvePath(item.Command, _workspace.HomePath),
             }).ToList(),
             SameQuickAccessRow);
 
@@ -504,11 +505,15 @@ public sealed partial class MainWindow : Window
         && left.IsActive == right.IsActive
         && left.Description == right.Description
         && left.Badge == right.Badge
+        && left.UsageText == right.UsageText
+        && left.ShowUsage == right.ShowUsage
+        && Math.Abs(left.UsedPercent - right.UsedPercent) < 0.5
         && left.Icon == right.Icon;
 
     private static bool SameQuickAccessRow(QuickAccessRow left, QuickAccessRow right) =>
         left.Command == right.Command
         && left.Name == right.Name
+        && left.Path == right.Path
         && left.Icon == right.Icon;
 
     private static void BindItemsSource(ListView list, object? items)
