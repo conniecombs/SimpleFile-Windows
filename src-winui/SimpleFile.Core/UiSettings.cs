@@ -2,7 +2,7 @@ namespace SimpleFile.Core;
 
 public sealed class UiSettings
 {
-    public string Theme { get; set; } = "dark";
+    public string Theme { get; set; } = "system";
     public string DefaultView { get; set; } = "list";
     public int DefaultIconSize { get; set; } = 64;
     public bool ShowHidden { get; set; }
@@ -28,7 +28,19 @@ public sealed class UiSettings
 
     public static string NormalizeTheme(string? theme)
     {
-        return string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
+        if (string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase))
+        {
+            return "light";
+        }
+
+        if (string.Equals(theme, "system", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(theme, "windows", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(theme, "default", StringComparison.OrdinalIgnoreCase))
+        {
+            return "system";
+        }
+
+        return "dark";
     }
 
     public static string NormalizeStartLocation(string? startLocation)

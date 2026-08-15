@@ -64,7 +64,7 @@ public static class EntryPresentation
 
     public static string EntryIcon(FileEntry entry)
     {
-        return entry.IsDir ? "\uD83D\uDCC1" : "\uD83D\uDCC4";
+        return entry.IsDir ? "\uE8B7" : "\uE8A5";
     }
 
     public static IReadOnlyList<FileEntry> FilterEntries(

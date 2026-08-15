@@ -152,6 +152,7 @@ public class DesktopPolishTests
     public void UiSettings_NormalizeThemeAndStartLocation()
     {
         Assert.Equal("light", UiSettings.NormalizeTheme("Light"));
+        Assert.Equal("system", UiSettings.NormalizeTheme("system"));
         Assert.Equal("dark", UiSettings.NormalizeTheme("nope"));
         Assert.Equal("last", UiSettings.NormalizeStartLocation("Last"));
         Assert.Equal("custom", UiSettings.NormalizeStartLocation("custom"));

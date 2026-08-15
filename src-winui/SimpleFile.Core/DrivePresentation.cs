@@ -12,11 +12,11 @@ public static class DrivePresentation
     {
         return (drive.DriveType ?? "").ToLowerInvariant() switch
         {
-            "network" => "\uD83C\uDF10",
-            "removable" => "\uD83D\uDCBE",
-            "cd-rom" or "optical" => "\uD83D\uDCBF",
-            "ram disk" => "\u26A1",
-            _ => "\uD83D\uDCBD",
+            "network" => "\uE968",
+            "removable" => "\uE88E",
+            "cd-rom" or "optical" => "\uE958",
+            "ram disk" => "\uE964",
+            _ => "\uEDA2",
         };
     }
 

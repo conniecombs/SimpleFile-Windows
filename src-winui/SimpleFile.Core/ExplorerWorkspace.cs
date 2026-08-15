@@ -13,11 +13,11 @@ public sealed class ExplorerWorkspace
 {
     public static readonly IReadOnlyList<(string Name, string Icon, string Command)> QuickAccessLocations =
     [
-        ("Home", "\uD83C\uDFE0", "navigateHome"),
-        ("Desktop", "\uD83D\uDCBB", "navigateDesktop"),
-        ("Downloads", "\uD83D\uDCE5", "navigateDownloads"),
-        ("Documents", "\uD83D\uDCC4", "navigateDocuments"),
-        ("Pictures", "\uD83D\uDDBC\uFE0F", "navigatePictures"),
+        ("Home", "\uE80F", "navigateHome"),
+        ("Desktop", "\uE7F4", "navigateDesktop"),
+        ("Downloads", "\uE896", "navigateDownloads"),
+        ("Documents", "\uE8A5", "navigateDocuments"),
+        ("Pictures", "\uEB9F", "navigatePictures"),
     ];
 
     private static readonly Dictionary<string, string> SpecialFolders = new(StringComparer.Ordinal)

@@ -35,8 +35,9 @@
                 <StackPanel x:Name="AppearancePanel" Spacing="16" Visibility="Visible">
                     <TextBlock Text="Appearance" FontSize="18" FontWeight="SemiBold" />
                     <ComboBox x:Name="ThemeComboBox" Header="Theme" HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="Dark" Tag="Dark" />
+                        <ComboBoxItem Content="Windows default" Tag="System" />
                         <ComboBoxItem Content="Light" Tag="Light" />
+                        <ComboBoxItem Content="Dark" Tag="Dark" />
                     </ComboBox>
                     <ToggleSwitch x:Name="ShowHiddenSwitch" Header="Show Hidden Files" />
                 </StackPanel>

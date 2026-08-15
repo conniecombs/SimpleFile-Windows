@@ -3,6 +3,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using SimpleFile.Core;
 using SimpleFile.Ipc;
@@ -58,7 +59,8 @@ public sealed partial class MainWindow : Window
             throw;
         }
 
-        Title = "SimpleFile - File Explorer";
+        Title = "SimpleFile";
+        SystemBackdrop = new MicaBackdrop();
         AppWindow.Resize(new SizeInt32(1200, 800));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
@@ -212,7 +214,7 @@ public sealed partial class MainWindow : Window
         SecondaryPaneRoot.BorderThickness = new Thickness(
             _workspace.DualPaneEnabled && _workspace.ActivePane == PaneId.Secondary ? 2 : 0);
         SidebarTargetSwitch.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
-        DualPaneButton.Content = _workspace.DualPaneEnabled ? "Single" : "Dual";
+        DualPaneButton.Content = _workspace.DualPaneEnabled ? "Single pane" : "Dual pane";
 
         if (!_editingPrimaryPath)
         {
@@ -331,8 +333,8 @@ public sealed partial class MainWindow : Window
                     Spacing = 6,
                     Children =
                     {
-                        new TextBlock { Text = "\uD83D\uDCC1" },
-                        new TextBlock { Text = tab.Title, MaxWidth = 140, TextTrimming = TextTrimming.CharacterEllipsis },
+                        new FontIcon { Glyph = "\uE8B7", FontSize = 12, FontFamily = new FontFamily("Segoe Fluent Icons") },
+                        new TextBlock { Text = tab.Title, MaxWidth = 140, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
             };

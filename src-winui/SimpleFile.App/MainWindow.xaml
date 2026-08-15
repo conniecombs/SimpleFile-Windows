@@ -5,8 +5,8 @@
     xmlns:local="using:SimpleFile.App"
     xmlns:core="using:SimpleFile.Core"
     xmlns:ipc="using:SimpleFile.Ipc"
-    Title="SimpleFile - File Explorer">
-    <Grid x:Name="RootGrid" RequestedTheme="Dark" Background="{ThemeResource SfBgPrimaryBrush}" PreviewKeyDown="OnRootPreviewKeyDown">
+    Title="SimpleFile">
+    <Grid x:Name="RootGrid" Background="{ThemeResource SfBgPrimaryBrush}" PreviewKeyDown="OnRootPreviewKeyDown">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F5" Invoked="OnRefreshAccelerator" />
             <KeyboardAccelerator Key="F6" Invoked="OnDualPaneAccelerator" />
@@ -83,18 +83,22 @@
                         AutomationProperties.Name="Search current folder"
                         PlaceholderText="Search current folder"
                         KeyDown="OnSearchKeyDown" />
-                    <Button
+                    <AppBarButton
                         Grid.Column="1"
+                        Icon="Find"
+                        Label="Search"
+                        Width="40"
                         AutomationProperties.Name="Search"
                         Click="OnSearchClick"
-                        Content="🔎"
                         ToolTipService.ToolTip="Search current folder" />
-                    <Button
+                    <AppBarButton
                         x:Name="SearchCancelButton"
                         Grid.Column="2"
+                        Icon="Cancel"
+                        Label="Cancel"
+                        Width="40"
                         AutomationProperties.Name="Cancel search"
                         Click="OnCancelSearchClick"
-                        Content="✕"
                         IsEnabled="False"
                         ToolTipService.ToolTip="Cancel search" />
                 </Grid>
@@ -125,8 +129,8 @@
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:QuickAccessRow">
                                     <StackPanel Orientation="Horizontal" Spacing="8" Padding="4">
-                                        <TextBlock Text="{x:Bind Icon}" />
-                                        <TextBlock Text="{x:Bind Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
@@ -233,7 +237,7 @@
                                 <DataTemplate x:DataType="local:DriveRow">
                                     <StackPanel Padding="4" Spacing="2">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock Text="{x:Bind Icon}" />
+                                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" VerticalAlignment="Center" />
                                             <TextBlock Text="{x:Bind Name}" TextWrapping="NoWrap" Foreground="{ThemeResource SfTextPrimaryBrush}" />
                                             <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="{ThemeResource SfTextMutedBrush}" />
                                         </StackPanel>
@@ -310,10 +314,10 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <Button x:Name="PrimaryBackButton" AutomationProperties.Name="Go back" Click="OnPrimaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
-                            <Button x:Name="PrimaryForwardButton" AutomationProperties.Name="Go forward" Click="OnPrimaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
-                            <Button x:Name="PrimaryUpButton" AutomationProperties.Name="Go up" Click="OnPrimaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
+                        <StackPanel Orientation="Horizontal">
+                            <AppBarButton x:Name="PrimaryBackButton" Icon="Back" Label="Back" Width="40" Click="OnPrimaryBack" ToolTipService.ToolTip="Back" AutomationProperties.Name="Go back" />
+                            <AppBarButton x:Name="PrimaryForwardButton" Icon="Forward" Label="Forward" Width="40" Click="OnPrimaryForward" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Go forward" />
+                            <AppBarButton x:Name="PrimaryUpButton" Icon="Up" Label="Up" Width="40" Click="OnPrimaryUp" ToolTipService.ToolTip="Up" AutomationProperties.Name="Go up" />
                         </StackPanel>
                         <Grid x:Name="PrimaryPathBar" Grid.Column="1" Background="{ThemeResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
                             <ScrollViewer x:Name="PrimaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -326,34 +330,34 @@
                                 KeyDown="OnPrimaryPathKeyDown"
                                 LostFocus="OnPrimaryPathLostFocus" />
                         </Grid>
-                        <Button Grid.Column="2" Click="OnEditPrimaryPath" Content="✎" ToolTipService.ToolTip="Edit left pane path" />
-                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-                            <Button Click="OnPrimaryNewFolder" Content="📁+" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
-                            <Button Click="OnPrimaryNewFile" Content="📄+" ToolTipService.ToolTip="New File (Ctrl+N)" />
-                            <Button Click="OnPrimaryRename" Content="✏️" ToolTipService.ToolTip="Rename (F2)" />
-                            <Button Click="OnPrimaryDelete" Content="🗑️" ToolTipService.ToolTip="Trash (Delete)" />
-                            <Button Click="OnSettingsClicked" Content="⚙" ToolTipService.ToolTip="Settings" />
-                            <DropDownButton Content="🏷" ToolTipService.ToolTip="Tags">
-                                <DropDownButton.Flyout>
+                        <AppBarButton Grid.Column="2" Icon="Edit" Label="Edit path" Width="40" Click="OnEditPrimaryPath" ToolTipService.ToolTip="Edit path" />
+                        <StackPanel Grid.Column="3" Orientation="Horizontal">
+                            <AppBarButton Icon="Folder" Label="New folder" Width="40" Click="OnPrimaryNewFolder" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
+                            <AppBarButton Icon="Document" Label="New file" Width="40" Click="OnPrimaryNewFile" ToolTipService.ToolTip="New File (Ctrl+N)" />
+                            <AppBarButton Icon="Edit" Label="Rename" Width="40" Click="OnPrimaryRename" ToolTipService.ToolTip="Rename (F2)" />
+                            <AppBarButton Icon="Delete" Label="Delete" Width="40" Click="OnPrimaryDelete" ToolTipService.ToolTip="Trash (Delete)" />
+                            <AppBarButton Icon="Tag" Label="Tags" Width="40" ToolTipService.ToolTip="Tags">
+                                <AppBarButton.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
+                                        <MenuFlyoutItem Text="Set color label" Click="OnSetColorLabelClicked" />
                                     </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
-                            <DropDownButton Content="⋮" ToolTipService.ToolTip="More Actions">
-                                <DropDownButton.Flyout>
+                                </AppBarButton.Flyout>
+                            </AppBarButton>
+                            <AppBarButton Icon="Setting" Label="Settings" Width="40" Click="OnSettingsClicked" ToolTipService.ToolTip="Settings" />
+                            <AppBarButton Icon="More" Label="More" Width="40" ToolTipService.ToolTip="More">
+                                <AppBarButton.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="View Archive Contents" Click="OnViewArchiveClicked" />
-                                        <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
-                                        <MenuFlyoutItem Text="Create Archive" Click="OnCreateArchiveClicked" />
+                                        <MenuFlyoutItem Text="View archive contents" Click="OnViewArchiveClicked" />
+                                        <MenuFlyoutItem Text="Extract archive" Click="OnExtractArchiveClicked" />
+                                        <MenuFlyoutItem Text="Create archive" Click="OnCreateArchiveClicked" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Find Duplicates" Click="OnDuplicateCheckerClicked" />
-                                        <MenuFlyoutItem Text="Disk Cleanup" Click="OnDiskCleanupClicked" />
+                                        <MenuFlyoutItem Text="Find duplicates" Click="OnDuplicateCheckerClicked" />
+                                        <MenuFlyoutItem Text="Disk cleanup" Click="OnDiskCleanupClicked" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Open Terminal Here" Click="OnOpenTerminalClicked" />
+                                        <MenuFlyoutItem Text="Open terminal here" Click="OnOpenTerminalClicked" />
                                     </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
+                                </AppBarButton.Flyout>
+                            </AppBarButton>
                         </StackPanel>
                     </Grid>
                     <Grid x:Name="PrimaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
@@ -451,10 +455,10 @@
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <Button x:Name="SecondaryBackButton" AutomationProperties.Name="Go back" Click="OnSecondaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
-                            <Button x:Name="SecondaryForwardButton" AutomationProperties.Name="Go forward" Click="OnSecondaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
-                            <Button x:Name="SecondaryUpButton" AutomationProperties.Name="Go up" Click="OnSecondaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
+                        <StackPanel Orientation="Horizontal">
+                            <AppBarButton x:Name="SecondaryBackButton" Icon="Back" Label="Back" Width="40" Click="OnSecondaryBack" ToolTipService.ToolTip="Back" AutomationProperties.Name="Go back" />
+                            <AppBarButton x:Name="SecondaryForwardButton" Icon="Forward" Label="Forward" Width="40" Click="OnSecondaryForward" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Go forward" />
+                            <AppBarButton x:Name="SecondaryUpButton" Icon="Up" Label="Up" Width="40" Click="OnSecondaryUp" ToolTipService.ToolTip="Up" AutomationProperties.Name="Go up" />
                         </StackPanel>
                         <Grid Grid.Column="1" Background="{ThemeResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
                             <ScrollViewer x:Name="SecondaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -467,34 +471,34 @@
                                 KeyDown="OnSecondaryPathKeyDown"
                                 LostFocus="OnSecondaryPathLostFocus" />
                         </Grid>
-                        <Button Grid.Column="2" Click="OnEditSecondaryPath" Content="✎" ToolTipService.ToolTip="Edit right pane path" />
-                        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4">
-                            <Button Click="OnSecondaryNewFolder" Content="📁+" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
-                            <Button Click="OnSecondaryNewFile" Content="📄+" ToolTipService.ToolTip="New File (Ctrl+N)" />
-                            <Button Click="OnSecondaryRename" Content="✏️" ToolTipService.ToolTip="Rename (F2)" />
-                            <Button Click="OnSecondaryDelete" Content="🗑️" ToolTipService.ToolTip="Trash (Delete)" />
-                            <Button Click="OnSettingsClicked" Content="⚙" ToolTipService.ToolTip="Settings" />
-                            <DropDownButton Content="🏷" ToolTipService.ToolTip="Tags">
-                                <DropDownButton.Flyout>
+                        <AppBarButton Grid.Column="2" Icon="Edit" Label="Edit path" Width="40" Click="OnEditSecondaryPath" ToolTipService.ToolTip="Edit path" />
+                        <StackPanel Grid.Column="3" Orientation="Horizontal">
+                            <AppBarButton Icon="Folder" Label="New folder" Width="40" Click="OnSecondaryNewFolder" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
+                            <AppBarButton Icon="Document" Label="New file" Width="40" Click="OnSecondaryNewFile" ToolTipService.ToolTip="New File (Ctrl+N)" />
+                            <AppBarButton Icon="Edit" Label="Rename" Width="40" Click="OnSecondaryRename" ToolTipService.ToolTip="Rename (F2)" />
+                            <AppBarButton Icon="Delete" Label="Delete" Width="40" Click="OnSecondaryDelete" ToolTipService.ToolTip="Trash (Delete)" />
+                            <AppBarButton Icon="Tag" Label="Tags" Width="40" ToolTipService.ToolTip="Tags">
+                                <AppBarButton.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
+                                        <MenuFlyoutItem Text="Set color label" Click="OnSetColorLabelClicked" />
                                     </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
-                            <DropDownButton Content="⋮" ToolTipService.ToolTip="More Actions">
-                                <DropDownButton.Flyout>
+                                </AppBarButton.Flyout>
+                            </AppBarButton>
+                            <AppBarButton Icon="Setting" Label="Settings" Width="40" Click="OnSettingsClicked" ToolTipService.ToolTip="Settings" />
+                            <AppBarButton Icon="More" Label="More" Width="40" ToolTipService.ToolTip="More">
+                                <AppBarButton.Flyout>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="View Archive Contents" Click="OnViewArchiveClicked" />
-                                        <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
-                                        <MenuFlyoutItem Text="Create Archive" Click="OnCreateArchiveClicked" />
+                                        <MenuFlyoutItem Text="View archive contents" Click="OnViewArchiveClicked" />
+                                        <MenuFlyoutItem Text="Extract archive" Click="OnExtractArchiveClicked" />
+                                        <MenuFlyoutItem Text="Create archive" Click="OnCreateArchiveClicked" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Find Duplicates" Click="OnDuplicateCheckerClicked" />
-                                        <MenuFlyoutItem Text="Disk Cleanup" Click="OnDiskCleanupClicked" />
+                                        <MenuFlyoutItem Text="Find duplicates" Click="OnDuplicateCheckerClicked" />
+                                        <MenuFlyoutItem Text="Disk cleanup" Click="OnDiskCleanupClicked" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="Open Terminal Here" Click="OnOpenTerminalClicked" />
+                                        <MenuFlyoutItem Text="Open terminal here" Click="OnOpenTerminalClicked" />
                                     </MenuFlyout>
-                                </DropDownButton.Flyout>
-                            </DropDownButton>
+                                </AppBarButton.Flyout>
+                            </AppBarButton>
                         </StackPanel>
                     </Grid>
                     <Grid x:Name="SecondaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">

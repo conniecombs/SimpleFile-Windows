@@ -119,8 +119,12 @@ public sealed partial class MainWindow
 
     private void ApplyTheme(string? theme)
     {
-        var light = string.Equals(UiSettings.NormalizeTheme(theme), "light", StringComparison.Ordinal);
-        var next = light ? ElementTheme.Light : ElementTheme.Dark;
+        var next = UiSettings.NormalizeTheme(theme) switch
+        {
+            "light" => ElementTheme.Light,
+            "dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
         if (RootGrid.RequestedTheme == next)
         {
             return;

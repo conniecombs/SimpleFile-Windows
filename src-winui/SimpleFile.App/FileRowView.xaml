@@ -11,7 +11,7 @@
             <ColumnDefinition x:Name="TypeColumn" Width="100" />
         </Grid.ColumnDefinitions>
         <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock x:Name="IconText" VerticalAlignment="Center" />
+            <TextBlock x:Name="IconText" VerticalAlignment="Center" FontFamily="Segoe MDL2 Assets" FontSize="16" />
             <TextBlock
                 x:Name="NameText"
                 VerticalAlignment="Center"

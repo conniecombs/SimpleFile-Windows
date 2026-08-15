@@ -54,7 +54,7 @@ public sealed partial class SettingsDialog : ContentDialog
         }
     }
 
-    public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "Dark";
+    public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "System";
     public bool ShowHidden => ShowHiddenSwitch.IsOn;
     public nint OwnerHwnd { get; set; }
 
@@ -76,8 +76,12 @@ public sealed partial class SettingsDialog : ContentDialog
     {
         _fileOps = fileOps;
         
-        var theme = await fileOps.GetSettingAsync("theme").ConfigureAwait(false) ?? "Dark";
-        ThemeComboBox.SelectedIndex = theme == "Light" ? 1 : 0;
+        var theme = await fileOps.GetSettingAsync("theme").ConfigureAwait(false) ?? "System";
+        ThemeComboBox.SelectedIndex = theme.Equals("Light", StringComparison.OrdinalIgnoreCase)
+            ? 1
+            : theme.Equals("Dark", StringComparison.OrdinalIgnoreCase)
+                ? 2
+                : 0;
         
         var showHidden = await fileOps.GetSettingAsync("showHidden").ConfigureAwait(false);
         ShowHiddenSwitch.IsOn = showHidden == "true";
