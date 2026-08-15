@@ -27,14 +27,14 @@ Sources of truth for this slice:
 | Sidebar Quick Access: Home / Desktop / Downloads / Documents / Pictures | `navigateSpecial` + `joinPath(home, name)` | Same commands and join rule | Done |
 | Sidebar My PC drive roots | `list_drives`, fallback drive, status badge/description | `DrivePresentation` + drive list | Done |
 | Refresh drives | `simplefile:refresh-drives` | ↻ button | Done |
-| Collapse Quick Access / My PC | `localStorage` `simplefile-sidebar-collapse-state` | In-session only | **Gap** — not persisted |
+| Collapse Quick Access / My PC | `localStorage` `simplefile-sidebar-collapse-state` | Settings IPC `sidebar.*Collapsed` | Done |
 | Directory listing via `list_directory` | Channel chunks then full listing | `list_directory.chunk` then result | Done |
 | First chunk paints before enumeration finishes | `primaryListingInProgress` + progressive concat | Same token + progressive list | Done |
 | `RESULT_TOO_LARGE` keeps streamed chunks | Architecture / Gate 5 | Workspace treats as success + status | Done |
 | Hide `.` files by default | `showHiddenFiles: false` | Same | Done |
 | Sort dirs-first then name (default) | `visibleEntries` / `sortEntries` | `EntryPresentation` | Done |
 | Header sort name / size / date / type | Click header toggles direction | Same | Done |
-| Columns Name, Size, Modified, Type | Default visible columns | Same four | Done (fixed widths) |
+| Columns Name, Size, Modified, Type | Default visible columns | Same four, resizable | Done |
 | Breadcrumb segments | `path.split(/[/\\]/)` + `C:\` for drive | `BreadcrumbBuilder` | Done |
 | Click breadcrumb navigates | `loadDirectoryForPane` | `NavigateToAsync` | Done |
 | Path edit (✎), Enter navigates, Escape cancels | `ContentShell` path bar | Same | Done |
@@ -59,9 +59,9 @@ Sources of truth for this slice:
 | Ctrl+W | Close active pane’s active tab | Same | Done |
 | Middle-click tab | Close | Same | Done |
 | Pane resize 20–80% | ContentShell divider | Drag divider | Done |
-| Persist tabs / `saveTabs` | `localStorage` | **Gap** — session only |
-| Tab keyboard focus wrap (ArrowLeft/Right on tab) | `moveTabFocus` | **Gap** — Ctrl+Tab only |
-| Tab key switches panes | `pane.switch` when dual | **Gap** — WinUI Tab moves focus; use click / Alt+1/2 / Ctrl+Shift+Left/Right |
+| Persist tabs / `saveTabs` | `localStorage` | Settings IPC `workspace-layout` |
+| Tab keyboard focus wrap (ArrowLeft/Right on tab) | `moveTabFocus` | ArrowLeft/Right on the focused tab |
+| Tab key switches panes | `pane.switch` when dual | Tab switches panes when focus is not in a text box |
 
 ## Gaps (remaining)
 
@@ -82,7 +82,7 @@ These are intentional. They stay on Svelte until a later PR.
 | Bookmarks, recents, smart folders | Sidebar below Quick Access | Out of slice |
 | Settings / `startLocation` last or custom | `localStorage` settings | Always home |
 | Persist sidebar collapse | `simplefile-sidebar-collapse-state` | Session only |
-| Theme toggle / light theme | `data-theme` | Dark chrome only |
+| Theme toggle / light theme | `data-theme` | Settings theme + ThemeDictionaries |
 | Preview pane, search, transfers, tags, context menus | Rest of the app | Out of slice |
 | UNC breadcrumb first segment | Svelte accumulates `server` not `\\server` | **Matched on purpose** (same quirk) |
 | Breadcrumb path after drive | `C:\` + `\Users` → `C:\\Users` | **Matched on purpose** (Win32 still opens the folder) |

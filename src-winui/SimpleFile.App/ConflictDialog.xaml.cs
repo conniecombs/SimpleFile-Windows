@@ -19,6 +19,9 @@ public sealed partial class ConflictDialog : ContentDialog
     public ConflictDialog()
     {
         InitializeComponent();
+        PrimaryButtonClick += (_, _) => Result = ConflictResolution.Replace;
+        SecondaryButtonClick += (_, _) => Result = ConflictResolution.Skip;
+        CloseButtonClick += (_, _) => Result = ConflictResolution.Cancel;
         KeepBothButton.Click += (_, _) =>
         {
             Result = ConflictResolution.KeepBoth;

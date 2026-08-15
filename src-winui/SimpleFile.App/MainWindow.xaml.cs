@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -48,6 +49,11 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "SimpleFile - File Explorer";
         AppWindow.Resize(new SizeInt32(1200, 800));
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.IsResizable = true;
+            presenter.IsMaximizable = true;
+        }
 
         PrimaryFileList.ItemsSource = PrimaryFiles;
         SecondaryFileList.ItemsSource = SecondaryFiles;
@@ -74,9 +80,15 @@ public sealed partial class MainWindow : Window
             await _backend.StartAsync();
             var fileOps = new FileOperationService(_backend.Client!);
             _workspace = new ExplorerWorkspace(_backend, fileOps);
+            ColumnLayoutHost.Attach(_workspace.Columns);
             _workspace.Changed += OnWorkspaceChanged;
             _fileChangeSubscription = _backend.Client!.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
             await _workspace.InitializeAsync();
+            ApplyTheme(_workspace.Settings.Theme);
+            _quickAccessCollapsed = _workspace.Settings.QuickAccessCollapsed;
+            _myPcCollapsed = _workspace.Settings.MyPcCollapsed;
+            ApplyPreviewVisibility();
+            ApplyColumnWidths();
             SyncFromWorkspace();
         }
         catch (Exception exception)
@@ -118,12 +130,12 @@ public sealed partial class MainWindow : Window
             PrimaryFiles,
             _searchMode && _searchPane == PaneId.Primary
                 ? _activeSearchResults.Select(SearchRowFrom)
-                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(FileRow.From));
+                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(entry => ToFileRow(entry)));
         Replace(
             SecondaryFiles,
             _searchMode && _searchPane == PaneId.Secondary
                 ? _activeSearchResults.Select(SearchRowFrom)
-                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(FileRow.From));
+                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(entry => ToFileRow(entry)));
         Replace(
             Drives,
             _workspace.Drives.Select(drive => DriveRow.From(drive, _workspace.Pane(_workspace.SidebarTarget).Path)));
@@ -150,6 +162,13 @@ public sealed partial class MainWindow : Window
 
         DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
         QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        QuickAccessCollapseButton.Content = _quickAccessCollapsed ? "▸" : "▾";
+        MyPcCollapseButton.Content = _myPcCollapsed ? "▸" : "▾";
+        RefreshSmartFolders();
+        ApplyPreviewVisibility();
+        ApplyColumnWidths();
+        ApplyTheme(_workspace.Settings.Theme);
+        UpdateEmptyStates();
 
         ApplyDualPaneLayout();
         PrimaryPaneRoot.BorderThickness = new Thickness(
@@ -176,14 +195,24 @@ public sealed partial class MainWindow : Window
         var searchCount = _searchMode && _searchPane == _workspace.ActivePane
             ? _activeSearchResults.Count
             : (int?)null;
-        var count = searchCount ?? _workspace.VisibleEntriesFor(_workspace.ActivePane).Count;
-        var paneLabel = _workspace.ActivePaneLabel;
+        var visible = _workspace.VisibleEntriesFor(_workspace.ActivePane);
+        var count = searchCount ?? visible.Count;
+        var selectedEntries = ActiveSelectedRows
+            .Select(row => new FileEntry { Name = row.Name, Path = row.Path, IsDir = row.IsDir, Size = row.Size })
+            .ToList();
+        var snapshot = StatusBarFormatter.Format(
+            count,
+            selectedEntries,
+            active.Path,
+            _workspace.ActivePaneLabel,
+            listingInProgress: active.ListingInProgress,
+            isEmpty: count == 0 && !active.ListingInProgress && searchCount is null);
         CountText.Text = searchCount is null
-            ? (count == 1 ? "1 item" : $"{count} items")
+            ? snapshot.Combined
             : (count == 1 ? "1 search result" : $"{count} search results");
-        if (!string.IsNullOrEmpty(paneLabel))
+        if (searchCount is not null && !string.IsNullOrEmpty(_workspace.ActivePaneLabel))
         {
-            CountText.Text = $"{paneLabel} · {CountText.Text}";
+            CountText.Text = $"{_workspace.ActivePaneLabel} · {CountText.Text}";
         }
 
         if (active.ListingInProgress && count == 0)
@@ -264,6 +293,7 @@ public sealed partial class MainWindow : Window
                 Padding = new Thickness(6, 2, 6, 2),
             };
             button.Click += OnBreadcrumbClick;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"Navigate to {segment.Label}");
             host.Children.Add(button);
             if (index < crumbs.Count - 1)
             {
@@ -303,6 +333,8 @@ public sealed partial class MainWindow : Window
             ToolTipService.SetToolTip(tabButton, tab.Path);
             tabButton.Click += OnTabClick;
             tabButton.PointerPressed += OnTabPointerPressed;
+            tabButton.KeyDown += OnTabKeyDown;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tabButton, $"Tab {tab.Title}");
             host.Children.Add(tabButton);
 
             var close = new Button
@@ -312,6 +344,7 @@ public sealed partial class MainWindow : Window
                 Tag = new PaneTab(paneId, tab.Id),
             };
             close.Click += OnTabCloseClick;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, $"Close tab {tab.Title}");
             host.Children.Add(close);
 
             if (isActive)
@@ -352,9 +385,16 @@ public sealed partial class MainWindow : Window
         list.SelectedItem = path is null ? null : rows.FirstOrDefault(row => row.Path == path);
     }
 
-    private static FileRow SearchRowFrom(SearchResult result)
+    private FileRow ToFileRow(FileEntry entry)
     {
-        return FileRow.From(new FileEntry
+        var cut = _workspace?.Clipboard is { Operation: ClipboardOperation.Cut, HasItems: true } clipboard
+            && clipboard.SourcePaths.Any(path => PathRules.PathsEqual(path, entry.Path));
+        return FileRow.From(entry, cut);
+    }
+
+    private FileRow SearchRowFrom(SearchResult result)
+    {
+        return ToFileRow(new FileEntry
         {
             Name = result.Name,
             Path = result.Path,
@@ -363,6 +403,35 @@ public sealed partial class MainWindow : Window
             Modified = result.Modified,
             Extension = result.Extension,
         });
+    }
+
+    private void UpdateEmptyStates()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        SetEmptyState(PrimaryEmptyText, PrimaryFiles.Count, _workspace.Primary, _searchMode && _searchPane == PaneId.Primary);
+        SetEmptyState(SecondaryEmptyText, SecondaryFiles.Count, _workspace.Secondary, _searchMode && _searchPane == PaneId.Secondary);
+    }
+
+    private static void SetEmptyState(TextBlock target, int count, ExplorerPane pane, bool searching)
+    {
+        if (count > 0)
+        {
+            target.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        target.Text = pane.ListingInProgress
+            ? "Loading…"
+            : searching
+                ? "No search results"
+                : string.IsNullOrEmpty(pane.Path)
+                    ? "Select a folder"
+                    : "This folder is empty";
+        target.Visibility = Visibility.Visible;
     }
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> source)
@@ -442,6 +511,11 @@ public sealed partial class MainWindow : Window
     private void OnToggleQuickAccess(object sender, RoutedEventArgs e)
     {
         _quickAccessCollapsed = !_quickAccessCollapsed;
+        if (_workspace is not null)
+        {
+            _workspace.Settings.QuickAccessCollapsed = _quickAccessCollapsed;
+        }
+
         QuickAccessCollapseButton.Content = _quickAccessCollapsed ? "▸" : "▾";
         QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -449,8 +523,43 @@ public sealed partial class MainWindow : Window
     private void OnToggleMyPc(object sender, RoutedEventArgs e)
     {
         _myPcCollapsed = !_myPcCollapsed;
+        if (_workspace is not null)
+        {
+            _workspace.Settings.MyPcCollapsed = _myPcCollapsed;
+        }
+
         MyPcCollapseButton.Content = _myPcCollapsed ? "▸" : "▾";
         DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void OnTabKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (_workspace is null || sender is not Button { Tag: PaneTab tab })
+        {
+            return;
+        }
+
+        if (e.Key is not VirtualKey.Left and not VirtualKey.Right)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var pane = _workspace.Pane(tab.Pane);
+        if (pane.Tabs.Count == 0)
+        {
+            return;
+        }
+
+        var index = pane.Tabs.FindIndex(candidate => candidate.Id == tab.TabId);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var delta = e.Key == VirtualKey.Right ? 1 : -1;
+        var next = pane.Tabs[(index + delta + pane.Tabs.Count) % pane.Tabs.Count];
+        await _workspace.SwitchToTabAsync(next.Id, tab.Pane);
     }
 
     private async void OnQuickAccessClick(object sender, ItemClickEventArgs e)
@@ -1393,6 +1502,16 @@ public sealed partial class MainWindow : Window
 
         if (_workspace is not null)
         {
+            try
+            {
+                await _workspace.SaveWorkspaceLayoutAsync();
+                await _workspace.SaveUiSettingsAsync();
+            }
+            catch
+            {
+                // Best-effort persistence on exit.
+            }
+
             _workspace.Changed -= OnWorkspaceChanged;
             _workspace = null;
         }
@@ -1533,12 +1652,45 @@ public sealed partial class MainWindow : Window
         var paths = SelectedPaths;
         if (paths is null || paths.Length == 0) return;
 
+        if (_workspace.Settings.ConfirmDelete)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = _workspace.Settings.UseTrash ? "Move to Trash" : "Delete",
+                Content = $"Delete {paths.Length} item(s)?",
+                PrimaryButtonText = _workspace.Settings.UseTrash ? "Trash" : "Delete",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Content.XamlRoot,
+            };
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+        }
+
         try
         {
-            await _workspace.TrashSelectedAsync(paths);
+            if (_workspace.Settings.UseTrash)
+            {
+                await _workspace.TrashSelectedAsync(paths);
+            }
+            else
+            {
+                foreach (var path in paths)
+                {
+                    await _workspace.DeleteSelectedAsync(path);
+                }
+            }
         }
         catch (IpcException ex)
         {
+            if (FileOperationService.IsTrashUnavailable(ex))
+            {
+                ShowMessage("Trash unavailable", ex.Message, InfoBarSeverity.Warning);
+                return;
+            }
+
             ShowMessage("Trash", ex.Message, InfoBarSeverity.Error);
         }
     }
@@ -1595,39 +1747,14 @@ public sealed partial class MainWindow : Window
 
     private async Task PasteFromClipboard()
     {
-        if (_workspace is null || _workspace.Clipboard is null || !_workspace.Clipboard.HasItems) return;
-        if (_workspace.FileOps is null) return;
+        if (_workspace is null || !_workspace.Clipboard.HasItems) return;
 
         var clipboard = _workspace.Clipboard;
-        var destination = _workspace.ActivePane == PaneId.Primary ? _workspace.Primary.Path : _workspace.Secondary.Path;
-
-        try
+        var destination = _workspace.Active.Path;
+        await TransferWithConflictAsync(clipboard.SourcePaths, destination, clipboard.Operation == ClipboardOperation.Cut);
+        if (clipboard.Operation == ClipboardOperation.Cut)
         {
-            var progress = new Progress<ProgressUpdate>(OnTransferProgress);
-            if (clipboard.Operation == ClipboardOperation.Copy)
-            {
-                await _workspace.FileOps.CopyAsync(
-                    clipboard.SourcePaths,
-                    destination,
-                    "keep-both",
-                    progress,
-                    operationId => StartTransferProgress(operationId, "Copying..."));
-            }
-            else
-            {
-                await _workspace.FileOps.MoveAsync(
-                    clipboard.SourcePaths,
-                    destination,
-                    "keep-both",
-                    progress,
-                    operationId => StartTransferProgress(operationId, "Moving..."));
-                clipboard.Clear();
-            }
-            await _workspace.RefreshAsync();
-        }
-        catch (IpcException ex)
-        {
-            ShowMessage("Paste", ex.Message, InfoBarSeverity.Error);
+            clipboard.Clear();
         }
     }
 
@@ -1940,12 +2067,20 @@ public sealed partial class MainWindow : Window
     private async void OnSettingsClicked(object sender, RoutedEventArgs e)
     {
         if (_workspace?.FileOps == null) return;
-        var dialog = new SettingsDialog { XamlRoot = Content.XamlRoot };
+        var dialog = new SettingsDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            OwnerHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this),
+        };
         await dialog.LoadSettingsAsync(_workspace.FileOps);
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
             await dialog.SaveSettingsAsync(_workspace.FileOps);
+            dialog.ApplyTo(_workspace.Settings);
+            _workspace.SetShowHidden(_workspace.Settings.ShowHidden);
+            ApplyTheme(_workspace.Settings.Theme);
+            await _workspace.SaveUiSettingsAsync();
         }
     }
 

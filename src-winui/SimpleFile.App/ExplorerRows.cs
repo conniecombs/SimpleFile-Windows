@@ -13,8 +13,11 @@ public sealed class FileRow
     public string SizeText { get; set; } = "";
     public string ModifiedText { get; set; } = "";
     public string TypeText { get; set; } = "";
+    public bool IsCut { get; set; }
+    public ulong Size { get; set; }
+    public string AutomationName => IsDir ? $"Folder {Name}" : $"File {Name}";
 
-    public static FileRow From(FileEntry entry)
+    public static FileRow From(FileEntry entry, bool isCut = false)
     {
         return new FileRow
         {
@@ -25,6 +28,8 @@ public sealed class FileRow
             SizeText = EntryPresentation.FormatFileSize(entry.Size, entry.IsDir),
             ModifiedText = EntryPresentation.FormatModified(entry.Modified),
             TypeText = EntryPresentation.FileType(entry),
+            IsCut = isCut,
+            Size = entry.Size,
         };
     }
 }

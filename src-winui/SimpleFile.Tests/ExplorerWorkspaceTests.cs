@@ -215,15 +215,15 @@ public class ExplorerWorkspaceTests
         await first.ToggleDualPaneAsync();
         await first.NavigatePaneAsync(PaneId.Secondary, @"C:\", HistoryMode.ReplaceCurrent);
         first.SetSort("size");
+        await first.SaveWorkspaceLayoutAsync();
 
-        // Workspace layout persistence (SaveWorkspaceLayoutAsync) is not yet implemented.
-        // Verify that a second workspace initializes independently.
         var second = new ExplorerWorkspace(backend, fileOps);
         await second.InitializeAsync();
 
-        // Second workspace starts fresh — no persisted dual pane or sort state.
-        Assert.False(second.DualPaneEnabled);
-        Assert.Equal(PaneId.Primary, second.ActivePane);
+        Assert.True(second.DualPaneEnabled);
+        Assert.Equal(@"C:\Users\test\Desktop", second.Primary.Path);
+        Assert.Equal(@"C:\", second.Secondary.Path);
+        Assert.Equal("size", second.SortBy);
         Assert.True(second.Primary.Tabs.Count >= 1);
         var activePrimaryTab = second.Primary.Tabs.First(tab => tab.Id == second.Primary.ActiveTabId);
         Assert.Equal(second.Primary.Path, activePrimaryTab.Path);

@@ -6,7 +6,7 @@
     xmlns:core="using:SimpleFile.Core"
     xmlns:ipc="using:SimpleFile.Ipc"
     Title="SimpleFile - File Explorer">
-    <Grid x:Name="RootGrid" RequestedTheme="Dark" Background="{StaticResource SfBgPrimaryBrush}">
+    <Grid x:Name="RootGrid" RequestedTheme="Dark" Background="{ThemeResource SfBgPrimaryBrush}" PreviewKeyDown="OnRootPreviewKeyDown">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F5" Invoked="OnRefreshAccelerator" />
             <KeyboardAccelerator Key="F6" Invoked="OnDualPaneAccelerator" />
@@ -31,24 +31,38 @@
             <KeyboardAccelerator Key="V" Modifiers="Control" Invoked="OnPasteAccelerator" />
             <KeyboardAccelerator Key="F4" Invoked="OnOpenTerminalAccelerator" />
             <KeyboardAccelerator Key="S" Modifiers="Control,Shift" Invoked="OnSettingsAccelerator" />
+            <KeyboardAccelerator Key="P" Modifiers="Control,Shift" Invoked="OnCommandPaletteAccelerator" />
+            <KeyboardAccelerator Key="L" Modifiers="Control" Invoked="OnFocusPathAccelerator" />
+            <KeyboardAccelerator Key="D" Modifiers="Menu" Invoked="OnFocusPathAccelerator" />
+            <KeyboardAccelerator Key="F" Modifiers="Control" Invoked="OnFocusSearchAccelerator" />
+            <KeyboardAccelerator Key="A" Modifiers="Control" Invoked="OnSelectAllAccelerator" />
+            <KeyboardAccelerator Key="C" Modifiers="Control,Shift" Invoked="OnCopyPathAccelerator" />
+            <KeyboardAccelerator Key="Z" Modifiers="Control" Invoked="OnUndoAccelerator" />
+            <KeyboardAccelerator Key="Y" Modifiers="Control" Invoked="OnRedoAccelerator" />
+            <KeyboardAccelerator Key="Z" Modifiers="Control,Shift" Invoked="OnRedoAccelerator" />
+            <KeyboardAccelerator Key="F1" Invoked="OnKeyboardHelpAccelerator" />
+            <KeyboardAccelerator Key="C" Modifiers="Control,Menu" Invoked="OnCopyToOtherPaneAccelerator" />
+            <KeyboardAccelerator Key="M" Modifiers="Control,Menu" Invoked="OnMoveToOtherPaneAccelerator" />
         </Grid.KeyboardAccelerators>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240" />
+            <ColumnDefinition x:Name="SidebarColumn" Width="240" MinWidth="150" MaxWidth="600" />
+            <ColumnDefinition x:Name="SidebarDividerColumn" Width="6" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
-        <Grid Grid.Column="0" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,0,1,0">
+        <Grid Grid.Column="0" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,0,1,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <StackPanel Padding="12,16,12,8" Spacing="8">
                 <Grid>
-                    <TextBlock FontSize="20" FontWeight="SemiBold" Text="SimpleFile" Foreground="{StaticResource SfTextPrimaryBrush}" />
+                    <TextBlock FontSize="20" FontWeight="SemiBold" Text="SimpleFile" Foreground="{ThemeResource SfTextPrimaryBrush}" />
                     <Button
                         x:Name="DualPaneButton"
                         HorizontalAlignment="Right"
                         Padding="8,4"
+                        AutomationProperties.Name="Toggle dual pane"
                         Click="OnToggleDualPane"
                         Content="Dual"
                         ToolTipService.ToolTip="Toggle dual pane (F6)" />
@@ -65,31 +79,40 @@
                     </Grid.ColumnDefinitions>
                     <TextBox
                         x:Name="SearchBox"
+                        AutomationProperties.Name="Search current folder"
                         PlaceholderText="Search current folder"
                         KeyDown="OnSearchKeyDown" />
                     <Button
                         Grid.Column="1"
+                        AutomationProperties.Name="Search"
                         Click="OnSearchClick"
                         Content="🔎"
                         ToolTipService.ToolTip="Search current folder" />
                     <Button
                         x:Name="SearchCancelButton"
                         Grid.Column="2"
+                        AutomationProperties.Name="Cancel search"
                         Click="OnCancelSearchClick"
                         Content="✕"
                         IsEnabled="False"
                         ToolTipService.ToolTip="Cancel search" />
                 </Grid>
+                <TextBox
+                    x:Name="QuickFilterBox"
+                    AutomationProperties.Name="Quick filter"
+                    PlaceholderText="Filter this folder"
+                    TextChanged="OnQuickFilterChanged" />
             </StackPanel>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Padding="8,0,8,16" Spacing="12">
                     <StackPanel Spacing="4">
                         <Grid>
-                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SfTextMutedBrush}" Text="Quick Access" />
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="Quick Access" />
                             <Button
                                 x:Name="QuickAccessCollapseButton"
                                 HorizontalAlignment="Right"
                                 Padding="6,2"
+                                AutomationProperties.Name="Collapse Quick Access"
                                 Click="OnToggleQuickAccess"
                                 Content="▾" />
                         </Grid>
@@ -102,7 +125,7 @@
                                 <DataTemplate x:DataType="local:QuickAccessRow">
                                     <StackPanel Orientation="Horizontal" Spacing="8" Padding="4">
                                         <TextBlock Text="{x:Bind Icon}" />
-                                        <TextBlock Text="{x:Bind Name}" Foreground="{StaticResource SfTextPrimaryBrush}" />
+                                        <TextBlock Text="{x:Bind Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
                                     </StackPanel>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
@@ -111,7 +134,7 @@
 
                     <StackPanel Spacing="4">
                         <Grid>
-                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SfTextMutedBrush}" Text="Smart Folders" />
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="Smart Folders" />
                         </Grid>
                         <ListView
                             x:Name="SmartFoldersList"
@@ -127,8 +150,8 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Text="🔍" VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
-                                        <Button Grid.Column="2" Content="×" Padding="4,2" Click="OnDeleteSmartFolderClicked" Tag="{Binding Id}" Background="Transparent" BorderThickness="0" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <Button Grid.Column="2" Content="×" Padding="4,2" AutomationProperties.Name="Delete smart folder" Click="OnDeleteSmartFolderClicked" Tag="{Binding Id}" Background="Transparent" BorderThickness="0" />
                                     </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
@@ -137,17 +160,19 @@
 
                     <StackPanel Spacing="4">
                         <Grid>
-                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SfTextMutedBrush}" Text="My PC" />
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SfTextMutedBrush}" Text="My PC" />
                             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal" Spacing="4">
                                 <Button
                                     x:Name="RefreshDrivesButton"
                                     Padding="6,2"
+                                    AutomationProperties.Name="Refresh drives"
                                     Click="OnRefreshDrives"
                                     Content="↻"
                                     ToolTipService.ToolTip="Refresh drives and mapped network status" />
                                 <Button
                                     x:Name="MyPcCollapseButton"
                                     Padding="6,2"
+                                    AutomationProperties.Name="Collapse My PC"
                                     Click="OnToggleMyPc"
                                     Content="▾" />
                             </StackPanel>
@@ -162,12 +187,12 @@
                                     <StackPanel Padding="4" Spacing="2">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
                                             <TextBlock Text="{x:Bind Icon}" />
-                                            <TextBlock Text="{x:Bind Name}" TextWrapping="NoWrap" Foreground="{StaticResource SfTextPrimaryBrush}" />
-                                            <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="{StaticResource SfTextMutedBrush}" />
+                                            <TextBlock Text="{x:Bind Name}" TextWrapping="NoWrap" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                            <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="{ThemeResource SfTextMutedBrush}" />
                                         </StackPanel>
                                         <TextBlock
                                             FontSize="11"
-                                            Foreground="{StaticResource SfTextMutedBrush}"
+                                            Foreground="{ThemeResource SfTextMutedBrush}"
                                             Text="{x:Bind Description}"
                                             TextWrapping="Wrap" />
                                     </StackPanel>
@@ -179,7 +204,16 @@
             </ScrollViewer>
         </Grid>
 
-        <Grid Grid.Column="1">
+        <Border
+            x:Name="SidebarDivider"
+            Grid.Column="1"
+            Background="{ThemeResource SfBorderBrush}"
+            AutomationProperties.Name="Resize sidebar"
+            PointerPressed="OnSidebarDividerPressed"
+            PointerMoved="OnSidebarDividerMoved"
+            PointerReleased="OnSidebarDividerReleased" />
+
+        <Grid Grid.Column="2">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -195,7 +229,7 @@
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="320" />
+                    <ColumnDefinition x:Name="PreviewColumn" Width="320" />
                 </Grid.ColumnDefinitions>
 
                 <Grid x:Name="PanesGrid" Grid.Column="0">
@@ -208,7 +242,7 @@
                 <Grid
                     x:Name="PrimaryPaneRoot"
                     Grid.Column="0"
-                    BorderBrush="{StaticResource SfAccentBrush}"
+                    BorderBrush="{ThemeResource SfAccentBrush}"
                     BorderThickness="0"
                     PointerPressed="OnPrimaryPanePressed">
                     <Grid.RowDefinitions>
@@ -230,11 +264,11 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <Button x:Name="PrimaryBackButton" Click="OnPrimaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
-                            <Button x:Name="PrimaryForwardButton" Click="OnPrimaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
-                            <Button x:Name="PrimaryUpButton" Click="OnPrimaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
+                            <Button x:Name="PrimaryBackButton" AutomationProperties.Name="Go back" Click="OnPrimaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
+                            <Button x:Name="PrimaryForwardButton" AutomationProperties.Name="Go forward" Click="OnPrimaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
+                            <Button x:Name="PrimaryUpButton" AutomationProperties.Name="Go up" Click="OnPrimaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
                         </StackPanel>
-                        <Grid x:Name="PrimaryPathBar" Grid.Column="1" Background="{StaticResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
+                        <Grid x:Name="PrimaryPathBar" Grid.Column="1" Background="{ThemeResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
                             <ScrollViewer x:Name="PrimaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                                 <StackPanel x:Name="PrimaryBreadcrumbHost" Orientation="Horizontal" />
                             </ScrollViewer>
@@ -275,61 +309,63 @@
                             </DropDownButton>
                         </StackPanel>
                     </Grid>
-                    <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
+                    <Grid x:Name="PrimaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="100" />
-                            <ColumnDefinition Width="160" />
-                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition x:Name="PrimaryNameCol" Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition x:Name="PrimarySizeCol" Width="100" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition x:Name="PrimaryDateCol" Width="160" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition x:Name="PrimaryTypeCol" Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortName" Content="Name" />
-                        <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortSize" Content="Size" />
-                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortDate" Content="Modified" />
-                        <Button Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortType" Content="Type" />
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
+                        <Border Grid.Column="1" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name" />
+                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
+                        <Border Grid.Column="3" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size" />
+                        <Button Grid.Column="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
+                        <Border Grid.Column="5" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date" />
+                        <Button Grid.Column="6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
                     </Grid>
-                    <ListView
-                        x:Name="PrimaryFileList"
-                        Grid.Row="3"
-                        IsItemClickEnabled="True"
-                        ItemClick="OnPrimaryFileClick"
-                        DoubleTapped="OnPrimaryFileDoubleTapped"
-                        KeyDown="OnPrimaryFileKeyDown"
-                        SelectionChanged="OnPrimarySelectionChanged"
-                        SelectionMode="Multiple">
-                        <ListView.ContextFlyout>
-                            <MenuFlyout>
-                                <MenuFlyoutSeparator />
-                                <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
-                                <MenuFlyoutItem Text="Compress to Archive" Click="OnCreateArchiveClicked" />
-                                <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
-                            </MenuFlyout>
-                        </ListView.ContextFlyout>
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="local:FileRow">
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="100" />
-                                        <ColumnDefinition Width="160" />
-                                        <ColumnDefinition Width="100" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind Icon}" />
-                                        <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                                    <TextBlock Grid.Column="2" Text="{x:Bind ModifiedText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                                    <TextBlock Grid.Column="3" Text="{x:Bind TypeText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                    <Grid Grid.Row="3">
+                        <ListView
+                            x:Name="PrimaryFileList"
+                            AllowDrop="True"
+                            CanDragItems="True"
+                            AutomationProperties.Name="Left pane files"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnPrimaryFileClick"
+                            DoubleTapped="OnPrimaryFileDoubleTapped"
+                            KeyDown="OnPrimaryFileKeyDown"
+                            SelectionChanged="OnPrimarySelectionChanged"
+                            SelectionMode="Multiple"
+                            DragItemsStarting="OnFileDragItemsStarting"
+                            DragOver="OnPrimaryFileDragOver"
+                            Drop="OnPrimaryFileDrop"
+                            DragLeave="OnFileDragLeave">
+                            <ListView.ContextFlyout>
+                                <MenuFlyout Opening="OnFileListContextOpening" />
+                            </ListView.ContextFlyout>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileRow">
+                                    <local:FileRowView Row="{x:Bind}" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock
+                            x:Name="PrimaryEmptyText"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource SfTextMutedBrush}"
+                            Text="This folder is empty"
+                            Visibility="Collapsed" />
+                    </Grid>
                 </Grid>
 
                 <Border
                     x:Name="PaneDivider"
                     Grid.Column="1"
-                    Background="{StaticResource SfBorderBrush}"
+                    Background="{ThemeResource SfBorderBrush}"
                     PointerPressed="OnDividerPressed"
                     PointerMoved="OnDividerMoved"
                     PointerReleased="OnDividerReleased"
@@ -338,7 +374,7 @@
                 <Grid
                     x:Name="SecondaryPaneRoot"
                     Grid.Column="2"
-                    BorderBrush="{StaticResource SfAccentBrush}"
+                    BorderBrush="{ThemeResource SfAccentBrush}"
                     BorderThickness="0"
                     PointerPressed="OnSecondaryPanePressed"
                     Visibility="Collapsed">
@@ -361,11 +397,11 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal" Spacing="4">
-                            <Button x:Name="SecondaryBackButton" Click="OnSecondaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
-                            <Button x:Name="SecondaryForwardButton" Click="OnSecondaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
-                            <Button x:Name="SecondaryUpButton" Click="OnSecondaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
+                            <Button x:Name="SecondaryBackButton" AutomationProperties.Name="Go back" Click="OnSecondaryBack" Content="◀" ToolTipService.ToolTip="Go Back" />
+                            <Button x:Name="SecondaryForwardButton" AutomationProperties.Name="Go forward" Click="OnSecondaryForward" Content="▶" ToolTipService.ToolTip="Go Forward" />
+                            <Button x:Name="SecondaryUpButton" AutomationProperties.Name="Go up" Click="OnSecondaryUp" Content="▲" ToolTipService.ToolTip="Go Up" />
                         </StackPanel>
-                        <Grid Grid.Column="1" Background="{StaticResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
+                        <Grid Grid.Column="1" Background="{ThemeResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
                             <ScrollViewer x:Name="SecondaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                                 <StackPanel x:Name="SecondaryBreadcrumbHost" Orientation="Horizontal" />
                             </ScrollViewer>
@@ -406,55 +442,57 @@
                             </DropDownButton>
                         </StackPanel>
                     </Grid>
-                    <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
+                    <Grid x:Name="SecondaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="100" />
-                            <ColumnDefinition Width="160" />
-                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition x:Name="SecondaryNameCol" Width="*" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition x:Name="SecondarySizeCol" Width="100" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition x:Name="SecondaryDateCol" Width="160" />
+                            <ColumnDefinition Width="6" />
+                            <ColumnDefinition x:Name="SecondaryTypeCol" Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortName" Content="Name" />
-                        <Button Grid.Column="1" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortSize" Content="Size" />
-                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortDate" Content="Modified" />
-                        <Button Grid.Column="3" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Click="OnSortType" Content="Type" />
+                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
+                        <Border Grid.Column="1" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name" />
+                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
+                        <Border Grid.Column="3" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size" />
+                        <Button Grid.Column="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
+                        <Border Grid.Column="5" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date" />
+                        <Button Grid.Column="6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
                     </Grid>
-                    <ListView
-                        x:Name="SecondaryFileList"
-                        Grid.Row="3"
-                        IsItemClickEnabled="True"
-                        ItemClick="OnSecondaryFileClick"
-                        DoubleTapped="OnSecondaryFileDoubleTapped"
-                        KeyDown="OnSecondaryFileKeyDown"
-                        SelectionChanged="OnSecondarySelectionChanged"
-                        SelectionMode="Multiple">
-                        <ListView.ContextFlyout>
-                            <MenuFlyout>
-                                <MenuFlyoutSeparator />
-                                <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
-                                <MenuFlyoutItem Text="Compress to Archive" Click="OnCreateArchiveClicked" />
-                                <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
-                            </MenuFlyout>
-                        </ListView.ContextFlyout>
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="local:FileRow">
-                                <Grid ColumnSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="100" />
-                                        <ColumnDefinition Width="160" />
-                                        <ColumnDefinition Width="100" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind Icon}" />
-                                        <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" ToolTipService.ToolTip="{x:Bind Name}" />
-                                    </StackPanel>
-                                    <TextBlock Grid.Column="1" Text="{x:Bind SizeText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                                    <TextBlock Grid.Column="2" Text="{x:Bind ModifiedText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                                    <TextBlock Grid.Column="3" Text="{x:Bind TypeText}" Foreground="{StaticResource SfTextMutedBrush}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                    <Grid Grid.Row="3">
+                        <ListView
+                            x:Name="SecondaryFileList"
+                            AllowDrop="True"
+                            CanDragItems="True"
+                            AutomationProperties.Name="Right pane files"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnSecondaryFileClick"
+                            DoubleTapped="OnSecondaryFileDoubleTapped"
+                            KeyDown="OnSecondaryFileKeyDown"
+                            SelectionChanged="OnSecondarySelectionChanged"
+                            SelectionMode="Multiple"
+                            DragItemsStarting="OnFileDragItemsStarting"
+                            DragOver="OnSecondaryFileDragOver"
+                            Drop="OnSecondaryFileDrop"
+                            DragLeave="OnFileDragLeave">
+                            <ListView.ContextFlyout>
+                                <MenuFlyout Opening="OnFileListContextOpening" />
+                            </ListView.ContextFlyout>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileRow">
+                                    <local:FileRowView Row="{x:Bind}" />
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock
+                            x:Name="SecondaryEmptyText"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource SfTextMutedBrush}"
+                            Text="This folder is empty"
+                            Visibility="Collapsed" />
+                    </Grid>
                 </Grid>
 
                 </Grid>
@@ -462,8 +500,8 @@
                 <Border
                     x:Name="PreviewPane"
                     Grid.Column="1"
-                    Background="{StaticResource SfBgSecondaryBrush}"
-                    BorderBrush="{StaticResource SfBorderBrush}"
+                    Background="{ThemeResource SfBgSecondaryBrush}"
+                    BorderBrush="{ThemeResource SfBorderBrush}"
                     BorderThickness="1,0,0,0"
                     Padding="12">
                     <Grid>
@@ -472,16 +510,25 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <StackPanel Spacing="8">
-                            <TextBlock
-                                x:Name="PreviewTitle"
-                                FontSize="16"
-                                FontWeight="SemiBold"
-                                Foreground="{StaticResource SfTextPrimaryBrush}"
-                                Text="Preview" />
+                            <Grid>
+                                <TextBlock
+                                    x:Name="PreviewTitle"
+                                    FontSize="16"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource SfTextPrimaryBrush}"
+                                    Text="Preview" />
+                                <Button
+                                    HorizontalAlignment="Right"
+                                    Padding="6,2"
+                                    AutomationProperties.Name="Hide preview pane"
+                                    Click="OnTogglePreview"
+                                    Content="✕"
+                                    ToolTipService.ToolTip="Hide preview pane" />
+                            </Grid>
                             <TextBlock
                                 x:Name="PreviewSubtitle"
                                 FontSize="12"
-                                Foreground="{StaticResource SfTextMutedBrush}"
+                                Foreground="{ThemeResource SfTextMutedBrush}"
                                 Text="Select a file" />
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <Button
@@ -528,13 +575,13 @@
                                     Visibility="Collapsed" />
                                 <TextBlock
                                     x:Name="PreviewEmptyText"
-                                    Foreground="{StaticResource SfTextMutedBrush}"
+                                    Foreground="{ThemeResource SfTextMutedBrush}"
                                     Text="No preview loaded."
                                     TextWrapping="Wrap" />
                                 <TextBlock
                                     FontSize="12"
                                     FontWeight="SemiBold"
-                                    Foreground="{StaticResource SfTextPrimaryBrush}"
+                                    Foreground="{ThemeResource SfTextPrimaryBrush}"
                                     Text="Metadata" />
                                 <StackPanel x:Name="PreviewMetadataRows" Spacing="4" />
                                 <Button
@@ -547,7 +594,7 @@
                                     x:Name="PreviewChecksumText"
                                     FontFamily="Consolas"
                                     FontSize="11"
-                                    Foreground="{StaticResource SfTextMutedBrush}"
+                                    Foreground="{ThemeResource SfTextMutedBrush}"
                                     TextWrapping="Wrap" />
                             </StackPanel>
                         </ScrollViewer>
@@ -560,10 +607,82 @@
                 Grid.Row="1"
                 Visibility="Collapsed" />
 
-            <Grid Grid.Row="2" Padding="12,6" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,0">
-                <TextBlock x:Name="StatusText" Foreground="{StaticResource SfTextMutedBrush}" Text="Starting simplefile-service…" />
-                <TextBlock x:Name="CountText" HorizontalAlignment="Right" Foreground="{StaticResource SfTextMutedBrush}" />
+            <Grid Grid.Row="2" Padding="12,6" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Foreground="{ThemeResource SfTextMutedBrush}" Text="Starting simplefile-service…" TextTrimming="CharacterEllipsis" />
+                <Button
+                    x:Name="PreviewToggleButton"
+                    Grid.Column="1"
+                    Margin="8,0"
+                    Padding="8,2"
+                    AutomationProperties.Name="Toggle preview pane"
+                    Click="OnTogglePreview"
+                    Content="Preview"
+                    ToolTipService.ToolTip="Toggle preview pane" />
+                <TextBlock x:Name="CountText" Grid.Column="2" Foreground="{ThemeResource SfTextMutedBrush}" />
             </Grid>
+        </Grid>
+
+        <Grid
+            x:Name="CommandPaletteOverlay"
+            Grid.ColumnSpan="3"
+            Background="#99000000"
+            Visibility="Collapsed"
+            PointerPressed="OnCommandPaletteOverlayPressed">
+            <Border
+                Width="560"
+                MaxHeight="420"
+                Margin="0,72,0,0"
+                Padding="12"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="{ThemeResource SfBgSecondaryBrush}"
+                BorderBrush="{ThemeResource SfBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                PointerPressed="OnCommandPaletteInnerPressed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBox
+                        x:Name="CommandPaletteInput"
+                        AutomationProperties.Name="Command palette"
+                        PlaceholderText="Type a command..."
+                        TextChanged="OnCommandPaletteTextChanged"
+                        KeyDown="OnCommandPaletteKeyDown" />
+                    <ListView
+                        x:Name="CommandPaletteList"
+                        Grid.Row="1"
+                        Margin="0,8,0,0"
+                        AutomationProperties.Name="Commands"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnCommandPaletteItemClick"
+                        SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="core:AppCommand">
+                                <Grid Padding="4" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind Label}" Foreground="{ThemeResource SfTextPrimaryBrush}" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        FontSize="12"
+                                        Foreground="{ThemeResource SfTextMutedBrush}"
+                                        Text="{x:Bind Shortcut}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>

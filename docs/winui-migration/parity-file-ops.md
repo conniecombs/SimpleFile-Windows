@@ -27,8 +27,8 @@ and the WinUI 3 native app.
 | Keyboard shortcuts | ✅ | ✅ | F2, Del, Shift+Del, Ctrl+C/X/V/N |
 | Archive-aware ops | ✅ | ❌ | Deferred to Archives phase |
 | Undo/redo stack | ❌ | ❌ | No centralized undo in either |
-| Clipboard cut visual | ✅ | ❌ | Svelte dims cut items; WinUI pending |
-| Drag and drop | ✅ | ❌ | Deferred |
+| Clipboard cut visual | ✅ | ✅ | Cut items dim in the file list |
+| Drag and drop | ✅ | ✅ | Internal move/copy + external StorageItems copy |
 
 ## Architecture
 

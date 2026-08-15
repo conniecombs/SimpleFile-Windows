@@ -37,6 +37,9 @@ public sealed class ExplorerWorkspace
         _backend = backend;
         FileOps = fileOps;
         Clipboard = new ClipboardState();
+        Undo = new UndoStack();
+        Columns = new ColumnLayout();
+        Settings = UiSettings.CreateDefault();
         Primary = new ExplorerPane(PaneId.Primary);
         Secondary = new ExplorerPane(PaneId.Secondary);
     }
@@ -45,6 +48,9 @@ public sealed class ExplorerWorkspace
 
     public FileOperationService? FileOps { get; }
     public ClipboardState Clipboard { get; }
+    public UndoStack Undo { get; }
+    public ColumnLayout Columns { get; }
+    public UiSettings Settings { get; private set; }
     public ExplorerPane Primary { get; }
     public ExplorerPane Secondary { get; }
 
@@ -113,8 +119,64 @@ public sealed class ExplorerWorkspace
 
         await LoadSmartFoldersAsync().ConfigureAwait(false);
         await LoadTagsAsync().ConfigureAwait(false);
-        await NavigatePaneAsync(PaneId.Primary, HomePath, HistoryMode.Push, activate: false, cancellationToken)
+        await LoadUiSettingsAsync(cancellationToken).ConfigureAwait(false);
+
+        if (await TryRestoreWorkspaceLayoutAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        var startPath = ResolveStartPath();
+        await NavigatePaneAsync(PaneId.Primary, startPath, HistoryMode.Push, activate: false, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public string ResolveStartPath()
+    {
+        var mode = UiSettings.NormalizeStartLocation(Settings.StartLocation);
+        if (mode == "custom" && !string.IsNullOrWhiteSpace(Settings.CustomPath))
+        {
+            return Settings.CustomPath.Trim();
+        }
+
+        if (mode == "last" && !string.IsNullOrWhiteSpace(Settings.LastPath))
+        {
+            return Settings.LastPath.Trim();
+        }
+
+        return string.IsNullOrEmpty(HomePath) ? Primary.Path : HomePath;
+    }
+
+    public void ApplyUiSettings(UiSettings settings)
+    {
+        Settings = settings;
+        ShowHiddenFiles = settings.ShowHidden;
+        Columns.ApplyPreset(string.IsNullOrWhiteSpace(settings.ColumnPreset) ? "default" : settings.ColumnPreset);
+        Columns.RestoreWidths(settings.ColumnWidths);
+        RaiseChanged();
+    }
+
+    public void SetShowHidden(bool showHidden)
+    {
+        ShowHiddenFiles = showHidden;
+        Settings.ShowHidden = showHidden;
+        RaiseChanged();
+    }
+
+    public ExplorerPane OtherPane()
+    {
+        return ActivePane == PaneId.Secondary ? Primary : Secondary;
+    }
+
+    public string? OtherPanePath()
+    {
+        if (!DualPaneEnabled)
+        {
+            return null;
+        }
+
+        var path = OtherPane().Path;
+        return string.IsNullOrWhiteSpace(path) ? null : path;
     }
 
     public async Task RefreshDrivesAsync(bool quiet = false, CancellationToken cancellationToken = default)
@@ -907,6 +969,263 @@ public sealed class ExplorerWorkspace
     public async Task RevealInFolderAsync(string path)
     {
         await RequireFileOps().RevealInFolderAsync(path).ConfigureAwait(false);
+    }
+
+    public WorkspaceLayout CaptureLayout()
+    {
+        return new WorkspaceLayout
+        {
+            DualPaneEnabled = DualPaneEnabled,
+            ActivePane = ActivePane,
+            SortBy = SortBy,
+            SortAscending = SortAscending,
+            Primary = CapturePane(Primary),
+            Secondary = CapturePane(Secondary),
+        };
+    }
+
+    public async Task ApplyLayoutAsync(WorkspaceLayout layout, CancellationToken cancellationToken = default)
+    {
+        DualPaneEnabled = layout.DualPaneEnabled;
+        SortBy = string.IsNullOrWhiteSpace(layout.SortBy) ? "name" : layout.SortBy;
+        SortAscending = layout.SortAscending;
+        RestorePaneTabs(Primary, layout.Primary);
+        RestorePaneTabs(Secondary, layout.Secondary);
+
+        var primaryPath = string.IsNullOrWhiteSpace(layout.Primary.Path) ? HomePath : layout.Primary.Path;
+        if (!string.IsNullOrWhiteSpace(primaryPath))
+        {
+            await NavigatePaneAsync(PaneId.Primary, primaryPath, HistoryMode.ReplaceCurrent, activate: false, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (DualPaneEnabled && !string.IsNullOrWhiteSpace(layout.Secondary.Path))
+        {
+            await NavigatePaneAsync(PaneId.Secondary, layout.Secondary.Path, HistoryMode.ReplaceCurrent, activate: false, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (DualPaneEnabled)
+        {
+            ActivatePane(layout.ActivePane);
+        }
+        else
+        {
+            ActivatePane(PaneId.Primary);
+        }
+    }
+
+    public async Task SaveWorkspaceLayoutAsync(CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null)
+        {
+            return;
+        }
+
+        var json = System.Text.Json.JsonSerializer.Serialize(CaptureLayout());
+        await FileOps.SetSettingAsync(WorkspaceLayout.SettingsKey, json, cancellationToken).ConfigureAwait(false);
+        Settings.LastPath = Active.Path;
+        await FileOps.SetSettingAsync("lastPath", Settings.LastPath, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> TryRestoreWorkspaceLayoutAsync(CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var json = await FileOps.GetSettingAsync(WorkspaceLayout.SettingsKey, cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return false;
+            }
+
+            var layout = System.Text.Json.JsonSerializer.Deserialize<WorkspaceLayout>(json);
+            if (layout is null || string.IsNullOrWhiteSpace(layout.Primary.Path))
+            {
+                return false;
+            }
+
+            await ApplyLayoutAsync(layout, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task SaveUiSettingsAsync(CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null)
+        {
+            return;
+        }
+
+        Settings.ShowHidden = ShowHiddenFiles;
+        Settings.ColumnWidths = Columns.SnapshotWidths();
+        await FileOps.SetSettingAsync("theme", Settings.Theme, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("showHidden", Settings.ShowHidden ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("useTrash", Settings.UseTrash ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("confirmDelete", Settings.ConfirmDelete ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("startLocation", Settings.StartLocation, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("customPath", Settings.CustomPath, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("openInNewTab", Settings.OpenInNewTab ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("enableGitIntegration", Settings.EnableGitIntegration ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("previewVisible", Settings.PreviewVisible ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.quickAccessCollapsed", Settings.QuickAccessCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.myPcCollapsed", Settings.MyPcCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("lastPath", Settings.LastPath, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task CopyOrMoveToOtherPaneAsync(string[] sources, bool move, string conflictAction = "keep-both", CancellationToken cancellationToken = default)
+    {
+        var destination = OtherPanePath();
+        if (destination is null || sources.Length == 0 || FileOps is null)
+        {
+            return;
+        }
+
+        if (move)
+        {
+            var results = await FileOps.MoveAsync(sources, destination, conflictAction, ct: cancellationToken).ConfigureAwait(false);
+            Undo.PushMove(results, FileOps);
+        }
+        else
+        {
+            var results = await FileOps.CopyAsync(sources, destination, conflictAction, ct: cancellationToken).ConfigureAwait(false);
+            Undo.PushCopy(results, FileOps);
+        }
+
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
+        if (DualPaneEnabled)
+        {
+            await NavigatePaneAsync(OtherPane().Id, destination, HistoryMode.None, activate: false, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    public async Task PackIntoFolderAsync(string[] sources, string folderName, CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null || sources.Length == 0 || string.IsNullOrWhiteSpace(folderName))
+        {
+            return;
+        }
+
+        var created = await FileOps.CreateFolderAsync(Active.Path, folderName, cancellationToken).ConfigureAwait(false);
+        await FileOps.MoveAsync(sources, created, "keep-both", ct: cancellationToken).ConfigureAwait(false);
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task UnpackFolderAsync(string folderPath, CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null || string.IsNullOrWhiteSpace(folderPath))
+        {
+            return;
+        }
+
+        var listing = await _backend.ListDirectoryAsync(folderPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var parent = PathRules.GetParentPath(folderPath);
+        if (parent is null)
+        {
+            return;
+        }
+
+        var children = listing.Entries.Select(entry => entry.Path).ToArray();
+        if (children.Length > 0)
+        {
+            await FileOps.MoveAsync(children, parent, "keep-both", ct: cancellationToken).ConfigureAwait(false);
+        }
+
+        await FileOps.DeleteAsync(folderPath, cancellationToken).ConfigureAwait(false);
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task LoadUiSettingsAsync(CancellationToken cancellationToken)
+    {
+        if (FileOps is null)
+        {
+            return;
+        }
+
+        try
+        {
+            Settings.Theme = UiSettings.NormalizeTheme(await FileOps.GetSettingAsync("theme", cancellationToken).ConfigureAwait(false));
+            Settings.ShowHidden = await ReadBoolSettingAsync("showHidden", false, cancellationToken).ConfigureAwait(false);
+            Settings.UseTrash = await ReadBoolSettingAsync("useTrash", true, cancellationToken).ConfigureAwait(false);
+            Settings.ConfirmDelete = await ReadBoolSettingAsync("confirmDelete", true, cancellationToken).ConfigureAwait(false);
+            Settings.StartLocation = UiSettings.NormalizeStartLocation(
+                await FileOps.GetSettingAsync("startLocation", cancellationToken).ConfigureAwait(false));
+            Settings.CustomPath = await FileOps.GetSettingAsync("customPath", cancellationToken).ConfigureAwait(false) ?? "";
+            Settings.LastPath = await FileOps.GetSettingAsync("lastPath", cancellationToken).ConfigureAwait(false) ?? "";
+            Settings.OpenInNewTab = await ReadBoolSettingAsync("openInNewTab", false, cancellationToken).ConfigureAwait(false);
+            Settings.EnableGitIntegration = await ReadBoolSettingAsync("enableGitIntegration", true, cancellationToken).ConfigureAwait(false);
+            Settings.PreviewVisible = await ReadBoolSettingAsync("previewVisible", true, cancellationToken).ConfigureAwait(false);
+            Settings.QuickAccessCollapsed = await ReadBoolSettingAsync("sidebar.quickAccessCollapsed", false, cancellationToken).ConfigureAwait(false);
+            Settings.MyPcCollapsed = await ReadBoolSettingAsync("sidebar.myPcCollapsed", false, cancellationToken).ConfigureAwait(false);
+            ShowHiddenFiles = Settings.ShowHidden;
+        }
+        catch
+        {
+            // Missing keys or a stub IPC keep defaults.
+        }
+    }
+
+    private async Task<bool> ReadBoolSettingAsync(string key, bool fallback, CancellationToken cancellationToken)
+    {
+        var raw = await FileOps!.GetSettingAsync(key, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return fallback;
+        }
+
+        return raw.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static WorkspacePaneLayout CapturePane(ExplorerPane pane)
+    {
+        return new WorkspacePaneLayout
+        {
+            Path = pane.Path,
+            ActiveTabId = pane.ActiveTabId,
+            Tabs = pane.Tabs.Select(tab => new WorkspaceTabLayout
+            {
+                Id = tab.Id,
+                Path = tab.Path,
+                Title = tab.Title,
+                History = [.. tab.History],
+                HistoryIndex = tab.HistoryIndex,
+            }).ToList(),
+        };
+    }
+
+    private static void RestorePaneTabs(ExplorerPane pane, WorkspacePaneLayout layout)
+    {
+        pane.Tabs.Clear();
+        foreach (var tab in layout.Tabs)
+        {
+            pane.Tabs.Add(new FileTab
+            {
+                Id = string.IsNullOrEmpty(tab.Id) ? ExplorerPane.CreateTab(tab.Path).Id : tab.Id,
+                Path = tab.Path,
+                Title = string.IsNullOrEmpty(tab.Title) ? PathRules.Basename(tab.Path) : tab.Title,
+                History = tab.History.Count > 0 ? [.. tab.History] : [tab.Path],
+                HistoryIndex = tab.HistoryIndex,
+            });
+        }
+
+        pane.ActiveTabId = layout.ActiveTabId;
+        if (pane.ActiveTabId is not null)
+        {
+            var active = pane.Tabs.FirstOrDefault(tab => tab.Id == pane.ActiveTabId);
+            if (active is not null)
+            {
+                pane.ApplyTabHistory(active);
+            }
+        }
     }
 }
 

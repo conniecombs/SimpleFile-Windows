@@ -144,6 +144,45 @@ public sealed class FileOperationService
         await _ipc.UnwatchDirectoryAsync(ct).ConfigureAwait(false);
     }
 
+    public Task<string> CopyEntryResolvedAsync(
+        string source,
+        string destination,
+        string conflictAction,
+        CancellationToken ct = default)
+    {
+        return _ipc.CopyEntryResolvedAsync(source, destination, conflictAction, ct);
+    }
+
+    public Task<string> MoveEntryResolvedAsync(
+        string source,
+        string destination,
+        string conflictAction,
+        CancellationToken ct = default)
+    {
+        return _ipc.MoveEntryResolvedAsync(source, destination, conflictAction, ct);
+    }
+
+    public Task<FileEntry> GetEntryInfoAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.GetEntryInfoAsync(path, ct);
+    }
+
+    public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.CalculateFolderSizeAsync(path, ct);
+    }
+
+    public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.CountFolderItemsAsync(path, ct);
+    }
+
+    public Task GitPullAsync(string path, CancellationToken ct = default) => _ipc.GitPullAsync(path, ct);
+
+    public Task GitPushAsync(string path, CancellationToken ct = default) => _ipc.GitPushAsync(path, ct);
+
+    public Task<GitStatus> GetGitStatusAsync(string path, CancellationToken ct = default) => _ipc.GetGitStatusAsync(path, ct);
+
     // Open a file in the default application.
     public async Task OpenFileAsync(string path, CancellationToken ct = default)
     {

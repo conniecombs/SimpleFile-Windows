@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -43,7 +44,32 @@ public sealed partial class SettingsDialog : ContentDialog
 
     private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
     {
-        // Simple filter placeholder
+        var query = SearchBox.Text.Trim();
+        foreach (var item in CategoryList.Items.OfType<ListViewItem>())
+        {
+            var label = item.Content?.ToString() ?? "";
+            item.Visibility = query.Length == 0 || label.Contains(query, StringComparison.OrdinalIgnoreCase)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
+    public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "Dark";
+    public bool ShowHidden => ShowHiddenSwitch.IsOn;
+    public nint OwnerHwnd { get; set; }
+
+    public void ApplyTo(UiSettings settings)
+    {
+        settings.Theme = UiSettings.NormalizeTheme(Theme);
+        settings.ShowHidden = ShowHiddenSwitch.IsOn;
+        settings.UseTrash = UseTrashSwitch.IsOn;
+        settings.ConfirmDelete = ConfirmDeleteSwitch.IsOn;
+        settings.StartLocation = UiSettings.NormalizeStartLocation(
+            ((ComboBoxItem?)StartLocationComboBox.SelectedItem)?.Tag?.ToString());
+        settings.CustomPath = CustomPathBox.Text.Trim();
+        settings.OpenInNewTab = OpenInNewTabSwitch.IsOn;
+        settings.EnableGitIntegration = EnableGitSwitch.IsOn;
+        settings.ShowFolderSizes = ShowFolderSizesSwitch.IsOn;
     }
 
     public async Task LoadSettingsAsync(FileOperationService fileOps)
@@ -70,6 +96,11 @@ public sealed partial class SettingsDialog : ContentDialog
         var openInNewTab = await fileOps.GetSettingAsync("openInNewTab").ConfigureAwait(false);
         OpenInNewTabSwitch.IsOn = openInNewTab == "true";
 
+        var enableGit = await fileOps.GetSettingAsync("enableGitIntegration").ConfigureAwait(false);
+        EnableGitSwitch.IsOn = enableGit != "false";
+        var showSizes = await fileOps.GetSettingAsync("showFolderSizes").ConfigureAwait(false);
+        ShowFolderSizesSwitch.IsOn = showSizes == "true";
+
         // Tools
         await CheckRarInstalledAsync().ConfigureAwait(true);
         
@@ -90,6 +121,8 @@ public sealed partial class SettingsDialog : ContentDialog
         await fileOps.SetSettingAsync("startLocation", startLoc).ConfigureAwait(false);
         await fileOps.SetSettingAsync("customPath", CustomPathBox.Text).ConfigureAwait(false);
         await fileOps.SetSettingAsync("openInNewTab", OpenInNewTabSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
+        await fileOps.SetSettingAsync("enableGitIntegration", EnableGitSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
+        await fileOps.SetSettingAsync("showFolderSizes", ShowFolderSizesSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
     }
 
     private async Task CheckRarInstalledAsync()
@@ -156,8 +189,19 @@ public sealed partial class SettingsDialog : ContentDialog
         await _fileOps.InstallUpdateAsync().ConfigureAwait(true);
     }
 
-    private void OnBrowseCustomPath(object sender, RoutedEventArgs e)
+    private async void OnBrowseCustomPath(object sender, RoutedEventArgs e)
     {
-        // Simple logic or skip for now since it needs folder picker on Window
+        var picker = new FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        if (OwnerHwnd != 0)
+        {
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, OwnerHwnd);
+        }
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is not null)
+        {
+            CustomPathBox.Text = folder.Path;
+        }
     }
 }

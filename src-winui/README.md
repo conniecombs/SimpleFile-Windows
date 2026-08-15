@@ -11,7 +11,7 @@ The existing Svelte/Tauri app remains the shipping UI. See `docs/winui-migration
 - `SimpleFile.Core.ExplorerWorkspace` ports Svelte `loadDirectory` / history / `getParentPath` / Quick Access / drive status.
 - `SimpleFile.App` shows a dark explorer chrome: sidebar (Quick Access + My PC), dual pane (F6), pane-local tabs, back/forward/up, breadcrumbs, path edit, list columns.
 
-Partially ported: archive browse/list/create/extract plus archive-entry preview/open/checksum/metadata/compare now use the Rust IPC service. Settings key/value IPC is wired through the Rust metadata database, and the WinUI workspace restores pane/tab layout on startup. Not ported yet: tree expand, tags, full settings dialog parity, and the full archive dialog chrome. Transfers, watcher refresh, and basic search now use IPC-backed events; deeper UI parity remains incremental.
+Native chrome now includes a command palette (Ctrl+Shift+P), full Svelte context-menu IDs, drag/drop transfers, resizable columns, light/dark theme, empty/loading states, keyboard-help / Quick Look / properties modals, and AutomationProperties names on the main chrome. Workspace tabs, dual-pane, sort, sidebar collapse, and settings persist through the Rust settings IPC. Tree expand is still incremental.
 
 ## Projects
 
