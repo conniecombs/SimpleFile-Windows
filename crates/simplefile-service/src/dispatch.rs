@@ -9,6 +9,7 @@ use simplefile_ipc::{
     SHUTDOWN_METHOD,
 };
 use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -17,8 +18,11 @@ pub struct SessionState {
     pub handshake_done: bool,
     pub expected_token: Option<String>,
     pub shutdown: bool,
+    pub duplicate_check_cancel: Arc<AtomicBool>,
+    pub disk_cleanup_cancel: Arc<AtomicBool>,
 }
 
+#[derive(Debug)]
 pub(crate) enum Dispatch {
     Reply(JsonRpcResponse),
     ListDirectory {
@@ -50,6 +54,25 @@ pub(crate) enum Dispatch {
         path: String,
     },
     UnwatchDirectory {
+        id: Option<Value>,
+    },
+    DuplicateCheck {
+        id: Option<Value>,
+        directory: String,
+        min_size: Option<u64>,
+        partial_hash_bytes: Option<u64>,
+        operation_id: Option<String>,
+    },
+    CancelDuplicateCheck {
+        id: Option<Value>,
+    },
+    DiskCleanup {
+        id: Option<Value>,
+        directory: String,
+        size_threshold: Option<u64>,
+        operation_id: Option<String>,
+    },
+    CancelDiskCleanup {
         id: Option<Value>,
     },
     Shutdown(JsonRpcResponse),
@@ -197,6 +220,26 @@ struct CreateArchiveParams {
     #[serde(rename = "archivePath")]
     archive_path: String,
     format: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DuplicateCheckParams {
+    directory: String,
+    #[serde(rename = "minSize")]
+    min_size: Option<u64>,
+    #[serde(rename = "partialHashBytes")]
+    partial_hash_bytes: Option<u64>,
+    #[serde(rename = "operationId")]
+    operation_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DiskCleanupParams {
+    directory: String,
+    #[serde(rename = "sizeThreshold")]
+    size_threshold: Option<u64>,
+    #[serde(rename = "operationId")]
+    operation_id: Option<String>,
 }
 
 pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Dispatch {
@@ -632,6 +675,31 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
         "unwatch_directory" => Dispatch::UnwatchDirectory {
             id: request.id.clone(),
         },
+        "duplicate_check" => match parse_params::<DuplicateCheckParams>(request) {
+            Ok(params) => Dispatch::DuplicateCheck {
+                id: request.id.clone(),
+                directory: params.directory,
+                min_size: params.min_size,
+                partial_hash_bytes: params.partial_hash_bytes,
+                operation_id: params.operation_id,
+            },
+            Err(response) => Dispatch::Reply(response),
+        },
+        "cancel_duplicate_check" => Dispatch::CancelDuplicateCheck {
+            id: request.id.clone(),
+        },
+        "disk_cleanup" => match parse_params::<DiskCleanupParams>(request) {
+            Ok(params) => Dispatch::DiskCleanup {
+                id: request.id.clone(),
+                directory: params.directory,
+                size_threshold: params.size_threshold,
+                operation_id: params.operation_id,
+            },
+            Err(response) => Dispatch::Reply(response),
+        },
+        "cancel_disk_cleanup" => Dispatch::CancelDiskCleanup {
+            id: request.id.clone(),
+        },
         _ => Dispatch::Reply(JsonRpcResponse::error(
             request.id.clone(),
             ERR_METHOD_NOT_FOUND,
@@ -791,6 +859,60 @@ mod tests {
         };
         let path = response.result.unwrap().as_str().unwrap().to_string();
         assert!(!path.is_empty());
+    }
+
+    #[test]
+    fn duplicate_check_and_cleanup_are_dispatched() {
+        let mut state = SessionState {
+            handshake_done: true,
+            ..SessionState::default()
+        };
+
+        let duplicate = dispatch(
+            &mut state,
+            &request(
+                "duplicate_check",
+                4,
+                json!({
+                    "directory": "C:\\",
+                    "minSize": 1,
+                    "operationId": "dup-1"
+                }),
+            ),
+        );
+        match duplicate {
+            Dispatch::DuplicateCheck {
+                directory,
+                min_size,
+                operation_id,
+                ..
+            } => {
+                assert_eq!(directory, "C:\\");
+                assert_eq!(min_size, Some(1));
+                assert_eq!(operation_id.as_deref(), Some("dup-1"));
+            }
+            other => panic!("expected DuplicateCheck, got {other:?}"),
+        }
+
+        let cancel = dispatch(
+            &mut state,
+            &request("cancel_duplicate_check", 5, json!({})),
+        );
+        assert!(matches!(cancel, Dispatch::CancelDuplicateCheck { .. }));
+
+        let cleanup = dispatch(
+            &mut state,
+            &request(
+                "disk_cleanup",
+                6,
+                json!({
+                    "directory": "C:\\",
+                    "sizeThreshold": 100,
+                    "operationId": "clean-1"
+                }),
+            ),
+        );
+        assert!(matches!(cleanup, Dispatch::DiskCleanup { .. }));
     }
 
     #[test]

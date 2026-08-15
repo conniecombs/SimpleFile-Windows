@@ -62,9 +62,13 @@
       "source": "crates/simplefile-core/src/models.rs",
       "fields": ["hash", "files"]
     },
+    "CleanupFile": {
+      "source": "crates/simplefile-core/src/models.rs",
+      "fields": ["path", "size"]
+    },
     "CleanupResult": {
       "source": "crates/simplefile-core/src/models.rs",
-      "fields": ["large_files", "duplicates"]
+      "fields": ["large_files", "duplicates", "scanned_files"]
     },
     "DuplicateCheckFile": {
       "source": "crates/simplefile-core/src/models.rs",

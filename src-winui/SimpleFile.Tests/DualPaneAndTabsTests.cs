@@ -162,6 +162,63 @@ public class DualPaneAndTabsTests
     }
 
     [Fact]
+    public async Task ActivatePane_DoesNotRaiseWhenAlreadyActive()
+    {
+        var workspace = await Started();
+        var raises = 0;
+        workspace.Changed += (_, _) => raises++;
+
+        workspace.ActivatePane(PaneId.Primary);
+        workspace.ActivatePane(PaneId.Secondary);
+        Assert.Equal(0, raises);
+
+        await workspace.ToggleDualPaneAsync();
+        raises = 0;
+        workspace.ActivatePane(PaneId.Primary);
+        Assert.Equal(0, raises);
+        workspace.ActivatePane(PaneId.Secondary);
+        Assert.Equal(1, raises);
+        workspace.ActivatePane(PaneId.Secondary);
+        Assert.Equal(1, raises);
+    }
+
+    [Fact]
+    public async Task SelectPath_DoesNotRaiseForSelectionOnly()
+    {
+        var workspace = await Started();
+        var file = workspace.VisibleEntries.First(entry => !entry.IsDir);
+        var raises = 0;
+        workspace.Changed += (_, _) => raises++;
+
+        workspace.SelectPath(file.Path);
+        workspace.SelectPath(null);
+        workspace.SelectPath(file.Path, PaneId.Primary);
+        Assert.Equal(0, raises);
+        Assert.Equal(file.Path, workspace.SelectedPath);
+    }
+
+    [Fact]
+    public async Task Refresh_KeepsSelectionAndDoesNotClearListing()
+    {
+        var workspace = await Started();
+        var file = workspace.VisibleEntries.First(entry => !entry.IsDir);
+        workspace.SelectPath(file.Path);
+        var raises = 0;
+        workspace.Changed += (_, _) =>
+        {
+            raises++;
+            Assert.NotEmpty(workspace.VisibleEntries);
+            Assert.Equal(file.Path, workspace.SelectedPath);
+        };
+
+        await workspace.RefreshAsync();
+
+        Assert.True(raises >= 1);
+        Assert.Equal(file.Path, workspace.SelectedPath);
+        Assert.Contains(workspace.VisibleEntries, entry => entry.Path == file.Path);
+    }
+
+    [Fact]
     public async Task SwitchTabBy_Wraps()
     {
         var workspace = await Started();

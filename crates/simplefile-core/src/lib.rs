@@ -6,6 +6,7 @@
 
 pub mod archive;
 pub mod checksum;
+pub mod cleanup;
 pub mod compare;
 pub mod dir_list;
 pub mod drives;

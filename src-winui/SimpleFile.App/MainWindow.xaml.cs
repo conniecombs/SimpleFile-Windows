@@ -38,6 +38,8 @@ public sealed partial class MainWindow : Window
     private readonly List<SearchResult> _activeSearchResults = [];
     private int _previewToken;
     private string? _previewPath;
+    private bool _applyingWorkspace;
+    private int _folderRefreshToken;
 
     public ObservableCollection<FileRow> PrimaryFiles { get; } = [];
     public ObservableCollection<FileRow> SecondaryFiles { get; } = [];
@@ -123,6 +125,24 @@ public sealed partial class MainWindow : Window
 
     private void SyncFromWorkspace()
     {
+        if (_workspace is null || _applyingWorkspace)
+        {
+            return;
+        }
+
+        _applyingWorkspace = true;
+        try
+        {
+            SyncFromWorkspaceCore();
+        }
+        finally
+        {
+            _applyingWorkspace = false;
+        }
+    }
+
+    private void SyncFromWorkspaceCore()
+    {
         if (_workspace is null)
         {
             return;
@@ -135,27 +155,31 @@ public sealed partial class MainWindow : Window
             ClearSearchState();
         }
 
-        Replace(
+        ReplaceIfChanged(
             PrimaryFiles,
-            _searchMode && _searchPane == PaneId.Primary
+            (_searchMode && _searchPane == PaneId.Primary
                 ? _activeSearchResults.Select(SearchRowFrom)
-                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(entry => ToFileRow(entry)));
-        Replace(
+                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(ToFileRow)).ToList(),
+            SameFileRow);
+        ReplaceIfChanged(
             SecondaryFiles,
-            _searchMode && _searchPane == PaneId.Secondary
+            (_searchMode && _searchPane == PaneId.Secondary
                 ? _activeSearchResults.Select(SearchRowFrom)
-                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(entry => ToFileRow(entry)));
-        Replace(
+                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(ToFileRow)).ToList(),
+            SameFileRow);
+        ReplaceIfChanged(
             Drives,
-            _workspace.Drives.Select(drive => DriveRow.From(drive, _workspace.Pane(_workspace.SidebarTarget).Path)));
-        Replace(
+            _workspace.Drives.Select(drive => DriveRow.From(drive, _workspace.Pane(_workspace.SidebarTarget).Path)).ToList(),
+            SameDriveRow);
+        ReplaceIfChanged(
             QuickAccess,
             ExplorerWorkspace.QuickAccessLocations.Select(item => new QuickAccessRow
             {
                 Name = item.Name,
                 Icon = item.Icon,
                 Command = item.Command,
-            }));
+            }).ToList(),
+            SameQuickAccessRow);
 
         RebuildBreadcrumbs(PrimaryBreadcrumbHost, _workspace.Primary.Breadcrumbs, PaneId.Primary);
         RebuildBreadcrumbs(SecondaryBreadcrumbHost, _workspace.Secondary.Breadcrumbs, PaneId.Secondary);
@@ -174,9 +198,9 @@ public sealed partial class MainWindow : Window
         QuickAccessCollapseButton.Content = _quickAccessCollapsed ? "▸" : "▾";
         MyPcCollapseButton.Content = _myPcCollapsed ? "▸" : "▾";
         RefreshSmartFolders();
-        FolderTreeList.ItemsSource = _workspace.FolderTreeRows;
-        BookmarksList.ItemsSource = _workspace.Bookmarks;
-        RecentsList.ItemsSource = _workspace.RecentPaths;
+        BindItemsSource(FolderTreeList, _workspace.FolderTreeRows);
+        BindItemsSource(BookmarksList, _workspace.Bookmarks);
+        BindItemsSource(RecentsList, _workspace.RecentPaths);
         ApplyPreviewVisibility();
         ApplyColumnWidths();
         ApplyTheme(_workspace.Settings.Theme);
@@ -202,53 +226,7 @@ public sealed partial class MainWindow : Window
 
         SelectRow(PrimaryFileList, PrimaryFiles, _workspace.Primary.SelectedPath);
         SelectRow(SecondaryFileList, SecondaryFiles, _workspace.Secondary.SelectedPath);
-
-        var active = _workspace.Active;
-        var searchCount = _searchMode && _searchPane == _workspace.ActivePane
-            ? _activeSearchResults.Count
-            : (int?)null;
-        var visible = _workspace.VisibleEntriesFor(_workspace.ActivePane);
-        var count = searchCount ?? visible.Count;
-        var selectedEntries = ActiveSelectedRows
-            .Select(row => new FileEntry { Name = row.Name, Path = row.Path, IsDir = row.IsDir, Size = row.Size })
-            .ToList();
-        var snapshot = StatusBarFormatter.Format(
-            count,
-            selectedEntries,
-            active.Path,
-            _workspace.ActivePaneLabel,
-            listingInProgress: active.ListingInProgress,
-            isEmpty: count == 0 && !active.ListingInProgress && searchCount is null);
-        CountText.Text = searchCount is null
-            ? snapshot.Combined
-            : (count == 1 ? "1 search result" : $"{count} search results");
-        if (searchCount is not null && !string.IsNullOrEmpty(_workspace.ActivePaneLabel))
-        {
-            CountText.Text = $"{_workspace.ActivePaneLabel} · {CountText.Text}";
-        }
-
-        if (active.ListingInProgress && count == 0)
-        {
-            StatusText.Text = "Loading…";
-        }
-        else if (!string.IsNullOrEmpty(_workspace.ErrorMessage))
-        {
-            StatusText.Text = _workspace.ErrorMessage;
-        }
-        else if (_searchMode && _searchPane == _workspace.ActivePane)
-        {
-            StatusText.Text = string.IsNullOrWhiteSpace(SearchBox.Text)
-                ? "Search results"
-                : $"Search results for \"{SearchBox.Text.Trim()}\"";
-        }
-        else if (!string.IsNullOrEmpty(_workspace.StatusMessage))
-        {
-            StatusText.Text = _workspace.StatusMessage;
-        }
-        else
-        {
-            StatusText.Text = active.Path;
-        }
+        UpdateSelectionStatus();
 
         if (!string.IsNullOrEmpty(_workspace.ErrorMessage))
         {
@@ -294,6 +272,13 @@ public sealed partial class MainWindow : Window
 
     private void RebuildBreadcrumbs(StackPanel host, IReadOnlyList<BreadcrumbSegment> crumbs, PaneId pane)
     {
+        var key = string.Join('\u001f', crumbs.Select(crumb => crumb.Path + "=" + crumb.Label));
+        if (Equals(host.Tag, key) && host.Children.Count > 0)
+        {
+            return;
+        }
+
+        host.Tag = key;
         host.Children.Clear();
         for (var index = 0; index < crumbs.Count; index++)
         {
@@ -322,6 +307,15 @@ public sealed partial class MainWindow : Window
 
     private void RebuildTabs(StackPanel host, ExplorerPane pane, PaneId paneId)
     {
+        var key = string.Join(
+            '\u001f',
+            pane.Tabs.Select(tab => $"{tab.Id}:{tab.Path}:{tab.Id == pane.ActiveTabId}"));
+        if (Equals(host.Tag, key) && host.Children.Count > 0)
+        {
+            return;
+        }
+
+        host.Tag = key;
         host.Children.Clear();
         var hasActive = pane.Tabs.Any(tab => tab.Id == pane.ActiveTabId);
         foreach (var tab in pane.Tabs)
@@ -454,6 +448,72 @@ public sealed partial class MainWindow : Window
         foreach (var item in source)
         {
             target.Add(item);
+        }
+    }
+
+    private static bool ReplaceIfChanged<T>(
+        ObservableCollection<T> target,
+        IReadOnlyList<T> source,
+        Func<T, T, bool> same)
+    {
+        if (target.Count == source.Count)
+        {
+            var unchanged = true;
+            for (var index = 0; index < source.Count; index++)
+            {
+                if (!same(target[index], source[index]))
+                {
+                    unchanged = false;
+                    break;
+                }
+            }
+
+            if (unchanged)
+            {
+                return false;
+            }
+        }
+
+        target.Clear();
+        foreach (var item in source)
+        {
+            target.Add(item);
+        }
+
+        return true;
+    }
+
+    private static bool SameFileRow(FileRow left, FileRow right) =>
+        left.Path == right.Path
+        && left.Name == right.Name
+        && left.IsDir == right.IsDir
+        && left.IsCut == right.IsCut
+        && left.Size == right.Size
+        && left.ModifiedText == right.ModifiedText
+        && left.SizeText == right.SizeText
+        && left.TypeText == right.TypeText
+        && left.GitText == right.GitText
+        && left.TagColor == right.TagColor
+        && left.Icon == right.Icon;
+
+    private static bool SameDriveRow(DriveRow left, DriveRow right) =>
+        left.Path == right.Path
+        && left.Name == right.Name
+        && left.IsActive == right.IsActive
+        && left.Description == right.Description
+        && left.Badge == right.Badge
+        && left.Icon == right.Icon;
+
+    private static bool SameQuickAccessRow(QuickAccessRow left, QuickAccessRow right) =>
+        left.Command == right.Command
+        && left.Name == right.Name
+        && left.Icon == right.Icon;
+
+    private static void BindItemsSource(ListView list, object? items)
+    {
+        if (!ReferenceEquals(list.ItemsSource, items))
+        {
+            list.ItemsSource = items;
         }
     }
 
@@ -699,17 +759,46 @@ public sealed partial class MainWindow : Window
         await _workspace.NavigatePaneAsync(pane, path);
     }
 
-    private void OnPrimaryFileClick(object sender, ItemClickEventArgs e) => SelectClicked(e, PaneId.Primary);
+    private void OnPrimaryFileRightTapped(object sender, RightTappedRoutedEventArgs e) =>
+        SelectRightTapped(PrimaryFileList, PaneId.Primary, e);
 
-    private void OnSecondaryFileClick(object sender, ItemClickEventArgs e) => SelectClicked(e, PaneId.Secondary);
+    private void OnSecondaryFileRightTapped(object sender, RightTappedRoutedEventArgs e) =>
+        SelectRightTapped(SecondaryFileList, PaneId.Secondary, e);
 
-    private void SelectClicked(ItemClickEventArgs e, PaneId pane)
+    private void SelectRightTapped(ListView list, PaneId pane, RightTappedRoutedEventArgs e)
     {
-        if (_workspace is not null && e.ClickedItem is FileRow row)
+        if (_workspace is null || e.OriginalSource is not DependencyObject source)
         {
-            _workspace.SelectPath(row.Path, pane);
-            QueuePreview(row);
+            return;
         }
+
+        var view = FindAncestor<FileRowView>(source);
+        var row = view?.Row;
+        if (row is null)
+        {
+            return;
+        }
+
+        if (list.SelectedItems.OfType<FileRow>().Any(item =>
+                string.Equals(item.Path, row.Path, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        _applyingWorkspace = true;
+        try
+        {
+            list.SelectedItems.Clear();
+            list.SelectedItems.Add(row);
+        }
+        finally
+        {
+            _applyingWorkspace = false;
+        }
+
+        _workspace.SelectPath(row.Path, pane);
+        QueuePreview(row);
+        UpdateSelectionStatus();
     }
 
     private void OnPrimarySelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -720,7 +809,7 @@ public sealed partial class MainWindow : Window
 
     private void HandleSelectionChanged(ListView list, PaneId pane, SelectionChangedEventArgs e)
     {
-        if (_workspace is null)
+        if (_applyingWorkspace || _workspace is null)
         {
             return;
         }
@@ -733,6 +822,7 @@ public sealed partial class MainWindow : Window
             {
                 _workspace.SelectPath(null, pane);
                 ClearPreview();
+                UpdateSelectionStatus();
             }
 
             return;
@@ -740,6 +830,7 @@ public sealed partial class MainWindow : Window
 
         _workspace.SelectPath(row.Path, pane);
         QueuePreview(row);
+        UpdateSelectionStatus();
     }
 
     private async void OnPrimaryFileDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) =>
@@ -771,6 +862,16 @@ public sealed partial class MainWindow : Window
             {
                 e.Handled = true;
                 _workspace.SelectPath(match.Path, pane);
+                var rows = pane == PaneId.Secondary ? SecondaryFiles : PrimaryFiles;
+                SelectRow(list, rows, match.Path);
+                var row = rows.FirstOrDefault(item =>
+                    string.Equals(item.Path, match.Path, StringComparison.OrdinalIgnoreCase));
+                if (row is not null)
+                {
+                    QueuePreview(row);
+                }
+
+                UpdateSelectionStatus();
             }
         }
     }
@@ -791,6 +892,61 @@ public sealed partial class MainWindow : Window
 
     private IReadOnlyList<FileRow> ActiveSelectedRows =>
         ActiveFileList.SelectedItems.OfType<FileRow>().ToArray();
+
+    private void UpdateSelectionStatus()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var active = _workspace.Active;
+        var searchCount = _searchMode && _searchPane == _workspace.ActivePane
+            ? _activeSearchResults.Count
+            : (int?)null;
+        var visible = _workspace.VisibleEntriesFor(_workspace.ActivePane);
+        var count = searchCount ?? visible.Count;
+        var selectedEntries = ActiveSelectedRows
+            .Select(row => new FileEntry { Name = row.Name, Path = row.Path, IsDir = row.IsDir, Size = row.Size })
+            .ToList();
+        var snapshot = StatusBarFormatter.Format(
+            count,
+            selectedEntries,
+            active.Path,
+            _workspace.ActivePaneLabel,
+            listingInProgress: active.ListingInProgress,
+            isEmpty: count == 0 && !active.ListingInProgress && searchCount is null);
+        CountText.Text = searchCount is null
+            ? snapshot.Combined
+            : (count == 1 ? "1 search result" : $"{count} search results");
+        if (searchCount is not null && !string.IsNullOrEmpty(_workspace.ActivePaneLabel))
+        {
+            CountText.Text = $"{_workspace.ActivePaneLabel} · {CountText.Text}";
+        }
+
+        if (active.ListingInProgress && count == 0)
+        {
+            StatusText.Text = "Loading…";
+        }
+        else if (!string.IsNullOrEmpty(_workspace.ErrorMessage))
+        {
+            StatusText.Text = _workspace.ErrorMessage;
+        }
+        else if (_searchMode && _searchPane == _workspace.ActivePane)
+        {
+            StatusText.Text = string.IsNullOrWhiteSpace(SearchBox.Text)
+                ? "Search results"
+                : $"Search results for \"{SearchBox.Text.Trim()}\"";
+        }
+        else if (!string.IsNullOrEmpty(_workspace.StatusMessage))
+        {
+            StatusText.Text = _workspace.StatusMessage;
+        }
+        else
+        {
+            StatusText.Text = active.Path;
+        }
+    }
 
     private void QueuePreviewFromSelection()
     {
@@ -1486,9 +1642,26 @@ public sealed partial class MainWindow : Window
 
     private void OnFileChange(FileChangeEvent change)
     {
-        DispatcherQueue.TryEnqueue(async () =>
+        DispatcherQueue.TryEnqueue(() =>
         {
             if (_workspace is null || string.IsNullOrEmpty(_watchedPath))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_previewPath)
+                && string.Equals(change.Path, _previewPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (_searchMode)
+            {
+                return;
+            }
+
+            if (!PathRules.PathContains(_workspace.Active.Path, change.Path)
+                && !string.Equals(_workspace.Active.Path, _watchedPath, StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -1497,14 +1670,27 @@ public sealed partial class MainWindow : Window
             StatusText.Text = string.IsNullOrEmpty(name)
                 ? $"{change.Kind}: {change.Path}"
                 : $"{change.Kind}: {name}";
-
-            if (!_searchMode
-                && (PathRules.PathContains(_workspace.Active.Path, change.Path)
-                    || string.Equals(_workspace.Active.Path, _watchedPath, StringComparison.OrdinalIgnoreCase)))
-            {
-                await _workspace.RefreshAsync();
-            }
+            ScheduleInPlaceRefresh();
         });
+    }
+
+    private async void ScheduleInPlaceRefresh()
+    {
+        var token = Interlocked.Increment(ref _folderRefreshToken);
+        try
+        {
+            await Task.Delay(350);
+            if (token != _folderRefreshToken || _workspace is null)
+            {
+                return;
+            }
+
+            await _workspace.RefreshAsync();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            StatusText.Text = exception.Message;
+        }
     }
 
     private async void OnClosed(object sender, WindowEventArgs args)
@@ -2078,6 +2264,16 @@ public sealed partial class MainWindow : Window
     private void ShowError(string message) => ShowMessage("Error", message, Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error);
     private void RefreshView() => SyncFromWorkspace();
 
+    private static bool IsCancellationMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        return message.Contains("cancel", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void OnOpenTerminalAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
@@ -2180,44 +2376,121 @@ public sealed partial class MainWindow : Window
     private async void OnDuplicateCheckerClicked(object sender, RoutedEventArgs e)
     {
         if (_workspace?.FileOps == null) return;
-        var dialog = new DuplicateCheckerDialog { XamlRoot = Content.XamlRoot, Directory = _workspace.Active.Path };
+        var path = _workspace.Active.Path;
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        var dialog = new DuplicateCheckerDialog { XamlRoot = Content.XamlRoot, Directory = path };
         dialog.ShowConfiguration();
-        var configResult = await dialog.ShowAsync();
-        if (configResult != ContentDialogResult.None) return;
-        var minSizeKb = dialog.MinSizeKb;
-        var progress = new Progress<Ipc.ProgressUpdate>(update => {
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var progress = new Progress<Ipc.ProgressUpdate>(update =>
+        {
             DispatcherQueue.TryEnqueue(() => dialog.UpdateProgress(update));
         });
+
+        dialog.ScanCancelled += (_, _) =>
+        {
+            _ = _workspace.FileOps.CancelDuplicateCheckAsync();
+        };
+        dialog.PreviewRequested += (_, filePath) =>
+        {
+            QueuePreview(ToFileRow(new FileEntry
+            {
+                Name = System.IO.Path.GetFileName(filePath),
+                Path = filePath,
+            }));
+        };
+        dialog.OpenRequested += (_, filePath) =>
+        {
+            _ = _workspace.FileOps.OpenFileAsync(filePath);
+        };
+        dialog.RevealRequested += (_, filePath) =>
+        {
+            _ = _workspace.FileOps.RevealInFolderAsync(filePath);
+        };
+
         try
         {
             dialog.ShowScanning();
-            _ = dialog.ShowAsync();
+            var scanUi = dialog.ShowAsync();
             var result = await _workspace.FileOps.DuplicateCheckAsync(
-                _workspace.Active.Path, minSizeKb * 1024, null, progress);
+                path, dialog.MinSizeBytes, null, progress);
+            if (dialog.ScanWasCancelled)
+            {
+                return;
+            }
+
             dialog.ShowResults(result);
+            await scanUi;
+            if (dialog.DeleteRequested)
+            {
+                var trash = dialog.PathsToDelete;
+                if (trash.Length > 0)
+                {
+                    await _workspace.FileOps.TrashAsync(trash);
+                    await _workspace.RefreshAsync();
+                }
+            }
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (OperationCanceledException)
+        {
+            dialog.Hide();
+        }
+        catch (Exception ex)
+        {
+            dialog.Hide();
+            if (!IsCancellationMessage(ex.Message))
+            {
+                ShowError(ex.Message);
+            }
+        }
     }
 
     private async void OnDiskCleanupClicked(object sender, RoutedEventArgs e)
     {
         if (_workspace?.FileOps == null) return;
-        var dialog = new DiskCleanupDialog { XamlRoot = Content.XamlRoot, Directory = _workspace.Active.Path };
+        var path = _workspace.Active.Path;
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        var dialog = new DiskCleanupDialog { XamlRoot = Content.XamlRoot, Directory = path };
         dialog.ShowConfiguration();
-        var configResult = await dialog.ShowAsync();
-        if (configResult != ContentDialogResult.None) return;
-        var progress = new Progress<Ipc.ProgressUpdate>(update => {
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var progress = new Progress<Ipc.ProgressUpdate>(update =>
+        {
             DispatcherQueue.TryEnqueue(() => dialog.UpdateProgress(update));
         });
+
+        dialog.ScanCancelled += (_, _) =>
+        {
+            _ = _workspace.FileOps.CancelDiskCleanupAsync();
+        };
+
         try
         {
             dialog.ShowScanning();
-            _ = dialog.ShowAsync();
-            var result = await _workspace.FileOps.DiskCleanupAsync(
-                _workspace.Active.Path, dialog.ThresholdBytes, progress);
+            var scanUi = dialog.ShowAsync();
+            var result = await _workspace.FileOps.DiskCleanupAsync(path, dialog.ThresholdBytes, progress);
+            if (dialog.ScanWasCancelled)
+            {
+                return;
+            }
+
             dialog.ShowResults(result);
+            await scanUi;
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (OperationCanceledException)
+        {
+            dialog.Hide();
+        }
+        catch (Exception ex)
+        {
+            dialog.Hide();
+            if (!IsCancellationMessage(ex.Message))
+            {
+                ShowError(ex.Message);
+            }
+        }
     }
 
     private async void OnSetColorLabelClicked(object sender, RoutedEventArgs e)
@@ -2248,7 +2521,7 @@ public sealed partial class MainWindow : Window
     private void RefreshSmartFolders()
     {
         if (_workspace == null) return;
-        SmartFoldersList.ItemsSource = _workspace.SmartFolders;
+        BindItemsSource(SmartFoldersList, _workspace.SmartFolders);
     }
 
     private async void OnSmartFolderClicked(object sender, ItemClickEventArgs e)

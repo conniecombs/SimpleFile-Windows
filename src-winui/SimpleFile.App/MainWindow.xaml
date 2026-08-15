@@ -378,18 +378,26 @@
                         <ListView
                             x:Name="PrimaryFileList"
                             AllowDrop="True"
-                            CanDragItems="True"
                             AutomationProperties.Name="Left pane files"
-                            IsItemClickEnabled="True"
-                            ItemClick="OnPrimaryFileClick"
                             DoubleTapped="OnPrimaryFileDoubleTapped"
+                            IsItemClickEnabled="False"
+                            IsMultiSelectCheckBoxEnabled="False"
                             KeyDown="OnPrimaryFileKeyDown"
+                            RightTapped="OnPrimaryFileRightTapped"
                             SelectionChanged="OnPrimarySelectionChanged"
-                            SelectionMode="Multiple"
-                            DragItemsStarting="OnFileDragItemsStarting"
+                            SelectionMode="Extended"
+                            SingleSelectionFollowsFocus="False"
                             DragOver="OnPrimaryFileDragOver"
                             Drop="OnPrimaryFileDrop"
                             DragLeave="OnFileDragLeave">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="8,3" />
+                                    <Setter Property="MinHeight" Value="28" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ContextFlyout>
                                 <MenuFlyout Opening="OnFileListContextOpening" />
                             </ListView.ContextFlyout>
@@ -511,18 +519,26 @@
                         <ListView
                             x:Name="SecondaryFileList"
                             AllowDrop="True"
-                            CanDragItems="True"
                             AutomationProperties.Name="Right pane files"
-                            IsItemClickEnabled="True"
-                            ItemClick="OnSecondaryFileClick"
                             DoubleTapped="OnSecondaryFileDoubleTapped"
+                            IsItemClickEnabled="False"
+                            IsMultiSelectCheckBoxEnabled="False"
                             KeyDown="OnSecondaryFileKeyDown"
+                            RightTapped="OnSecondaryFileRightTapped"
                             SelectionChanged="OnSecondarySelectionChanged"
-                            SelectionMode="Multiple"
-                            DragItemsStarting="OnFileDragItemsStarting"
+                            SelectionMode="Extended"
+                            SingleSelectionFollowsFocus="False"
                             DragOver="OnSecondaryFileDragOver"
                             Drop="OnSecondaryFileDrop"
                             DragLeave="OnFileDragLeave">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="8,3" />
+                                    <Setter Property="MinHeight" Value="28" />
+                                    <Setter Property="Margin" Value="0" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ContextFlyout>
                                 <MenuFlyout Opening="OnFileListContextOpening" />
                             </ListView.ContextFlyout>

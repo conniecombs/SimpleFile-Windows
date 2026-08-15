@@ -120,7 +120,13 @@ public sealed partial class MainWindow
     private void ApplyTheme(string? theme)
     {
         var light = string.Equals(UiSettings.NormalizeTheme(theme), "light", StringComparison.Ordinal);
-        RootGrid.RequestedTheme = light ? ElementTheme.Light : ElementTheme.Dark;
+        var next = light ? ElementTheme.Light : ElementTheme.Dark;
+        if (RootGrid.RequestedTheme == next)
+        {
+            return;
+        }
+
+        RootGrid.RequestedTheme = next;
     }
 
     private void OpenCommandPalette()

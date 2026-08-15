@@ -453,12 +453,58 @@ public sealed class ExplorerWorkspace
         return RefreshAsync(ActivePane, cancellationToken);
     }
 
-    public Task RefreshAsync(PaneId pane, CancellationToken cancellationToken = default)
+    public async Task RefreshAsync(PaneId pane, CancellationToken cancellationToken = default)
     {
-        var path = Pane(pane).Path;
-        return string.IsNullOrEmpty(path)
-            ? Task.CompletedTask
-            : NavigatePaneAsync(pane, path, HistoryMode.None, activate: false, cancellationToken);
+        var target = Normalize(pane);
+        var state = Pane(target);
+        var path = state.Path;
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        var selected = state.SelectedPath;
+        try
+        {
+            var listing = await _backend.ListDirectoryAsync(path, onChunk: null, cancellationToken)
+                .ConfigureAwait(false);
+
+            lock (_gate)
+            {
+                if (!PathRules.PathsEqual(state.Path, path))
+                {
+                    return;
+                }
+
+                state.Entries = [.. listing.Entries];
+                if (!string.IsNullOrEmpty(listing.Path))
+                {
+                    state.Path = listing.Path;
+                }
+
+                state.PathIsNetwork = listing.IsNetwork || PathRules.IsNetworkFsPath(state.Path, _drives);
+                state.SyncActiveTab();
+                PhotoFolderActive = PhotoFolder.IsPhotoFolder(listing.Entries, Settings.PhotoFolderImageThreshold);
+                state.SelectedPath = selected is not null
+                    && state.Entries.Any(entry => PathRules.PathsEqual(entry.Path, selected))
+                        ? selected
+                        : null;
+            }
+
+            RaiseChanged();
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            lock (_gate)
+            {
+                if (PathRules.PathsEqual(state.Path, path))
+                {
+                    ErrorMessage = exception.Message;
+                }
+            }
+
+            RaiseChanged();
+        }
     }
 
     public Task NavigateSpecialAsync(string command, CancellationToken cancellationToken = default)
@@ -650,14 +696,13 @@ public sealed class ExplorerWorkspace
 
     public void ActivatePane(PaneId pane)
     {
-        if (!DualPaneEnabled)
+        var next = DualPaneEnabled && pane == PaneId.Secondary ? PaneId.Secondary : PaneId.Primary;
+        if (ActivePane == next)
         {
-            ActivePane = PaneId.Primary;
-            RaiseChanged();
             return;
         }
 
-        ActivePane = pane == PaneId.Secondary ? PaneId.Secondary : PaneId.Primary;
+        ActivePane = next;
         RaiseChanged();
     }
 
@@ -796,13 +841,15 @@ public sealed class ExplorerWorkspace
 
     public void SelectPath(string? path, PaneId pane)
     {
-        Pane(pane).SelectedPath = path;
-        if (DualPaneEnabled)
+        var target = Pane(pane);
+        var nextPane = DualPaneEnabled ? Normalize(pane) : PaneId.Primary;
+        var paneChanged = ActivePane != nextPane;
+        target.SelectedPath = path;
+        ActivePane = nextPane;
+        if (paneChanged)
         {
-            ActivePane = Normalize(pane);
+            RaiseChanged();
         }
-
-        RaiseChanged();
     }
 
     public void SetSort(string sortBy)
@@ -927,6 +974,16 @@ public sealed class ExplorerWorkspace
     private void RaiseChanged()
     {
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static bool PathsEqual(string? left, string? right)
+    {
+        if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+        {
+            return string.IsNullOrEmpty(left) && string.IsNullOrEmpty(right);
+        }
+
+        return PathRules.PathsEqual(left, right);
     }
 
     private FileOperationService RequireFileOps()

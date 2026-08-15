@@ -14,10 +14,20 @@ namespace SimpleFile.App;
 public sealed partial class DuplicateCheckerDialog : ContentDialog
 {
     public string Directory { get; set; } = string.Empty;
-    public ulong MinSizeKb => (ulong)MinSizeInput.Value;
+    public ulong MinSizeBytes =>
+        IncludeEmptyCheck.IsChecked == true
+            ? 0
+            : Math.Max(1, (ulong)Math.Max(0, MinSizeInput.Value) * 1024);
     public DuplicateCheckResult? Result { get; set; }
     public string[] PathsToDelete => _groups.SelectMany(g => g.Files).Where(f => f.IsSelected).Select(f => f.Path).ToArray();
     public bool DeleteRequested { get; private set; }
+    public bool IsScanning { get; private set; }
+    public bool ScanWasCancelled { get; private set; }
+
+    public event EventHandler? ScanCancelled;
+    public event EventHandler<string>? PreviewRequested;
+    public event EventHandler<string>? OpenRequested;
+    public event EventHandler<string>? RevealRequested;
 
     private ObservableCollection<DuplicateGroupViewModel> _groups = new();
 
@@ -29,13 +39,34 @@ public sealed partial class DuplicateCheckerDialog : ContentDialog
 
     public void ShowConfiguration()
     {
+        IsScanning = false;
+        ScanWasCancelled = false;
+        DeleteRequested = false;
+        Title = "Find Duplicates";
+        PrimaryButtonText = "Start Scan";
+        CloseButtonText = "Cancel";
+        DefaultButton = ContentDialogButton.Primary;
+        DialogRoot.Width = 440;
+        DialogRoot.Height = double.NaN;
         PhaseConfig.Visibility = Visibility.Visible;
         PhaseScan.Visibility = Visibility.Collapsed;
         PhaseResults.Visibility = Visibility.Collapsed;
+        BindFolderPath();
     }
 
     public void ShowScanning()
     {
+        IsScanning = true;
+        Title = "Finding Duplicates";
+        PrimaryButtonText = string.Empty;
+        CloseButtonText = "Cancel";
+        DefaultButton = ContentDialogButton.Close;
+        DialogRoot.Width = 440;
+        DialogRoot.Height = double.NaN;
+        ScanProgress.IsIndeterminate = true;
+        ScanProgress.Value = 0;
+        ScanStatusText.Text = "Preparing scan";
+        ScanCurrentItem.Text = Directory;
         PhaseConfig.Visibility = Visibility.Collapsed;
         PhaseScan.Visibility = Visibility.Visible;
         PhaseResults.Visibility = Visibility.Collapsed;
@@ -43,11 +74,17 @@ public sealed partial class DuplicateCheckerDialog : ContentDialog
 
     public void ShowResults(DuplicateCheckResult result)
     {
+        IsScanning = false;
         Result = result;
+        Title = "Duplicate Results";
+        PrimaryButtonText = string.Empty;
+        CloseButtonText = "Close";
+        DefaultButton = ContentDialogButton.Close;
+        DialogRoot.Width = 680;
+        DialogRoot.Height = 480;
         PhaseConfig.Visibility = Visibility.Collapsed;
         PhaseScan.Visibility = Visibility.Collapsed;
         PhaseResults.Visibility = Visibility.Visible;
-        
         LoadResult(result);
     }
 
@@ -56,14 +93,22 @@ public sealed partial class DuplicateCheckerDialog : ContentDialog
         if (update.Total > 0)
         {
             ScanProgress.IsIndeterminate = false;
-            ScanProgress.Maximum = (double)update.Total;
-            ScanProgress.Value = (double)update.Current;
+            ScanProgress.Maximum = update.Total;
+            ScanProgress.Value = Math.Min(update.Current, update.Total);
+            ScanStatusText.Text = $"{update.Current:N0} of {update.Total:N0}";
         }
         else
         {
             ScanProgress.IsIndeterminate = true;
+            ScanStatusText.Text = string.IsNullOrWhiteSpace(update.Status)
+                ? "Scanning files"
+                : update.Status;
         }
-        ScanCurrentItem.Text = update.CurrentItem ?? "";
+
+        if (!string.IsNullOrWhiteSpace(update.CurrentItem))
+        {
+            ScanCurrentItem.Text = update.CurrentItem;
+        }
     }
 
     public void RemovePaths(string[] deletedPaths)
@@ -120,19 +165,30 @@ public sealed partial class DuplicateCheckerDialog : ContentDialog
         TrashButton.IsEnabled = selectedSize > 0;
     }
 
-    private void StartScanButton_Click(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e) => BindFolderPath();
+
+    private void BindFolderPath()
     {
-        // Actually the parent handles this usually, but the public interface doesn't define a StartRequested event.
-        // I will hide the dialog with a special result or let the parent subscribe.
-        // Wait, the prompt says "public interface... ShowConfiguration, ShowScanning, ShowResults".
-        // Maybe the caller doesn't use ContentDialogResult? Let's just Hide().
-        Hide();
+        FolderPathText.Text = string.IsNullOrWhiteSpace(Directory) ? "Current folder" : Directory;
+        ToolTipService.SetToolTip(FolderPathText, FolderPathText.Text);
     }
 
-    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    private void OnPrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
     {
-        DeleteRequested = false;
-        Hide();
+        if (MinSizeInput.Value is double.NaN || MinSizeInput.Value < 0)
+        {
+            args.Cancel = true;
+            MinSizeInput.Value = 1;
+        }
+    }
+
+    private void OnCloseButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+    {
+        if (IsScanning)
+        {
+            ScanWasCancelled = true;
+            ScanCancelled?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void TrashButton_Click(object sender, RoutedEventArgs e)
@@ -195,9 +251,29 @@ public sealed partial class DuplicateCheckerDialog : ContentDialog
         }
     }
 
-    private void PreviewFile_Click(object sender, RoutedEventArgs e) { /* Parent handles or ignore for now */ }
-    private void OpenFile_Click(object sender, RoutedEventArgs e) { /* Parent handles or ignore for now */ }
-    private void RevealFile_Click(object sender, RoutedEventArgs e) { /* Parent handles or ignore for now */ }
+    private void PreviewFile_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is DuplicateFileViewModel file)
+        {
+            PreviewRequested?.Invoke(this, file.Path);
+        }
+    }
+
+    private void OpenFile_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is DuplicateFileViewModel file)
+        {
+            OpenRequested?.Invoke(this, file.Path);
+        }
+    }
+
+    private void RevealFile_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is DuplicateFileViewModel file)
+        {
+            RevealRequested?.Invoke(this, file.Path);
+        }
+    }
 
     public static string FormatSize(long bytes)
     {

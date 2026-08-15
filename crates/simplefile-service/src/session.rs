@@ -9,6 +9,12 @@ use simplefile_ipc::{
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::dispatch::{dispatch, Dispatch, ProgressCopyMoveParams, SessionState};
+use simplefile_core::cleanup::{
+    scan_disk_cleanup, scan_duplicate_check, DuplicateScanOptions,
+};
+use simplefile_core::models::ProgressUpdate;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use crate::progress::OperationRegistry;
 use crate::watcher::WatcherState;
 
@@ -118,6 +124,50 @@ where
             }
             Dispatch::UnwatchDirectory { id } => {
                 crate::watcher::unwatch_directory(&mut watcher_state);
+                write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
+            }
+            Dispatch::DuplicateCheck {
+                id,
+                directory,
+                min_size,
+                partial_hash_bytes,
+                operation_id,
+            } => {
+                spawn_duplicate_check(
+                    writer.clone(),
+                    events.clone(),
+                    state.duplicate_check_cancel.clone(),
+                    id,
+                    directory,
+                    min_size,
+                    partial_hash_bytes,
+                    operation_id,
+                );
+            }
+            Dispatch::CancelDuplicateCheck { id } => {
+                state
+                    .duplicate_check_cancel
+                    .store(true, Ordering::Relaxed);
+                write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
+            }
+            Dispatch::DiskCleanup {
+                id,
+                directory,
+                size_threshold,
+                operation_id,
+            } => {
+                spawn_disk_cleanup(
+                    writer.clone(),
+                    events.clone(),
+                    state.disk_cleanup_cancel.clone(),
+                    id,
+                    directory,
+                    size_threshold,
+                    operation_id,
+                );
+            }
+            Dispatch::CancelDiskCleanup { id } => {
+                state.disk_cleanup_cancel.store(true, Ordering::Relaxed);
                 write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
             }
             Dispatch::Shutdown(response) => {
@@ -272,6 +322,115 @@ fn spawn_search_files<W>(
         if let Some(search_id) = search_id {
             registry.remove(&search_id).await;
         }
+    });
+}
+
+fn spawn_duplicate_check<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    events: EventSink,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+    id: Option<Value>,
+    directory: String,
+    min_size: Option<u64>,
+    partial_hash_bytes: Option<u64>,
+    operation_id: Option<String>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    cancel.store(false, Ordering::Relaxed);
+    let operation_id = operation_id.unwrap_or_else(|| "duplicate_check".to_string());
+    tokio::spawn(async move {
+        let events_for_task = events.clone();
+        let operation_id_for_task = operation_id.clone();
+        let join = tokio::task::spawn_blocking(move || {
+            let emit = |current, total, item: &str| {
+                events_for_task.emit(
+                    OPERATION_PROGRESS,
+                    &ProgressUpdate {
+                        operation_id: operation_id_for_task.clone(),
+                        operation_type: "duplicate-check".to_string(),
+                        current,
+                        total,
+                        current_item: item.to_string(),
+                        status: "running".to_string(),
+                        error: None,
+                    },
+                );
+            };
+            scan_duplicate_check(
+                &directory,
+                DuplicateScanOptions::from_params(min_size, partial_hash_bytes),
+                &cancel,
+                emit,
+            )
+        });
+
+        let response = match join.await {
+            Ok(Ok(result)) => match serde_json::to_value(result) {
+                Ok(value) => JsonRpcResponse::result(id, value),
+                Err(error) => JsonRpcResponse::application_error(
+                    id,
+                    format!("failed to serialize duplicate check result: {error}"),
+                ),
+            },
+            Ok(Err(message)) => JsonRpcResponse::application_error(id, message),
+            Err(error) => JsonRpcResponse::application_error(
+                id,
+                format!("duplicate check task failed: {error}"),
+            ),
+        };
+        let _ = write_json(&writer, &response).await;
+    });
+}
+
+fn spawn_disk_cleanup<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    events: EventSink,
+    cancel: Arc<std::sync::atomic::AtomicBool>,
+    id: Option<Value>,
+    directory: String,
+    size_threshold: Option<u64>,
+    operation_id: Option<String>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    cancel.store(false, Ordering::Relaxed);
+    let operation_id = operation_id.unwrap_or_else(|| "disk_cleanup".to_string());
+    tokio::spawn(async move {
+        let events_for_task = events.clone();
+        let operation_id_for_task = operation_id.clone();
+        let join = tokio::task::spawn_blocking(move || {
+            let emit = |current, total, item: &str| {
+                events_for_task.emit(
+                    OPERATION_PROGRESS,
+                    &ProgressUpdate {
+                        operation_id: operation_id_for_task.clone(),
+                        operation_type: "cleanup".to_string(),
+                        current,
+                        total,
+                        current_item: item.to_string(),
+                        status: "running".to_string(),
+                        error: None,
+                    },
+                );
+            };
+            scan_disk_cleanup(&directory, size_threshold, &cancel, emit)
+        });
+
+        let response = match join.await {
+            Ok(Ok(result)) => match serde_json::to_value(result) {
+                Ok(value) => JsonRpcResponse::result(id, value),
+                Err(error) => JsonRpcResponse::application_error(
+                    id,
+                    format!("failed to serialize cleanup result: {error}"),
+                ),
+            },
+            Ok(Err(message)) => JsonRpcResponse::application_error(id, message),
+            Err(error) => {
+                JsonRpcResponse::application_error(id, format!("disk cleanup task failed: {error}"))
+            }
+        };
+        let _ = write_json(&writer, &response).await;
     });
 }
 

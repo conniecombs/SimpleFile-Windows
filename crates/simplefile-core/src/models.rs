@@ -169,14 +169,22 @@ pub struct DuplicateGroup {
     pub files: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CleanupFile {
+    pub path: String,
+    pub size: u64,
+}
+
 /// Result of a disk cleanup scan. The `large_files` vector lists files
 /// exceeding the requested size threshold along with their sizes. The
 /// `duplicates` vector contains groups of duplicate files (excluding the
 /// first occurrence in each group).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CleanupResult {
-    pub large_files: Vec<(String, u64)>,
+    pub large_files: Vec<CleanupFile>,
     pub duplicates: Vec<DuplicateGroup>,
+    #[serde(default)]
+    pub scanned_files: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
