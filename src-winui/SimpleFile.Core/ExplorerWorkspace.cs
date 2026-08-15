@@ -74,6 +74,16 @@ public sealed class ExplorerWorkspace
     public PaneId Normalize(PaneId pane) =>
         pane == PaneId.Secondary && DualPaneEnabled ? PaneId.Secondary : PaneId.Primary;
 
+    private static bool IsSupportedArchivePath(string path)
+    {
+        var name = PathRules.Basename(path).ToLowerInvariant();
+        return name.EndsWith(".tar.gz", StringComparison.Ordinal)
+            || name.EndsWith(".tgz", StringComparison.Ordinal)
+            || name.EndsWith(".zip", StringComparison.Ordinal)
+            || name.EndsWith(".tar", StringComparison.Ordinal)
+            || name.EndsWith(".rar", StringComparison.Ordinal);
+    }
+
     public string CurrentPath => Primary.Path;
     public IReadOnlyList<FileEntry> Entries => Primary.Entries;
     public IReadOnlyList<string> History => Primary.History;
@@ -437,6 +447,11 @@ public sealed class ExplorerWorkspace
             }
         }
 
+        if (shouldNavigate == false && IsSupportedArchivePath(path))
+        {
+            shouldNavigate = true;
+        }
+
         if (shouldNavigate == true)
         {
             await NavigatePaneAsync(target, path, HistoryMode.Push, activate: DualPaneEnabled, cancellationToken)
@@ -446,6 +461,34 @@ public sealed class ExplorerWorkspace
 
         if (shouldNavigate == false)
         {
+            if (FileOps is not null)
+            {
+                try
+                {
+                    await FileOps.OpenFileAsync(path, cancellationToken).ConfigureAwait(false);
+                    lock (_gate)
+                    {
+                        Pane(target).SelectedPath = path;
+                        StatusMessage = $"Opened {PathRules.Basename(path)}";
+                        ErrorMessage = null;
+                    }
+
+                    RaiseChanged();
+                    return;
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    lock (_gate)
+                    {
+                        Pane(target).SelectedPath = path;
+                        ErrorMessage = exception.Message;
+                    }
+
+                    RaiseChanged();
+                    return;
+                }
+            }
+
             lock (_gate)
             {
                 FileOpenUnsupported = true;

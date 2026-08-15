@@ -144,6 +144,42 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
     public Task RevealInFolderAsync(string path, CancellationToken ct = default)
         => InvokeAsync<object?>(Protocol.RevealInFolderMethod, new { path }, ct);
 
+    public Task OpenExternalUrlAsync(string url, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.OpenExternalUrlMethod, new { url }, ct);
+
+    public Task<ArchiveInfo> ListArchiveAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<ArchiveInfo>(Protocol.ListArchiveMethod, new { path }, ct);
+
+    public Task ExtractArchiveAsync(string archivePath, string destination, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.ExtractArchiveMethod, new { archivePath, destination }, ct);
+
+    public Task CreateArchiveAsync(string[] paths, string archivePath, string format, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CreateArchiveMethod, new { paths, archivePath, format }, ct);
+
+    public Task<FilePreview> ReadFilePreviewAsync(string path, ulong? maxSize = null, CancellationToken ct = default)
+        => InvokeAsync<FilePreview>(Protocol.ReadFilePreviewMethod, new { path, maxSize }, ct);
+
+    public Task<string> GenerateThumbnailAsync(string path, uint size, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.GenerateThumbnailMethod, new { path, size }, ct);
+
+    public Task<ThumbnailResult[]> GenerateThumbnailsAsync(string[] paths, uint size, CancellationToken ct = default)
+        => InvokeAsync<ThumbnailResult[]>(Protocol.GenerateThumbnailsMethod, new { paths, size }, ct);
+
+    public Task OpenFileWithAsync(string path, string application, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.OpenFileWithMethod, new { path, application }, ct);
+
+    public Task<FileComparison> CompareFilesAsync(string pathA, string pathB, CancellationToken ct = default)
+        => InvokeAsync<FileComparison>(Protocol.CompareFilesMethod, new { pathA, pathB }, ct);
+
+    public Task<Checksums> ComputeChecksumAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<Checksums>(Protocol.ComputeChecksumMethod, new { path }, ct);
+
+    public Task<ImageMetadata> GetImageMetadataAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<ImageMetadata>(Protocol.GetImageMetadataMethod, new { path }, ct);
+
+    public Task<FileMetadata> GetFileMetadataAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<FileMetadata>(Protocol.GetFileMetadataMethod, new { path }, ct);
+
     public Task<TreeNode[]> ListSubdirectoriesAsync(string path, CancellationToken ct = default)
         => InvokeAsync<TreeNode[]>(Protocol.ListSubdirectoriesMethod, new { path }, ct);
 

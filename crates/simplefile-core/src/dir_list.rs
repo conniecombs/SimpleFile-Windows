@@ -15,14 +15,24 @@ pub const FIRST_CHUNK_SIZE: usize = 96;
 /// Subsequent chunks trade IPC overhead vs. progressive updates.
 pub const LATER_CHUNK_SIZE: usize = 256;
 
-/// List a real filesystem directory, invoking `on_chunk` as pages fill.
-///
-/// Archive virtual paths are handled by the Tauri host, which calls
-/// `archive::list_archive_directory` before this function.
+/// List a real filesystem directory or archive virtual directory, invoking
+/// `on_chunk` as pages fill for normal filesystem directories.
 pub fn list_directory(
     path: String,
     mut on_chunk: impl FnMut(DirectoryListingChunk) -> Result<(), String>,
 ) -> Result<DirectoryListing, String> {
+    if let Some(listing) = crate::archive::list_archive_directory(&path)? {
+        on_chunk(DirectoryListingChunk {
+            path: listing.path.clone(),
+            parent: listing.parent.clone(),
+            entries: listing.entries.clone(),
+            chunk_index: 0,
+            done: true,
+            is_network: false,
+        })?;
+        return Ok(listing);
+    }
+
     let path_buf = validate_existing_path_no_resolve(&path)?;
     if !path_buf.is_dir() {
         return Err(format!("Path is not a directory: {path}"));

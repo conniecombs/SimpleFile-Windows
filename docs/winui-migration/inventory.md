@@ -571,7 +571,7 @@ Capabilities (`src-tauri/capabilities/default.json`): window `main`, `core:defau
 | `check:tauri-surface` | renderer may only import `@tauri-apps/api` via `tauri.ts` | Replace with “UI may only talk to IPC client” |
 | `check:updater` | pubkey, endpoint, `latest.json`, `.sig`, signing secret | Port to new updater packaging |
 | `check:workflows` | CI/release/installer snippets | Update after workflow rewrite |
-| `check:provider-surface` | banned “Remote Drives” leftovers | Keep |
+| `check:provider-surface` | banned retired-provider leftovers | Keep |
 | `check:windows-assets` | no icns/android/ios/linux schemas | Keep / adapt |
 | `check:rust` | rustfmt + test + clippy `-D warnings` | Keep |
 | `check:security` | `scripts/cargo-audit-release.mjs` | Keep |
@@ -616,7 +616,7 @@ All of these encode required behavior. They must be rewritten against the WinUI/
 | `scripts/check-tauri-renderer-surface.mjs` | No raw `@tauri-apps/api` outside `tauri.ts` | New IPC client boundary check |
 | `scripts/check-updater-config.mjs` | Updater pubkey/endpoint/signing | New updater config check |
 | `scripts/check-github-workflows.mjs` | Required CI/release snippets | Update after workflow rewrite |
-| `scripts/check-provider-surface.mjs` | Remote-drive leftover ban | Keep |
+| `scripts/check-provider-surface.mjs` | Provider-surface leftover ban | Keep |
 | `scripts/check-windows-assets.mjs` | Windows-only assets | Keep |
 | `scripts/check-js-syntax.mjs` | JS syntax | Keep until JS retired |
 | `scripts/cargo-audit-release.mjs` | cargo-audit | Keep |

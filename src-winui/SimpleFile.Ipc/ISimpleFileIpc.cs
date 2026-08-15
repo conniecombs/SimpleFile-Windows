@@ -49,6 +49,18 @@ public interface ISimpleFileIpc : IAsyncDisposable
     Task<FileEntry> GetEntryInfoAsync(string path, CancellationToken ct = default);
     Task OpenFileAsync(string path, CancellationToken ct = default);
     Task RevealInFolderAsync(string path, CancellationToken ct = default);
+    Task OpenExternalUrlAsync(string url, CancellationToken ct = default);
+    Task<ArchiveInfo> ListArchiveAsync(string path, CancellationToken ct = default);
+    Task ExtractArchiveAsync(string archivePath, string destination, CancellationToken ct = default);
+    Task CreateArchiveAsync(string[] paths, string archivePath, string format, CancellationToken ct = default);
+    Task<FilePreview> ReadFilePreviewAsync(string path, ulong? maxSize = null, CancellationToken ct = default);
+    Task<string> GenerateThumbnailAsync(string path, uint size, CancellationToken ct = default);
+    Task<ThumbnailResult[]> GenerateThumbnailsAsync(string[] paths, uint size, CancellationToken ct = default);
+    Task OpenFileWithAsync(string path, string application, CancellationToken ct = default);
+    Task<FileComparison> CompareFilesAsync(string pathA, string pathB, CancellationToken ct = default);
+    Task<Checksums> ComputeChecksumAsync(string path, CancellationToken ct = default);
+    Task<ImageMetadata> GetImageMetadataAsync(string path, CancellationToken ct = default);
+    Task<FileMetadata> GetFileMetadataAsync(string path, CancellationToken ct = default);
     Task<TreeNode[]> ListSubdirectoriesAsync(string path, CancellationToken ct = default);
     Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default);
     Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default);

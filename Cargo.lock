@@ -4150,15 +4150,28 @@ dependencies = [
 name = "simplefile-core"
 version = "1.1.0"
 dependencies = [
+ "base64 0.23.1",
  "chrono",
  "filetime",
+ "flate2",
  "getrandom 0.4.3",
+ "image",
+ "kamadak-exif",
+ "lofty",
  "log",
+ "lopdf",
+ "md-5",
  "notify",
  "parking_lot",
  "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.11.0",
+ "tar",
  "trash",
+ "unrar",
  "winapi",
+ "zip 8.6.0",
 ]
 
 [[package]]

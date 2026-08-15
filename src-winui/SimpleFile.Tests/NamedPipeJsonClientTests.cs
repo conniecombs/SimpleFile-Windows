@@ -252,6 +252,109 @@ public class NamedPipeJsonClientTests
     }
 
     [Fact]
+    public async Task InspectionMethods_UseContractNamesAndCasing()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var preview = client.ReadFilePreviewAsync(@"C:\Users\Public\notes.txt", 2048);
+        var previewRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.ReadFilePreviewMethod, previewRequest.Method);
+        var previewParams = Assert.IsType<JsonElement>(previewRequest.Params);
+        Assert.Equal(@"C:\Users\Public\notes.txt", previewParams.GetProperty("path").GetString());
+        Assert.Equal(2048ul, previewParams.GetProperty("maxSize").GetUInt64());
+        await server.SendResultAsync(previewRequest.Id, new FilePreview
+        {
+            FileType = "text",
+            MimeType = "text/plain",
+            Content = "hello",
+            Encoding = "utf-8",
+            Size = 5,
+        });
+        Assert.Equal("hello", (await preview).Content);
+
+        var compare = client.CompareFilesAsync(@"C:\left.txt", @"C:\right.txt");
+        var compareRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.CompareFilesMethod, compareRequest.Method);
+        var compareParams = Assert.IsType<JsonElement>(compareRequest.Params);
+        Assert.Equal(@"C:\left.txt", compareParams.GetProperty("pathA").GetString());
+        Assert.Equal(@"C:\right.txt", compareParams.GetProperty("pathB").GetString());
+        await server.SendResultAsync(compareRequest.Id, new FileComparison
+        {
+            LeftPath = @"C:\left.txt",
+            RightPath = @"C:\right.txt",
+            LeftName = "left.txt",
+            RightName = "right.txt",
+            Identical = false,
+            Added = 1,
+            Rows =
+            [
+                new DiffRow { Kind = "added", RightLine = 1, RightText = "hello" },
+            ],
+        });
+        var comparison = await compare;
+        Assert.False(comparison.Identical);
+        Assert.Single(comparison.Rows);
+
+        var checksum = client.ComputeChecksumAsync(@"C:\left.txt");
+        var checksumRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.ComputeChecksumMethod, checksumRequest.Method);
+        await server.SendResultAsync(checksumRequest.Id, new Checksums
+        {
+            Md5 = "md5",
+            Sha1 = "sha1",
+            Sha256 = "sha256",
+        });
+        Assert.Equal("sha256", (await checksum).Sha256);
+    }
+
+    [Fact]
+    public async Task ArchiveMethods_UseContractNamesAndCasing()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var list = client.ListArchiveAsync(@"C:\pack.zip");
+        var listRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.ListArchiveMethod, listRequest.Method);
+        var listParams = Assert.IsType<JsonElement>(listRequest.Params);
+        Assert.Equal(@"C:\pack.zip", listParams.GetProperty("path").GetString());
+        await server.SendResultAsync(listRequest.Id, new ArchiveInfo
+        {
+            Path = @"C:\pack.zip",
+            Format = "zip",
+            Entries =
+            [
+                new ArchiveEntry { Name = "notes.txt", Path = "notes.txt", Size = 5, CompressedSize = 4 },
+            ],
+            TotalSize = 5,
+            CompressedSize = 4,
+        });
+        Assert.Equal("zip", (await list).Format);
+
+        var extract = client.ExtractArchiveAsync(@"C:\pack.zip", @"C:\out");
+        var extractRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.ExtractArchiveMethod, extractRequest.Method);
+        var extractParams = Assert.IsType<JsonElement>(extractRequest.Params);
+        Assert.Equal(@"C:\pack.zip", extractParams.GetProperty("archivePath").GetString());
+        Assert.Equal(@"C:\out", extractParams.GetProperty("destination").GetString());
+        await server.SendResultAsync(extractRequest.Id, null);
+        await extract;
+
+        var create = client.CreateArchiveAsync([@"C:\a.txt"], @"C:\pack.zip", "zip");
+        var createRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.CreateArchiveMethod, createRequest.Method);
+        var createParams = Assert.IsType<JsonElement>(createRequest.Params);
+        Assert.Equal(@"C:\pack.zip", createParams.GetProperty("archivePath").GetString());
+        Assert.Equal("zip", createParams.GetProperty("format").GetString());
+        Assert.Equal(@"C:\a.txt", createParams.GetProperty("paths")[0].GetString());
+        await server.SendResultAsync(createRequest.Id, null);
+        await create;
+    }
+
+    [Fact]
     public async Task Cancellation_AbandonsAwaitWithoutSendingCancel()
     {
         var (server, client) = await FakeIpcServer.ConnectAsync();

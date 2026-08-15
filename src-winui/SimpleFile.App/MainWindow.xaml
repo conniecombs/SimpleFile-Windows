@@ -162,12 +162,18 @@
                 IsOpen="False"
                 Severity="Informational" />
 
-            <Grid x:Name="PanesGrid" Grid.Row="1">
+            <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="PrimaryColumn" Width="*" />
-                    <ColumnDefinition x:Name="DividerColumn" Width="0" />
-                    <ColumnDefinition x:Name="SecondaryColumn" Width="0" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="320" />
                 </Grid.ColumnDefinitions>
+
+                <Grid x:Name="PanesGrid" Grid.Column="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="PrimaryColumn" Width="*" />
+                        <ColumnDefinition x:Name="DividerColumn" Width="0" />
+                        <ColumnDefinition x:Name="SecondaryColumn" Width="0" />
+                    </Grid.ColumnDefinitions>
 
                 <Grid
                     x:Name="PrimaryPaneRoot"
@@ -236,7 +242,8 @@
                         ItemClick="OnPrimaryFileClick"
                         DoubleTapped="OnPrimaryFileDoubleTapped"
                         KeyDown="OnPrimaryFileKeyDown"
-                        SelectionMode="Single">
+                        SelectionChanged="OnPrimarySelectionChanged"
+                        SelectionMode="Multiple">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:FileRow">
                                 <Grid ColumnSpacing="8">
@@ -336,7 +343,8 @@
                         ItemClick="OnSecondaryFileClick"
                         DoubleTapped="OnSecondaryFileDoubleTapped"
                         KeyDown="OnSecondaryFileKeyDown"
-                        SelectionMode="Single">
+                        SelectionChanged="OnSecondarySelectionChanged"
+                        SelectionMode="Multiple">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:FileRow">
                                 <Grid ColumnSpacing="8">
@@ -358,6 +366,103 @@
                         </ListView.ItemTemplate>
                     </ListView>
                 </Grid>
+
+                </Grid>
+
+                <Border
+                    x:Name="PreviewPane"
+                    Grid.Column="1"
+                    Background="{StaticResource SfBgSecondaryBrush}"
+                    BorderBrush="{StaticResource SfBorderBrush}"
+                    BorderThickness="1,0,0,0"
+                    Padding="12">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Spacing="8">
+                            <TextBlock
+                                x:Name="PreviewTitle"
+                                FontSize="16"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource SfTextPrimaryBrush}"
+                                Text="Preview" />
+                            <TextBlock
+                                x:Name="PreviewSubtitle"
+                                FontSize="12"
+                                Foreground="{StaticResource SfTextMutedBrush}"
+                                Text="Select a file" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Button
+                                    x:Name="PreviewOpenButton"
+                                    Click="OnPreviewOpenClick"
+                                    Content="Open"
+                                    IsEnabled="False" />
+                                <Button
+                                    x:Name="PreviewOpenWithButton"
+                                    Click="OnPreviewOpenWithClick"
+                                    Content="Open With"
+                                    IsEnabled="False" />
+                                <Button
+                                    x:Name="PreviewRevealButton"
+                                    Click="OnPreviewRevealClick"
+                                    Content="Reveal"
+                                    IsEnabled="False" />
+                            </StackPanel>
+                            <Button
+                                x:Name="PreviewCompareButton"
+                                HorizontalAlignment="Left"
+                                Click="OnPreviewCompareClick"
+                                Content="Compare Selected"
+                                IsEnabled="False" />
+                        </StackPanel>
+
+                        <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Spacing="10">
+                                <Image
+                                    x:Name="PreviewImage"
+                                    MaxHeight="220"
+                                    Stretch="Uniform"
+                                    Visibility="Collapsed" />
+                                <TextBox
+                                    x:Name="PreviewTextBox"
+                                    AcceptsReturn="True"
+                                    FontFamily="Consolas"
+                                    FontSize="12"
+                                    IsReadOnly="True"
+                                    MaxHeight="280"
+                                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                    TextWrapping="NoWrap"
+                                    Visibility="Collapsed" />
+                                <TextBlock
+                                    x:Name="PreviewEmptyText"
+                                    Foreground="{StaticResource SfTextMutedBrush}"
+                                    Text="No preview loaded."
+                                    TextWrapping="Wrap" />
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource SfTextPrimaryBrush}"
+                                    Text="Metadata" />
+                                <StackPanel x:Name="PreviewMetadataRows" Spacing="4" />
+                                <Button
+                                    x:Name="PreviewChecksumButton"
+                                    HorizontalAlignment="Left"
+                                    Click="OnPreviewChecksumClick"
+                                    Content="Checksums"
+                                    IsEnabled="False" />
+                                <TextBlock
+                                    x:Name="PreviewChecksumText"
+                                    FontFamily="Consolas"
+                                    FontSize="11"
+                                    Foreground="{StaticResource SfTextMutedBrush}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
             </Grid>
 
             <local:ProgressPanel

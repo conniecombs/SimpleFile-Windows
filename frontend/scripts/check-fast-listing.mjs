@@ -26,28 +26,34 @@ function assertContains(file, values, label = 'value') {
   }
 }
 
-assertContains('src-tauri/src/dir_list.rs', [
+assertContains('crates/simplefile-core/src/dir_list.rs', [
   'FIND_FIRST_EX_LARGE_FETCH',
   'FindFirstFileExW',
-  'list_directory_blocking',
+  'pub fn list_directory',
   'FIRST_CHUNK_SIZE',
   'is_network',
   'get_file_entry_from_dir_entry',
 ], 'fast directory enumeration');
 
-assertContains('src-tauri/src/utils.rs', [
+assertContains('crates/simplefile-core/src/utils.rs', [
   'get_file_entry_from_dir_entry',
   'is_network_path',
   'read_link',
   'build_file_entry',
 ], 'DirEntry-based metadata helpers');
 
+assertContains('src-tauri/src/dir_list.rs', [
+  'Tauri adapter around `simplefile_core::dir_list`',
+  'list_directory_blocking',
+  'simplefile_core::dir_list::list_directory',
+], 'Tauri fast-listing adapter');
+
 assertContains('src-tauri/src/fs_ops.rs', [
   'on_chunk: tauri::ipc::Channel',
   'list_directory_blocking',
 ], 'chunked list_directory command');
 
-assertContains('src-tauri/src/models.rs', [
+assertContains('crates/simplefile-core/src/models.rs', [
   'DirectoryListingChunk',
   'is_network',
 ], 'listing chunk models');

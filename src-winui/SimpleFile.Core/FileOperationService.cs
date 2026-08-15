@@ -156,6 +156,70 @@ public sealed class FileOperationService
         await _ipc.RevealInFolderAsync(path, ct).ConfigureAwait(false);
     }
 
+    public async Task OpenExternalUrlAsync(string url, CancellationToken ct = default)
+    {
+        await _ipc.OpenExternalUrlAsync(url, ct).ConfigureAwait(false);
+    }
+
+    public Task<ArchiveInfo> ListArchiveAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.ListArchiveAsync(path, ct);
+    }
+
+    public async Task ExtractArchiveAsync(string archivePath, string destination, CancellationToken ct = default)
+    {
+        await _ipc.ExtractArchiveAsync(archivePath, destination, ct).ConfigureAwait(false);
+    }
+
+    public async Task CreateArchiveAsync(
+        string[] paths,
+        string archivePath,
+        string format,
+        CancellationToken ct = default)
+    {
+        await _ipc.CreateArchiveAsync(paths, archivePath, format, ct).ConfigureAwait(false);
+    }
+
+    public Task<FilePreview> ReadFilePreviewAsync(string path, ulong? maxSize = null, CancellationToken ct = default)
+    {
+        return _ipc.ReadFilePreviewAsync(path, maxSize, ct);
+    }
+
+    public Task<string> GenerateThumbnailAsync(string path, uint size = 256, CancellationToken ct = default)
+    {
+        return _ipc.GenerateThumbnailAsync(path, size, ct);
+    }
+
+    public Task<ThumbnailResult[]> GenerateThumbnailsAsync(string[] paths, uint size = 128, CancellationToken ct = default)
+    {
+        return _ipc.GenerateThumbnailsAsync(paths, size, ct);
+    }
+
+    public async Task OpenFileWithAsync(string path, string application, CancellationToken ct = default)
+    {
+        await _ipc.OpenFileWithAsync(path, application, ct).ConfigureAwait(false);
+    }
+
+    public Task<FileComparison> CompareFilesAsync(string pathA, string pathB, CancellationToken ct = default)
+    {
+        return _ipc.CompareFilesAsync(pathA, pathB, ct);
+    }
+
+    public Task<Checksums> ComputeChecksumAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.ComputeChecksumAsync(path, ct);
+    }
+
+    public Task<ImageMetadata> GetImageMetadataAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.GetImageMetadataAsync(path, ct);
+    }
+
+    public Task<FileMetadata> GetFileMetadataAsync(string path, CancellationToken ct = default)
+    {
+        return _ipc.GetFileMetadataAsync(path, ct);
+    }
+
     // Check if an IpcException represents a conflict.
     public static bool IsConflict(IpcException ex)
         => ex.Message.StartsWith(Protocol.PrefixConflict, StringComparison.Ordinal);

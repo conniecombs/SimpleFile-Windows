@@ -24,6 +24,13 @@ public class FileOperationServiceTests
         public Func<string, CancellationToken, Task>? CancelSearchHandler { get; set; }
         public Func<string, CancellationToken, Task>? WatchDirectoryHandler { get; set; }
         public Func<CancellationToken, Task>? UnwatchDirectoryHandler { get; set; }
+        public Func<string, ulong?, CancellationToken, Task<FilePreview>>? ReadFilePreviewHandler { get; set; }
+        public Func<string, CancellationToken, Task<Checksums>>? ComputeChecksumHandler { get; set; }
+        public Func<string, CancellationToken, Task<FileMetadata>>? GetFileMetadataHandler { get; set; }
+        public Func<string, string, CancellationToken, Task<FileComparison>>? CompareFilesHandler { get; set; }
+        public Func<string, CancellationToken, Task<ArchiveInfo>>? ListArchiveHandler { get; set; }
+        public Func<string, string, CancellationToken, Task>? ExtractArchiveHandler { get; set; }
+        public Func<string[], string, string, CancellationToken, Task>? CreateArchiveHandler { get; set; }
         private readonly Dictionary<string, List<object>> _handlers = new();
 
         public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default)
@@ -59,6 +66,27 @@ public class FileOperationServiceTests
 
         public Task UnwatchDirectoryAsync(CancellationToken ct = default)
             => UnwatchDirectoryHandler?.Invoke(ct) ?? throw new NotImplementedException();
+
+        public Task<FilePreview> ReadFilePreviewAsync(string path, ulong? maxSize = null, CancellationToken ct = default)
+            => ReadFilePreviewHandler?.Invoke(path, maxSize, ct) ?? throw new NotImplementedException();
+
+        public Task<Checksums> ComputeChecksumAsync(string path, CancellationToken ct = default)
+            => ComputeChecksumHandler?.Invoke(path, ct) ?? throw new NotImplementedException();
+
+        public Task<FileMetadata> GetFileMetadataAsync(string path, CancellationToken ct = default)
+            => GetFileMetadataHandler?.Invoke(path, ct) ?? throw new NotImplementedException();
+
+        public Task<FileComparison> CompareFilesAsync(string pathA, string pathB, CancellationToken ct = default)
+            => CompareFilesHandler?.Invoke(pathA, pathB, ct) ?? throw new NotImplementedException();
+
+        public Task<ArchiveInfo> ListArchiveAsync(string path, CancellationToken ct = default)
+            => ListArchiveHandler?.Invoke(path, ct) ?? throw new NotImplementedException();
+
+        public Task ExtractArchiveAsync(string archivePath, string destination, CancellationToken ct = default)
+            => ExtractArchiveHandler?.Invoke(archivePath, destination, ct) ?? throw new NotImplementedException();
+
+        public Task CreateArchiveAsync(string[] paths, string archivePath, string format, CancellationToken ct = default)
+            => CreateArchiveHandler?.Invoke(paths, archivePath, format, ct) ?? throw new NotImplementedException();
 
         public int SubscriptionCount(string eventName)
             => _handlers.TryGetValue(eventName, out var handlers) ? handlers.Count : 0;
@@ -107,6 +135,11 @@ public class FileOperationServiceTests
         public Task<FileEntry> GetEntryInfoAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task OpenFileAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task RevealInFolderAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task OpenExternalUrlAsync(string url, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<string> GenerateThumbnailAsync(string path, uint size, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<ThumbnailResult[]> GenerateThumbnailsAsync(string[] paths, uint size, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task OpenFileWithAsync(string path, string application, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<ImageMetadata> GetImageMetadataAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<TreeNode[]> ListSubdirectoriesAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
@@ -325,5 +358,102 @@ public class FileOperationServiceTests
         Assert.Single(results);
         Assert.Single(batches);
         Assert.Equal([1], completes);
+    }
+
+    [Fact]
+    public async Task InspectionMethods_CallTypedIpc()
+    {
+        string? previewPath = null;
+        ulong? previewSize = null;
+        string? checksumPath = null;
+        (string A, string B)? compared = null;
+        var stub = new StubIpc
+        {
+            ReadFilePreviewHandler = (path, maxSize, ct) =>
+            {
+                previewPath = path;
+                previewSize = maxSize;
+                return Task.FromResult(new FilePreview
+                {
+                    FileType = "text",
+                    MimeType = "text/plain",
+                    Content = "hello",
+                    Encoding = "utf-8",
+                    Size = 5,
+                });
+            },
+            ComputeChecksumHandler = (path, ct) =>
+            {
+                checksumPath = path;
+                return Task.FromResult(new Checksums { Md5 = "m", Sha1 = "s1", Sha256 = "s256" });
+            },
+            CompareFilesHandler = (pathA, pathB, ct) =>
+            {
+                compared = (pathA, pathB);
+                return Task.FromResult(new FileComparison { LeftPath = pathA, RightPath = pathB, Identical = true });
+            },
+        };
+        var service = new FileOperationService(stub);
+
+        var preview = await service.ReadFilePreviewAsync(@"C:\a.txt", 512);
+        var checksums = await service.ComputeChecksumAsync(@"C:\a.txt");
+        var comparison = await service.CompareFilesAsync(@"C:\a.txt", @"C:\b.txt");
+
+        Assert.Equal("hello", preview.Content);
+        Assert.Equal(@"C:\a.txt", previewPath);
+        Assert.Equal(512ul, previewSize);
+        Assert.Equal(@"C:\a.txt", checksumPath);
+        Assert.Equal("s256", checksums.Sha256);
+        Assert.Equal((@"C:\a.txt", @"C:\b.txt"), compared);
+        Assert.True(comparison.Identical);
+    }
+
+    [Fact]
+    public async Task ArchiveMethods_CallTypedIpc()
+    {
+        string? listed = null;
+        (string Archive, string Destination)? extracted = null;
+        (string[] Paths, string Archive, string Format)? created = null;
+        var stub = new StubIpc
+        {
+            ListArchiveHandler = (path, ct) =>
+            {
+                listed = path;
+                return Task.FromResult(new ArchiveInfo
+                {
+                    Path = path,
+                    Format = "zip",
+                    Entries =
+                    [
+                        new ArchiveEntry { Name = "notes.txt", Path = "notes.txt", Size = 5 },
+                    ],
+                    TotalSize = 5,
+                    CompressedSize = 4,
+                });
+            },
+            ExtractArchiveHandler = (archive, destination, ct) =>
+            {
+                extracted = (archive, destination);
+                return Task.CompletedTask;
+            },
+            CreateArchiveHandler = (paths, archive, format, ct) =>
+            {
+                created = (paths, archive, format);
+                return Task.CompletedTask;
+            },
+        };
+        var service = new FileOperationService(stub);
+
+        var info = await service.ListArchiveAsync(@"C:\pack.zip");
+        await service.ExtractArchiveAsync(@"C:\pack.zip", @"C:\out");
+        await service.CreateArchiveAsync([@"C:\a.txt", @"C:\b.txt"], @"C:\pack.zip", "zip");
+
+        Assert.Equal(@"C:\pack.zip", listed);
+        Assert.Equal("notes.txt", info.Entries[0].Name);
+        Assert.Equal((@"C:\pack.zip", @"C:\out"), extracted);
+        Assert.NotNull(created);
+        Assert.Equal([@"C:\a.txt", @"C:\b.txt"], created.Value.Paths);
+        Assert.Equal(@"C:\pack.zip", created.Value.Archive);
+        Assert.Equal("zip", created.Value.Format);
     }
 }

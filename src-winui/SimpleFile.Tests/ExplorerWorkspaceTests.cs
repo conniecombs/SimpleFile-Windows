@@ -75,6 +75,39 @@ public class ExplorerWorkspaceTests
     }
 
     [Fact]
+    public async Task OpenArchiveFile_NavigatesIntoArchive()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var archivePath = @"C:\Users\test\pack.zip";
+        backend.Listings[@"C:\Users\test"].Entries.Add(new FileEntry
+        {
+            Name = "pack.zip",
+            Path = archivePath,
+            Extension = "zip",
+            Size = 100,
+        });
+        backend.Listings[archivePath] = new DirectoryListing
+        {
+            Path = archivePath,
+            Parent = @"C:\Users\test",
+            Entries =
+            [
+                new FileEntry { Name = "inside.txt", Path = archivePath + @"\inside.txt", Size = 5 },
+            ],
+        };
+        var workspace = new ExplorerWorkspace(backend);
+        await workspace.InitializeAsync();
+
+        var archive = workspace.VisibleEntries.First(entry => entry.Name == "pack.zip");
+        await workspace.OpenEntryAsync(archive);
+
+        Assert.Equal(archivePath, workspace.CurrentPath);
+        Assert.Equal("inside.txt", workspace.VisibleEntries.Single().Name);
+        Assert.False(workspace.FileOpenUnsupported);
+    }
+
+
+    [Fact]
     public async Task NavigateSpecial_HomeAndDesktop()
     {
         var backend = FakeExplorerBackend.Typical();

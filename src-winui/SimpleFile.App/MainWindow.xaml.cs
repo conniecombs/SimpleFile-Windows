@@ -2,10 +2,12 @@ using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using SimpleFile.Core;
 using SimpleFile.Ipc;
 using Windows.Graphics;
 using Windows.System;
+using Windows.Storage.Streams;
 
 namespace SimpleFile.App;
 
@@ -33,6 +35,8 @@ public sealed partial class MainWindow : Window
     private bool _searchMode;
     private PaneId _searchPane = PaneId.Primary;
     private readonly List<SearchResult> _activeSearchResults = [];
+    private int _previewToken;
+    private string? _previewPath;
 
     public ObservableCollection<FileRow> PrimaryFiles { get; } = [];
     public ObservableCollection<FileRow> SecondaryFiles { get; } = [];
@@ -224,6 +228,8 @@ public sealed partial class MainWindow : Window
         {
             _ = PromptNetworkReconnectAsync(drive.Name, drive.StatusDetail, drive.RemotePath, drive.Path);
         }
+
+        QueuePreviewFromSelection();
     }
 
     private void ApplyDualPaneLayout()
@@ -338,6 +344,11 @@ public sealed partial class MainWindow : Window
 
     private static void SelectRow(ListView list, ObservableCollection<FileRow> rows, string? path)
     {
+        if (list.SelectionMode != ListViewSelectionMode.Single && list.SelectedItems.Count > 1)
+        {
+            return;
+        }
+
         list.SelectedItem = path is null ? null : rows.FirstOrDefault(row => row.Path == path);
     }
 
@@ -574,7 +585,38 @@ public sealed partial class MainWindow : Window
         if (_workspace is not null && e.ClickedItem is FileRow row)
         {
             _workspace.SelectPath(row.Path, pane);
+            QueuePreview(row);
         }
+    }
+
+    private void OnPrimarySelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        HandleSelectionChanged(PrimaryFileList, PaneId.Primary, e);
+
+    private void OnSecondarySelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        HandleSelectionChanged(SecondaryFileList, PaneId.Secondary, e);
+
+    private void HandleSelectionChanged(ListView list, PaneId pane, SelectionChangedEventArgs e)
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var row = e.AddedItems.OfType<FileRow>().LastOrDefault()
+            ?? list.SelectedItems.OfType<FileRow>().LastOrDefault();
+        if (row is null)
+        {
+            if (list == ActiveFileList)
+            {
+                _workspace.SelectPath(null, pane);
+                ClearPreview();
+            }
+
+            return;
+        }
+
+        _workspace.SelectPath(row.Path, pane);
+        QueuePreview(row);
     }
 
     private async void OnPrimaryFileDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) =>
@@ -608,6 +650,436 @@ public sealed partial class MainWindow : Window
                 new FileEntry { Name = row.Name, Path = row.Path, IsDir = row.IsDir },
                 pane);
         }
+    }
+
+    private FileRow? ActiveSelectedRow =>
+        ActiveFileList.SelectedItem as FileRow
+        ?? ActiveFileList.SelectedItems.OfType<FileRow>().LastOrDefault();
+
+    private IReadOnlyList<FileRow> ActiveSelectedRows =>
+        ActiveFileList.SelectedItems.OfType<FileRow>().ToArray();
+
+    private void QueuePreviewFromSelection()
+    {
+        var row = ActiveSelectedRow;
+        if (row is null)
+        {
+            ClearPreview();
+            return;
+        }
+
+        QueuePreview(row);
+    }
+
+    private void QueuePreview(FileRow row)
+    {
+        UpdatePreviewButtons(row);
+        if (string.Equals(_previewPath, row.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _previewPath = row.Path;
+        _ = LoadPreviewAsync(row);
+    }
+
+    private void ClearPreview()
+    {
+        _previewPath = null;
+        _ = Interlocked.Increment(ref _previewToken);
+        PreviewTitle.Text = "Preview";
+        PreviewSubtitle.Text = "Select a file";
+        PreviewImage.Source = null;
+        PreviewImage.Visibility = Visibility.Collapsed;
+        PreviewTextBox.Text = "";
+        PreviewTextBox.Visibility = Visibility.Collapsed;
+        PreviewEmptyText.Text = "No preview loaded.";
+        PreviewEmptyText.Visibility = Visibility.Visible;
+        PreviewMetadataRows.Children.Clear();
+        PreviewChecksumText.Text = "";
+        UpdatePreviewButtons(null);
+    }
+
+    private void UpdatePreviewButtons(FileRow? row)
+    {
+        var selected = ActiveSelectedRows;
+        var canActOnSelection = row is not null;
+        var canInspectFile = row is not null && !row.IsDir;
+        PreviewOpenButton.IsEnabled = canActOnSelection;
+        PreviewRevealButton.IsEnabled = canActOnSelection;
+        PreviewOpenWithButton.IsEnabled = canInspectFile;
+        PreviewChecksumButton.IsEnabled = canInspectFile;
+        PreviewCompareButton.IsEnabled = selected.Count == 2 && selected.All(item => !item.IsDir);
+    }
+
+    private async Task LoadPreviewAsync(FileRow row)
+    {
+        var token = Interlocked.Increment(ref _previewToken);
+        PreviewTitle.Text = row.Name;
+        PreviewSubtitle.Text = row.Path;
+        PreviewImage.Source = null;
+        PreviewImage.Visibility = Visibility.Collapsed;
+        PreviewTextBox.Text = "";
+        PreviewTextBox.Visibility = Visibility.Collapsed;
+        PreviewEmptyText.Text = row.IsDir ? "Folder selected." : "Loading preview...";
+        PreviewEmptyText.Visibility = Visibility.Visible;
+        PreviewMetadataRows.Children.Clear();
+        PreviewChecksumText.Text = "";
+        AddMetadataRow("Type", row.TypeText);
+        AddMetadataRow("Size", row.SizeText);
+        AddMetadataRow("Modified", row.ModifiedText);
+
+        if (row.IsDir || _workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        FilePreview? preview = null;
+        try
+        {
+            preview = await _workspace.FileOps.ReadFilePreviewAsync(row.Path, 2_000_000);
+            if (token != _previewToken)
+            {
+                return;
+            }
+
+            AddMetadataRow("Preview type", preview.FileType);
+            AddMetadataRow("MIME", preview.MimeType);
+            AddMetadataRow("Preview size", EntryPresentation.FormatFileSize(preview.Size, isDirectory: false));
+            await RenderPreviewContentAsync(row.Path, preview);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (token != _previewToken)
+            {
+                return;
+            }
+
+            PreviewEmptyText.Text = exception.Message;
+        }
+
+        await LoadMetadataAsync(row.Path, preview?.FileType, token);
+    }
+
+    private async Task RenderPreviewContentAsync(string path, FilePreview preview)
+    {
+        if (preview.FileType == "text" && preview.Content is not null)
+        {
+            PreviewTextBox.Text = preview.Content;
+            PreviewTextBox.Visibility = Visibility.Visible;
+            PreviewEmptyText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        if (preview.FileType == "image")
+        {
+            if (preview.Content is not null && await TrySetPreviewImageAsync(preview.Content))
+            {
+                PreviewEmptyText.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            try
+            {
+                var thumbnail = await _workspace!.FileOps!.GenerateThumbnailAsync(path, 256);
+                if (await TrySetPreviewImageAsync(thumbnail))
+                {
+                    PreviewEmptyText.Text = "Thumbnail preview";
+                    return;
+                }
+            }
+            catch
+            {
+                // Unsupported image codecs still keep metadata and actions visible.
+            }
+        }
+
+        PreviewEmptyText.Text = preview.Content is null
+            ? "No inline preview is available for this file."
+            : $"Preview content uses {preview.Encoding ?? "an unsupported"} encoding.";
+    }
+
+    private async Task LoadMetadataAsync(string path, string? previewType, int token)
+    {
+        if (_workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var metadata = await _workspace.FileOps.GetFileMetadataAsync(path);
+            if (token != _previewToken)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(metadata.Summary))
+            {
+                AddMetadataRow("Summary", metadata.Summary!);
+            }
+
+            if (!string.Equals(metadata.Kind, "unsupported", StringComparison.OrdinalIgnoreCase))
+            {
+                AddMetadataRow("Metadata kind", metadata.Kind);
+            }
+
+            AddMetadataRows(metadata.Fields);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (token == _previewToken)
+            {
+                AddMetadataRow("Metadata", exception.Message);
+            }
+        }
+
+        if (!string.Equals(previewType, "image", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            var image = await _workspace.FileOps.GetImageMetadataAsync(path);
+            if (token != _previewToken)
+            {
+                return;
+            }
+
+            AddMetadataRow("Dimensions", $"{image.Width} x {image.Height}");
+            AddMetadataRows(image.Exif.Take(12));
+        }
+        catch
+        {
+            // get_file_metadata already covers the non-EXIF image summary.
+        }
+    }
+
+    private async Task<bool> TrySetPreviewImageAsync(string base64)
+    {
+        try
+        {
+            var bytes = Convert.FromBase64String(base64);
+            var stream = new InMemoryRandomAccessStream();
+            var writer = new DataWriter(stream.GetOutputStreamAt(0));
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+            writer.Dispose();
+            stream.Seek(0);
+            var bitmap = new BitmapImage();
+            await bitmap.SetSourceAsync(stream);
+            PreviewImage.Source = bitmap;
+            PreviewImage.Visibility = Visibility.Visible;
+            return true;
+        }
+        catch
+        {
+            PreviewImage.Source = null;
+            PreviewImage.Visibility = Visibility.Collapsed;
+            return false;
+        }
+    }
+
+    private void AddMetadataRows(IEnumerable<string[]> rows)
+    {
+        foreach (var row in rows)
+        {
+            if (row.Length >= 2)
+            {
+                AddMetadataRow(row[0], row[1]);
+            }
+        }
+    }
+
+    private void AddMetadataRow(string label, string value)
+    {
+        if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        PreviewMetadataRows.Children.Add(new TextBlock
+        {
+            Text = $"{label}: {value}",
+            FontSize = 12,
+            Opacity = 0.86,
+            TextWrapping = TextWrapping.Wrap,
+        });
+    }
+
+    private async void OnPreviewOpenClick(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is null || ActiveSelectedRow is not { } row)
+        {
+            return;
+        }
+
+        try
+        {
+            await _workspace.OpenPathAsync(row.Path, row.IsDir, _workspace.ActivePane);
+        }
+        catch (IpcException exception)
+        {
+            ShowMessage("Open", exception.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async void OnPreviewRevealClick(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps is null || ActiveSelectedRow is not { } row)
+        {
+            return;
+        }
+
+        try
+        {
+            await _workspace.FileOps.RevealInFolderAsync(row.Path);
+        }
+        catch (IpcException exception)
+        {
+            ShowMessage("Reveal in folder", exception.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async void OnPreviewOpenWithClick(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps is null || ActiveSelectedRow is not { IsDir: false } row)
+        {
+            return;
+        }
+
+        var input = new TextBox
+        {
+            PlaceholderText = "Application name or full path",
+        };
+        var dialog = new ContentDialog
+        {
+            Title = "Open With",
+            Content = input,
+            PrimaryButtonText = "Open",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(input.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            await _workspace.FileOps.OpenFileWithAsync(row.Path, input.Text.Trim());
+        }
+        catch (IpcException exception)
+        {
+            ShowMessage("Open With", exception.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async void OnPreviewChecksumClick(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps is null || ActiveSelectedRow is not { IsDir: false } row)
+        {
+            return;
+        }
+
+        PreviewChecksumButton.IsEnabled = false;
+        PreviewChecksumText.Text = "Computing...";
+        try
+        {
+            var checksums = await _workspace.FileOps.ComputeChecksumAsync(row.Path);
+            PreviewChecksumText.Text =
+                $"MD5    {checksums.Md5}{Environment.NewLine}" +
+                $"SHA1   {checksums.Sha1}{Environment.NewLine}" +
+                $"SHA256 {checksums.Sha256}";
+        }
+        catch (IpcException exception)
+        {
+            PreviewChecksumText.Text = exception.Message;
+        }
+        finally
+        {
+            PreviewChecksumButton.IsEnabled = ActiveSelectedRow is { IsDir: false };
+        }
+    }
+
+    private async void OnPreviewCompareClick(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        var selected = ActiveSelectedRows;
+        if (selected.Count != 2 || selected.Any(row => row.IsDir))
+        {
+            return;
+        }
+
+        try
+        {
+            var comparison = await _workspace.FileOps.CompareFilesAsync(selected[0].Path, selected[1].Path);
+            await ShowComparisonAsync(comparison);
+        }
+        catch (IpcException exception)
+        {
+            ShowMessage("Compare files", exception.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async Task ShowComparisonAsync(FileComparison comparison)
+    {
+        var summary = comparison.Identical
+            ? "Files are identical."
+            : $"{comparison.Added} added, {comparison.Removed} removed, {comparison.Changed} changed";
+        var rows = comparison.Rows
+            .Take(80)
+            .Select(row =>
+            {
+                var left = row.LeftLine?.ToString() ?? "";
+                var right = row.RightLine?.ToString() ?? "";
+                var text = row.LeftText ?? row.RightText ?? "";
+                return $"{row.Kind,-8} {left,4} {right,4}  {text}";
+            });
+
+        var diffBox = new TextBox
+        {
+            Text = string.Join(Environment.NewLine, rows),
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas"),
+            FontSize = 12,
+            IsReadOnly = true,
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.NoWrap,
+            MaxHeight = 360,
+        };
+        ScrollViewer.SetHorizontalScrollBarVisibility(diffBox, ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(diffBox, ScrollBarVisibility.Auto);
+
+        var body = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = $"{comparison.LeftName} -> {comparison.RightName}" },
+                new TextBlock { Text = summary },
+                diffBox,
+            },
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "File Compare",
+            Content = body,
+            CloseButtonText = "Close",
+            XamlRoot = Content.XamlRoot,
+        };
+
+        await dialog.ShowAsync();
     }
 
     private async void OnTabClick(object sender, RoutedEventArgs e)

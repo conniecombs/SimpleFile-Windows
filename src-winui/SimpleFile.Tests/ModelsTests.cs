@@ -109,4 +109,89 @@ public class ModelsTests
         Assert.Equal("ready", drive.DriveStatus);
         Assert.Null(drive.RemotePath);
     }
+
+    [Fact]
+    public void InspectionModels_DeserializeSnakeCaseTuples()
+    {
+        const string json = """
+            {
+              "file_type": "text",
+              "mime_type": "text/plain",
+              "size": 5,
+              "content": "hello",
+              "encoding": "utf-8"
+            }
+            """;
+
+        var preview = JsonSerializer.Deserialize<FilePreview>(json, IpcJson.Options);
+        Assert.NotNull(preview);
+        Assert.Equal("text", preview.FileType);
+        Assert.Equal("hello", preview.Content);
+
+        const string metadataJson = """
+            {
+              "kind": "image",
+              "summary": "10 x 20",
+              "fields": [["Width", "10"], ["Height", "20"]]
+            }
+            """;
+
+        var metadata = JsonSerializer.Deserialize<FileMetadata>(metadataJson, IpcJson.Options);
+        Assert.NotNull(metadata);
+        Assert.Equal("image", metadata.Kind);
+        Assert.Equal(["Width", "10"], metadata.Fields[0]);
+
+        const string comparisonJson = """
+            {
+              "left_path": "C:\\left.txt",
+              "right_path": "C:\\right.txt",
+              "left_name": "left.txt",
+              "right_name": "right.txt",
+              "left_size": 5,
+              "right_size": 6,
+              "identical": false,
+              "added": 1,
+              "removed": 0,
+              "changed": 0,
+              "rows": [{"kind": "added", "left_line": null, "right_line": 1, "left_text": null, "right_text": "hello"}]
+            }
+            """;
+
+        var comparison = JsonSerializer.Deserialize<FileComparison>(comparisonJson, IpcJson.Options);
+        Assert.NotNull(comparison);
+        Assert.False(comparison.Identical);
+        Assert.Equal("added", comparison.Rows[0].Kind);
+        Assert.Equal(1, comparison.Rows[0].RightLine);
+    }
+
+    [Fact]
+    public void ArchiveModels_DeserializeSnakeCase()
+    {
+        const string json = """
+            {
+              "path": "C:\\pack.zip",
+              "format": "zip",
+              "entries": [
+                {
+                  "name": "notes.txt",
+                  "path": "folder/notes.txt",
+                  "is_dir": false,
+                  "size": 12,
+                  "compressed_size": 8
+                }
+              ],
+              "unsafe_entries": ["../escape.txt"],
+              "total_size": 12,
+              "compressed_size": 8
+            }
+            """;
+
+        var archive = JsonSerializer.Deserialize<ArchiveInfo>(json, IpcJson.Options);
+        Assert.NotNull(archive);
+        Assert.Equal("zip", archive.Format);
+        Assert.Equal(12ul, archive.TotalSize);
+        Assert.Equal("../escape.txt", archive.UnsafeEntries[0]);
+        Assert.Equal("notes.txt", archive.Entries[0].Name);
+        Assert.Equal(8ul, archive.Entries[0].CompressedSize);
+    }
 }

@@ -261,3 +261,162 @@ public sealed class TransferResult
     [JsonPropertyName("destination")]
     public string Destination { get; set; } = "";
 }
+
+public sealed class FilePreview
+{
+    [JsonPropertyName("file_type")]
+    public string FileType { get; set; } = "";
+
+    [JsonPropertyName("mime_type")]
+    public string MimeType { get; set; } = "";
+
+    [JsonPropertyName("size")]
+    public ulong Size { get; set; }
+
+    [JsonPropertyName("content")]
+    public string? Content { get; set; }
+
+    [JsonPropertyName("encoding")]
+    public string? Encoding { get; set; }
+}
+
+public sealed class ThumbnailResult
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("data")]
+    public string? Data { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public sealed class Checksums
+{
+    [JsonPropertyName("md5")]
+    public string Md5 { get; set; } = "";
+
+    [JsonPropertyName("sha1")]
+    public string Sha1 { get; set; } = "";
+
+    [JsonPropertyName("sha256")]
+    public string Sha256 { get; set; } = "";
+}
+
+public sealed class ImageMetadata
+{
+    [JsonPropertyName("width")]
+    public uint Width { get; set; }
+
+    [JsonPropertyName("height")]
+    public uint Height { get; set; }
+
+    [JsonPropertyName("exif")]
+    public List<string[]> Exif { get; set; } = [];
+}
+
+public sealed class FileMetadata
+{
+    [JsonPropertyName("kind")]
+    public string Kind { get; set; } = "";
+
+    [JsonPropertyName("summary")]
+    public string? Summary { get; set; }
+
+    [JsonPropertyName("fields")]
+    public List<string[]> Fields { get; set; } = [];
+}
+
+public sealed class DiffRow
+{
+    [JsonPropertyName("kind")]
+    public string Kind { get; set; } = "";
+
+    [JsonPropertyName("left_line")]
+    public int? LeftLine { get; set; }
+
+    [JsonPropertyName("right_line")]
+    public int? RightLine { get; set; }
+
+    [JsonPropertyName("left_text")]
+    public string? LeftText { get; set; }
+
+    [JsonPropertyName("right_text")]
+    public string? RightText { get; set; }
+}
+
+public sealed class FileComparison
+{
+    [JsonPropertyName("left_path")]
+    public string LeftPath { get; set; } = "";
+
+    [JsonPropertyName("right_path")]
+    public string RightPath { get; set; } = "";
+
+    [JsonPropertyName("left_name")]
+    public string LeftName { get; set; } = "";
+
+    [JsonPropertyName("right_name")]
+    public string RightName { get; set; } = "";
+
+    [JsonPropertyName("left_size")]
+    public ulong LeftSize { get; set; }
+
+    [JsonPropertyName("right_size")]
+    public ulong RightSize { get; set; }
+
+    [JsonPropertyName("identical")]
+    public bool Identical { get; set; }
+
+    [JsonPropertyName("added")]
+    public int Added { get; set; }
+
+    [JsonPropertyName("removed")]
+    public int Removed { get; set; }
+
+    [JsonPropertyName("changed")]
+    public int Changed { get; set; }
+
+    [JsonPropertyName("rows")]
+    public List<DiffRow> Rows { get; set; } = [];
+}
+
+public sealed class ArchiveEntry
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("is_dir")]
+    public bool IsDir { get; set; }
+
+    [JsonPropertyName("size")]
+    public ulong Size { get; set; }
+
+    [JsonPropertyName("compressed_size")]
+    public ulong CompressedSize { get; set; }
+}
+
+public sealed class ArchiveInfo
+{
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("format")]
+    public string Format { get; set; } = "";
+
+    [JsonPropertyName("entries")]
+    public List<ArchiveEntry> Entries { get; set; } = [];
+
+    [JsonPropertyName("unsafe_entries")]
+    public List<string> UnsafeEntries { get; set; } = [];
+
+    [JsonPropertyName("total_size")]
+    public ulong TotalSize { get; set; }
+
+    [JsonPropertyName("compressed_size")]
+    public ulong CompressedSize { get; set; }
+}

@@ -1,8 +1,8 @@
 //! Reusable file operation logic extracted from the Tauri frontend's `fs_ops.rs`.
 //!
-//! This module contains all file system operations that need no Tauri or archive
-//! dependencies, making them callable from any Rust-based backend (service crate,
-//! tests, CLI tools).
+//! This module contains file system operations that need no Tauri dependencies,
+//! making them callable from any Rust-based backend (service crate, tests, CLI
+//! tools).
 
 use crate::models::{FileEntry, TreeNode};
 use crate::utils::{
@@ -38,6 +38,10 @@ struct RenamePlan {
 // ============================================================================
 
 pub fn create_directory(path: &str, name: &str) -> Result<String, String> {
+    if crate::archive::split_archive_path(path)?.is_some() {
+        return crate::archive::create_archive_directory(path.to_string(), name.to_string());
+    }
+
     validate_name(name)?;
     let parent = validate_existing_path_no_resolve(path)?;
     let new_path = parent.join(name);
@@ -52,6 +56,10 @@ pub fn create_directory(path: &str, name: &str) -> Result<String, String> {
 }
 
 pub fn create_file(path: &str, name: &str) -> Result<String, String> {
+    if crate::archive::split_archive_path(path)?.is_some() {
+        return crate::archive::create_archive_file(path.to_string(), name.to_string());
+    }
+
     validate_name(name)?;
     let parent = validate_existing_path_no_resolve(path)?;
     let new_path = parent.join(name);
@@ -70,6 +78,10 @@ pub fn create_file(path: &str, name: &str) -> Result<String, String> {
 }
 
 pub fn delete_entry(path: &str) -> Result<(), String> {
+    if crate::archive::is_archive_virtual_path(path) {
+        return crate::archive::delete_archive_entry(path);
+    }
+
     let path_buf = validate_path_no_follow(path)?;
     let lstat = fs::symlink_metadata(&path_buf).map_err(|e| format!("Failed to stat path: {e}"))?;
     if lstat.file_type().is_symlink() {
@@ -89,6 +101,11 @@ pub fn delete_entry(path: &str) -> Result<(), String> {
 
 pub fn move_to_trash(paths: &[String]) -> Result<(), String> {
     for path in paths {
+        if crate::archive::is_archive_virtual_path(path) {
+            crate::archive::delete_archive_entry(path)?;
+            continue;
+        }
+
         let validated = validate_path_no_follow(path)?;
         trash::delete(&validated).map_err(|e| format!("TRASH_UNAVAILABLE: {e}"))?;
     }
@@ -100,6 +117,10 @@ pub fn move_to_trash(paths: &[String]) -> Result<(), String> {
 // ============================================================================
 
 pub fn rename_entry(path: &str, new_name: &str) -> Result<String, String> {
+    if crate::archive::is_archive_virtual_path(path) {
+        return crate::archive::rename_archive_entry(path.to_string(), new_name.to_string());
+    }
+
     validate_name(new_name)?;
     let path_buf = validate_path_no_follow(path)?;
     let parent = path_buf
@@ -342,6 +363,14 @@ pub fn copy_entry_resolved(
     destination: &str,
     conflict_action: &str,
 ) -> Result<String, String> {
+    if crate::archive::should_handle_transfer(source, destination)? {
+        return crate::archive::copy_entry_resolved(
+            source.to_string(),
+            destination.to_string(),
+            conflict_action.to_string(),
+        );
+    }
+
     let source_path = validate_path_no_follow(source)?;
     let dest_dir = validate_existing_path_no_resolve(destination)?;
     if !dest_dir.is_dir() {
@@ -366,6 +395,14 @@ pub fn move_entry_resolved(
     destination: &str,
     conflict_action: &str,
 ) -> Result<String, String> {
+    if crate::archive::should_handle_transfer(source, destination)? {
+        return crate::archive::move_entry_resolved(
+            source.to_string(),
+            destination.to_string(),
+            conflict_action.to_string(),
+        );
+    }
+
     let source_path = validate_path_no_follow(source)?;
     let dest_dir = validate_existing_path_no_resolve(destination)?;
     if !dest_dir.is_dir() {
@@ -451,6 +488,10 @@ pub fn calculate_folder_size(path: &str, cancel: &AtomicBool) -> Option<u64> {
 }
 
 pub fn count_folder_items(path: &str, cancel: &AtomicBool) -> Option<u64> {
+    if let Ok(Some(listing)) = crate::archive::list_archive_directory(path) {
+        return Some(listing.entries.len() as u64);
+    }
+
     let path_buf = match validate_existing_path_no_resolve(path) {
         Ok(p) => p,
         Err(_) => return None,

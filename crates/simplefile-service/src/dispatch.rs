@@ -135,6 +135,59 @@ struct SearchIdParams {
     search_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct PreviewParams {
+    path: String,
+    #[serde(rename = "maxSize")]
+    max_size: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ThumbnailParams {
+    path: String,
+    size: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ThumbnailBatchParams {
+    paths: Vec<String>,
+    size: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExternalUrlParams {
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct OpenWithParams {
+    path: String,
+    application: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CompareParams {
+    #[serde(rename = "pathA")]
+    path_a: String,
+    #[serde(rename = "pathB")]
+    path_b: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ExtractArchiveParams {
+    #[serde(rename = "archivePath")]
+    archive_path: String,
+    destination: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateArchiveParams {
+    paths: Vec<String>,
+    #[serde(rename = "archivePath")]
+    archive_path: String,
+    format: String,
+}
+
 pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Dispatch {
     if request.jsonrpc != simplefile_ipc::JSONRPC_VERSION {
         return Dispatch::Reply(JsonRpcResponse::error(
@@ -342,6 +395,135 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             },
             Err(r) => Dispatch::Reply(r),
         },
+        "open_external_url" => match parse_params::<ExternalUrlParams>(request) {
+            Ok(p) => match crate::shell::open_external_url(&p.url) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "list_archive" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::archive::list_archive(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "extract_archive" => match parse_params::<ExtractArchiveParams>(request) {
+            Ok(p) => match simplefile_core::archive::extract_archive(p.archive_path, p.destination)
+            {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "create_archive" => match parse_params::<CreateArchiveParams>(request) {
+            Ok(p) => {
+                match simplefile_core::archive::create_archive(p.paths, p.archive_path, p.format) {
+                    Ok(()) => {
+                        Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
+                    }
+                    Err(m) => {
+                        Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                    }
+                }
+            }
+            Err(r) => Dispatch::Reply(r),
+        },
+        "read_file_preview" => match parse_params::<PreviewParams>(request) {
+            Ok(p) => match simplefile_core::preview::read_file_preview(p.path, p.max_size) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "generate_thumbnail" => match parse_params::<ThumbnailParams>(request) {
+            Ok(p) => match simplefile_core::preview::generate_thumbnail(p.path, p.size) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(r))),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "generate_thumbnails" => match parse_params::<ThumbnailBatchParams>(request) {
+            Ok(p) => Dispatch::Reply(JsonRpcResponse::result(
+                request.id.clone(),
+                serde_json::to_value(simplefile_core::preview::generate_thumbnails(
+                    p.paths, p.size,
+                ))
+                .unwrap_or(Value::Null),
+            )),
+            Err(r) => Dispatch::Reply(r),
+        },
+        "compute_checksum" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::checksum::compute_checksum(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), r)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_image_metadata" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::metadata::get_image_metadata(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_file_metadata" => match parse_params::<PathParams>(request) {
+            Ok(p) => match simplefile_core::metadata::get_file_metadata(p.path) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "open_file_with" => match parse_params::<OpenWithParams>(request) {
+            Ok(p) => match simplefile_core::open_with::open_file_with(p.path, p.application) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
+        "compare_files" => match parse_params::<CompareParams>(request) {
+            Ok(p) => match simplefile_core::compare::compare_files(p.path_a, p.path_b) {
+                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(
+                    request.id.clone(),
+                    serde_json::to_value(r).unwrap_or(Value::Null),
+                )),
+                Err(m) => {
+                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
+                }
+            },
+            Err(r) => Dispatch::Reply(r),
+        },
         "calculate_folder_size" => match parse_params::<PathParams>(request) {
             Ok(p) => {
                 let cancel = AtomicBool::new(false);
@@ -486,6 +668,8 @@ fn parse_params<T: for<'de> Deserialize<'de>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn request(method: &str, id: u64, params: Value) -> JsonRpcRequest {
         JsonRpcRequest {
@@ -494,6 +678,17 @@ mod tests {
             method: method.into(),
             params: Some(params),
         }
+    }
+
+    fn temp_file(name: &str, content: &[u8]) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time")
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("simplefile-service-dispatch-{name}-{nanos}.txt"));
+        fs::write(&path, content).expect("write temp file");
+        path
     }
 
     #[test]
@@ -561,5 +756,139 @@ mod tests {
             panic!("expected reply");
         };
         assert_eq!(response.error.unwrap().code, ERR_METHOD_NOT_FOUND);
+    }
+
+    #[test]
+    fn inspection_methods_use_core_logic() {
+        let left = temp_file("left", b"alpha\nbravo\n");
+        let right = temp_file("right", b"alpha\ncharlie\n");
+        let mut state = SessionState {
+            handshake_done: true,
+            ..SessionState::default()
+        };
+
+        let preview = dispatch(
+            &mut state,
+            &request(
+                "read_file_preview",
+                10,
+                json!({ "path": left.to_string_lossy(), "maxSize": 1024 }),
+            ),
+        );
+        let Dispatch::Reply(preview_response) = preview else {
+            panic!("expected preview reply");
+        };
+        let preview_value = preview_response.result.unwrap();
+        assert_eq!(preview_value["file_type"], "text");
+        assert_eq!(preview_value["content"], "alpha\nbravo\n");
+
+        let checksum = dispatch(
+            &mut state,
+            &request(
+                "compute_checksum",
+                11,
+                json!({ "path": left.to_string_lossy() }),
+            ),
+        );
+        let Dispatch::Reply(checksum_response) = checksum else {
+            panic!("expected checksum reply");
+        };
+        assert!(
+            checksum_response.result.unwrap()["sha256"]
+                .as_str()
+                .unwrap()
+                .len()
+                >= 64
+        );
+
+        let compare = dispatch(
+            &mut state,
+            &request(
+                "compare_files",
+                12,
+                json!({
+                    "pathA": left.to_string_lossy(),
+                    "pathB": right.to_string_lossy(),
+                }),
+            ),
+        );
+        let Dispatch::Reply(compare_response) = compare else {
+            panic!("expected compare reply");
+        };
+        let compare_value = compare_response.result.unwrap();
+        assert_eq!(compare_value["identical"], false);
+        assert!(compare_value["changed"].as_u64().unwrap() >= 1);
+
+        let archive_path = left.with_file_name(format!(
+            "simplefile-service-dispatch-archive-{}.zip",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let create_archive = dispatch(
+            &mut state,
+            &request(
+                "create_archive",
+                13,
+                json!({
+                    "paths": [left.to_string_lossy()],
+                    "archivePath": archive_path.to_string_lossy(),
+                    "format": "zip",
+                }),
+            ),
+        );
+        let Dispatch::Reply(create_archive_response) = create_archive else {
+            panic!("expected create archive reply");
+        };
+        assert!(create_archive_response.error.is_none());
+        assert!(archive_path.exists());
+
+        let list_archive = dispatch(
+            &mut state,
+            &request(
+                "list_archive",
+                14,
+                json!({ "path": archive_path.to_string_lossy() }),
+            ),
+        );
+        let Dispatch::Reply(list_archive_response) = list_archive else {
+            panic!("expected list archive reply");
+        };
+        let archive_value = list_archive_response.result.unwrap();
+        assert_eq!(archive_value["format"], "zip");
+        assert_eq!(
+            archive_value["entries"][0]["name"].as_str().unwrap(),
+            left.file_name().unwrap().to_string_lossy()
+        );
+
+        let extract_dir = archive_path.with_file_name(format!(
+            "simplefile-service-dispatch-extract-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        let extract_archive = dispatch(
+            &mut state,
+            &request(
+                "extract_archive",
+                15,
+                json!({
+                    "archivePath": archive_path.to_string_lossy(),
+                    "destination": extract_dir.to_string_lossy(),
+                }),
+            ),
+        );
+        let Dispatch::Reply(extract_archive_response) = extract_archive else {
+            panic!("expected extract archive reply");
+        };
+        assert!(extract_archive_response.error.is_none());
+        assert!(extract_dir.join(left.file_name().unwrap()).exists());
+
+        let _ = fs::remove_file(left);
+        let _ = fs::remove_file(right);
+        let _ = fs::remove_file(archive_path);
+        let _ = fs::remove_dir_all(extract_dir);
     }
 }
