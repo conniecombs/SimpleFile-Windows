@@ -64,11 +64,13 @@
                     <FontIcon
                         FontFamily="{StaticResource SfIconFont}"
                         FontSize="14"
-                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                        Foreground="{ThemeResource SfTextPrimaryBrush}"
                         Glyph="&#xE8B7;" />
                     <TextBlock
                         VerticalAlignment="Center"
-                        Style="{ThemeResource CaptionTextBlockStyle}"
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Foreground="{ThemeResource SfTextPrimaryBrush}"
                         Text="SimpleFile" />
                 </StackPanel>
             </Grid>
@@ -83,8 +85,8 @@
 
             <Grid
                 Grid.Column="0"
-                Background="{ThemeResource LayerFillColorDefaultBrush}"
-                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                Background="{ThemeResource SfBgSecondaryBrush}"
+                BorderBrush="{ThemeResource SfBorderBrush}"
                 BorderThickness="0,0,1,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -206,7 +208,7 @@
                                                 Path="{x:Bind Path}" />
                                             <StackPanel Grid.Column="1" Spacing="3">
                                                 <TextBlock
-                                                    Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                                    Foreground="{ThemeResource SfTextPrimaryBrush}"
                                                     Text="{x:Bind Name}"
                                                     TextTrimming="CharacterEllipsis"
                                                     TextWrapping="NoWrap" />
@@ -218,7 +220,7 @@
                                                     Visibility="{x:Bind UsageVisibility}" />
                                                 <TextBlock
                                                     FontSize="11"
-                                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                    Foreground="{ThemeResource SfTextMutedBrush}"
                                                     Text="{x:Bind UsageText}"
                                                     Visibility="{x:Bind UsageVisibility}" />
                                             </StackPanel>
@@ -545,8 +547,8 @@
                                     Grid.Column="1"
                                     MinHeight="32"
                                     Padding="4,2"
-                                    Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    Background="{ThemeResource SfBgTertiaryBrush}"
+                                    BorderBrush="{ThemeResource SfBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="4">
                                     <ScrollViewer
@@ -703,7 +705,7 @@
                                 Grid.Row="2"
                                 Padding="8,0"
                                 Background="Transparent"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition x:Name="PrimaryNameCol" Width="*" />
@@ -877,8 +879,8 @@
                                     Grid.Column="1"
                                     MinHeight="32"
                                     Padding="4,2"
-                                    Background="{ThemeResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    Background="{ThemeResource SfBgTertiaryBrush}"
+                                    BorderBrush="{ThemeResource SfBorderBrush}"
                                     BorderThickness="1"
                                     CornerRadius="4">
                                     <ScrollViewer
@@ -947,7 +949,7 @@
                                 Grid.Row="2"
                                 Padding="8,0"
                                 Background="Transparent"
-                                BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                                BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition x:Name="SecondaryNameCol" Width="*" />
@@ -1054,8 +1056,8 @@
                         x:Name="PreviewPane"
                         Grid.Column="1"
                         Padding="16"
-                        Background="{ThemeResource LayerFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                        Background="{ThemeResource SfBgSecondaryBrush}"
+                        BorderBrush="{ThemeResource SfBorderBrush}"
                         BorderThickness="1,0,0,0">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -1164,8 +1166,8 @@
                 <Grid
                     Grid.Row="2"
                     Padding="12,6"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Background="{ThemeResource SfBgSecondaryBrush}"
+                    BorderBrush="{ThemeResource SfBorderBrush}"
                     BorderThickness="0,1,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -1221,8 +1223,8 @@
                 Padding="12"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
-                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+                Background="{ThemeResource SfBgPrimaryBrush}"
+                BorderBrush="{ThemeResource SfBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="8"
                 PointerPressed="OnCommandPaletteInnerPressed">

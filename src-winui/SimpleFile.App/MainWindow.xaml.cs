@@ -304,7 +304,7 @@ public sealed partial class MainWindow : Window
                 Tag = new PanePath(pane, segment.Path),
                 Style = ChromeStyle("SfBreadcrumbButtonStyle"),
                 FontWeight = isLast ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = Brush(isLast ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"),
+                Foreground = Brush(isLast ? "SfTextPrimaryBrush" : "SfTextMutedBrush"),
             };
             button.Click += OnBreadcrumbClick;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"Navigate to {segment.Label}");
@@ -316,7 +316,7 @@ public sealed partial class MainWindow : Window
                     Glyph = "\uE76C",
                     FontSize = 8,
                     FontFamily = new FontFamily("Segoe Fluent Icons"),
-                    Foreground = Brush("TextFillColorSecondaryBrush"),
+                    Foreground = Brush("SfTextMutedBrush"),
                     Margin = new Thickness(2, 0, 2, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                     Opacity = 0.7,
@@ -358,7 +358,7 @@ public sealed partial class MainWindow : Window
                             Glyph = "\uE8B7",
                             FontSize = 12,
                             FontFamily = new FontFamily("Segoe Fluent Icons"),
-                            Foreground = Brush(isActive ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"),
+                            Foreground = Brush(isActive ? "SfTextPrimaryBrush" : "SfTextMutedBrush"),
                             VerticalAlignment = VerticalAlignment.Center,
                         },
                         new TextBlock
@@ -382,7 +382,7 @@ public sealed partial class MainWindow : Window
             var chrome = new Border
             {
                 Tag = tabId,
-                Background = isActive ? Brush("ControlFillColorDefaultBrush") : Brush("SfTransparentBrush"),
+                Background = isActive ? Brush("SfBgTertiaryBrush") : Brush("SfTransparentBrush"),
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(2, 0, 2, 0),
                 Child = new StackPanel

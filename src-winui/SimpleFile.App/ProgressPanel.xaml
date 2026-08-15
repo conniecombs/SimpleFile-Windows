@@ -8,8 +8,8 @@
         Padding="16"
         HorizontalAlignment="Right"
         VerticalAlignment="Bottom"
-        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-        BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
+        Background="{ThemeResource SfBgPrimaryBrush}"
+        BorderBrush="{ThemeResource SfBorderBrush}"
         BorderThickness="1"
         CornerRadius="8">
         <StackPanel Spacing="8">
