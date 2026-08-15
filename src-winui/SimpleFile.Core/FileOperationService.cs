@@ -58,9 +58,11 @@ public sealed class FileOperationService
         string destination,
         string conflictAction,
         IProgress<ProgressUpdate>? progress = null,
+        Action<string>? operationStarted = null,
         CancellationToken ct = default)
     {
         var operationId = GenerateOperationId();
+        operationStarted?.Invoke(operationId);
         IDisposable? subscription = null;
         if (progress != null)
         {
@@ -87,9 +89,11 @@ public sealed class FileOperationService
         string destination,
         string conflictAction,
         IProgress<ProgressUpdate>? progress = null,
+        Action<string>? operationStarted = null,
         CancellationToken ct = default)
     {
         var operationId = GenerateOperationId();
+        operationStarted?.Invoke(operationId);
         IDisposable? subscription = null;
         if (progress != null)
         {
@@ -114,6 +118,30 @@ public sealed class FileOperationService
     public async Task CancelOperationAsync(string operationId, CancellationToken ct = default)
     {
         await _ipc.CancelOperationAsync(operationId, ct).ConfigureAwait(false);
+    }
+
+    public async Task<SearchResult[]> SearchAsync(
+        SearchOptions options,
+        Action<SearchResult[]>? onBatch = null,
+        Action<int>? onComplete = null,
+        CancellationToken ct = default)
+    {
+        return await _ipc.SearchFilesAsync(options, onBatch, onComplete, ct).ConfigureAwait(false);
+    }
+
+    public async Task CancelSearchAsync(string searchId, CancellationToken ct = default)
+    {
+        await _ipc.CancelSearchAsync(searchId, ct).ConfigureAwait(false);
+    }
+
+    public async Task WatchDirectoryAsync(string path, CancellationToken ct = default)
+    {
+        await _ipc.WatchDirectoryAsync(path, ct).ConfigureAwait(false);
+    }
+
+    public async Task UnwatchDirectoryAsync(CancellationToken ct = default)
+    {
+        await _ipc.UnwatchDirectoryAsync(ct).ConfigureAwait(false);
     }
 
     // Open a file in the default application.

@@ -168,6 +168,72 @@ public sealed class FileChangeEvent
     public string Kind { get; set; } = "";
 }
 
+public sealed class SearchResult
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = "";
+
+    [JsonPropertyName("is_dir")]
+    public bool IsDir { get; set; }
+
+    [JsonPropertyName("size")]
+    public ulong Size { get; set; }
+
+    [JsonPropertyName("modified")]
+    public string Modified { get; set; } = "";
+
+    [JsonPropertyName("extension")]
+    public string Extension { get; set; } = "";
+
+    [JsonPropertyName("match_type")]
+    public string MatchType { get; set; } = "";
+}
+
+public sealed class SearchOptions
+{
+    [JsonPropertyName("query")]
+    public string Query { get; set; } = "";
+
+    [JsonPropertyName("search_path")]
+    public string SearchPath { get; set; } = "";
+
+    [JsonPropertyName("case_sensitive")]
+    public bool CaseSensitive { get; set; }
+
+    [JsonPropertyName("include_hidden")]
+    public bool IncludeHidden { get; set; }
+
+    [JsonPropertyName("file_types")]
+    public string[]? FileTypes { get; set; }
+
+    [JsonPropertyName("max_results")]
+    public int? MaxResults { get; set; }
+
+    [JsonPropertyName("max_depth")]
+    public int? MaxDepth { get; set; }
+
+    [JsonPropertyName("search_id")]
+    public string? SearchId { get; set; }
+
+    [JsonPropertyName("content_search")]
+    public bool ContentSearch { get; set; }
+
+    [JsonPropertyName("min_size")]
+    public ulong? MinSize { get; set; }
+
+    [JsonPropertyName("max_size")]
+    public ulong? MaxSize { get; set; }
+
+    [JsonPropertyName("date_after")]
+    public string? DateAfter { get; set; }
+
+    [JsonPropertyName("date_before")]
+    public string? DateBefore { get; set; }
+}
+
 public sealed class TreeNode
 {
     [JsonPropertyName("name")]

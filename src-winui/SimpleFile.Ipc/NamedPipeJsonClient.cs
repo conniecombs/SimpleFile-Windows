@@ -162,6 +162,48 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
     public Task CancelOperationAsync(string operationId, CancellationToken ct = default)
         => InvokeAsync<object?>(Protocol.CancelOperationMethod, new { operationId }, ct);
 
+    public async Task<SearchResult[]> SearchFilesAsync(
+        SearchOptions options,
+        Action<SearchResult[]>? onBatch = null,
+        Action<int>? onComplete = null,
+        CancellationToken ct = default)
+    {
+        IDisposable? batchSubscription = null;
+        IDisposable? completeSubscription = null;
+        if (onBatch is not null)
+        {
+            batchSubscription = On<SearchResult[]>(Protocol.SearchResultsBatchEvent, onBatch);
+        }
+
+        if (onComplete is not null)
+        {
+            completeSubscription = On<int>(Protocol.SearchCompleteEvent, onComplete);
+        }
+
+        try
+        {
+            return await InvokeAsync<SearchResult[]>(
+                    Protocol.SearchFilesMethod,
+                    new { options },
+                    ct)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            completeSubscription?.Dispose();
+            batchSubscription?.Dispose();
+        }
+    }
+
+    public Task CancelSearchAsync(string searchId, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelSearchMethod, new { searchId }, ct);
+
+    public Task WatchDirectoryAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.WatchDirectoryMethod, new { path }, ct);
+
+    public Task UnwatchDirectoryAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.UnwatchDirectoryMethod, new { }, ct);
+
     public async Task<DirectoryListing> ListDirectoryAsync(
         string path,
         Action<DirectoryListingChunk>? onChunk = null,

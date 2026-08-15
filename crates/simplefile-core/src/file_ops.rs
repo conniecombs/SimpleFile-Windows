@@ -6,8 +6,8 @@
 
 use crate::models::{FileEntry, TreeNode};
 use crate::utils::{
-    count_directory_entries, get_file_entry, recreate_symlink,
-    validate_existing_path_no_resolve, validate_name, validate_path_no_follow,
+    count_directory_entries, get_file_entry, recreate_symlink, validate_existing_path_no_resolve,
+    validate_name, validate_path_no_follow,
 };
 use serde::Deserialize;
 use std::collections::HashSet;
@@ -710,7 +710,7 @@ fn create_dir_exclusive(path: &Path) -> Result<(), String> {
     })
 }
 
-pub(crate) fn preserve_basic_metadata(src: &Path, dst: &Path) -> Result<(), String> {
+pub fn preserve_basic_metadata(src: &Path, dst: &Path) -> Result<(), String> {
     let metadata = fs::metadata(src).map_err(|e| format!("Failed to stat copied source: {e}"))?;
     fs::set_permissions(dst, metadata.permissions())
         .map_err(|e| format!("Failed to preserve permissions: {e}"))?;

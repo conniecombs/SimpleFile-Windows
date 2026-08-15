@@ -16,7 +16,14 @@ public sealed partial class ProgressPanel : UserControl
 
     public void UpdateProgress(ProgressUpdate update)
     {
-        OperationLabel.Text = $"{update.OperationType}: {update.Current} / {update.Total}";
+        CancelButton.IsEnabled = update.Status == "running";
+        OperationLabel.Text = update.Status switch
+        {
+            "completed" => "Operation complete",
+            "cancelled" => "Operation cancelled",
+            "error" => $"Operation failed: {update.Error}",
+            _ => $"{update.OperationType}: {update.Current} / {update.Total}",
+        };
         if (update.Total > 0)
         {
             ProgressBar.IsIndeterminate = false;
@@ -26,7 +33,23 @@ public sealed partial class ProgressPanel : UserControl
         {
             ProgressBar.IsIndeterminate = true;
         }
-        CurrentItemLabel.Text = update.CurrentItem;
+        CurrentItemLabel.Text = update.Error ?? update.CurrentItem;
+    }
+
+    public void Start(string label)
+    {
+        Visibility = Visibility.Visible;
+        OperationLabel.Text = label;
+        CurrentItemLabel.Text = "";
+        ProgressBar.Value = 0;
+        ProgressBar.IsIndeterminate = true;
+        CancelButton.IsEnabled = true;
+    }
+
+    public void SetCancelling()
+    {
+        OperationLabel.Text = "Cancelling...";
+        CancelButton.IsEnabled = false;
     }
 
     public void SetCompleted()

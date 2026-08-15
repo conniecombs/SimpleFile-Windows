@@ -4,8 +4,10 @@
 
 pub mod dispatch;
 pub mod progress;
+pub mod search;
 pub mod session;
 pub mod shell;
+pub mod watcher;
 
 pub use dispatch::SessionState;
 pub use session::serve_connection;

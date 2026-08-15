@@ -23,6 +23,16 @@ public sealed partial class MainWindow : Window
     private bool _reconnectDialogOpen;
     private bool _dividerDragging;
     private double _primaryPercent = 50;
+    private IDisposable? _fileChangeSubscription;
+    private string? _watchTargetPath;
+    private string? _watchedPath;
+    private string? _currentOperationId;
+    private string? _activeSearchId;
+    private string? _searchRoot;
+    private int _searchCounter;
+    private bool _searchMode;
+    private PaneId _searchPane = PaneId.Primary;
+    private readonly List<SearchResult> _activeSearchResults = [];
 
     public ObservableCollection<FileRow> PrimaryFiles { get; } = [];
     public ObservableCollection<FileRow> SecondaryFiles { get; } = [];
@@ -39,6 +49,7 @@ public sealed partial class MainWindow : Window
         SecondaryFileList.ItemsSource = SecondaryFiles;
         DriveList.ItemsSource = Drives;
         QuickAccessList.ItemsSource = QuickAccess;
+        FileProgressPanel.CancelRequested += OnFileProgressCancelRequested;
 
         Closed += OnClosed;
         Activated += OnActivated;
@@ -60,6 +71,7 @@ public sealed partial class MainWindow : Window
             var fileOps = new FileOperationService(_backend.Client!);
             _workspace = new ExplorerWorkspace(_backend, fileOps);
             _workspace.Changed += OnWorkspaceChanged;
+            _fileChangeSubscription = _backend.Client!.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
             await _workspace.InitializeAsync();
             SyncFromWorkspace();
         }
@@ -91,8 +103,23 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        Replace(PrimaryFiles, _workspace.VisibleEntriesFor(PaneId.Primary).Select(FileRow.From));
-        Replace(SecondaryFiles, _workspace.VisibleEntriesFor(PaneId.Secondary).Select(FileRow.From));
+        if (_searchMode
+            && _searchRoot is not null
+            && !string.Equals(_workspace.Pane(_searchPane).Path, _searchRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            ClearSearchState();
+        }
+
+        Replace(
+            PrimaryFiles,
+            _searchMode && _searchPane == PaneId.Primary
+                ? _activeSearchResults.Select(SearchRowFrom)
+                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(FileRow.From));
+        Replace(
+            SecondaryFiles,
+            _searchMode && _searchPane == PaneId.Secondary
+                ? _activeSearchResults.Select(SearchRowFrom)
+                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(FileRow.From));
         Replace(
             Drives,
             _workspace.Drives.Select(drive => DriveRow.From(drive, _workspace.Pane(_workspace.SidebarTarget).Path)));
@@ -142,9 +169,14 @@ public sealed partial class MainWindow : Window
         SelectRow(SecondaryFileList, SecondaryFiles, _workspace.Secondary.SelectedPath);
 
         var active = _workspace.Active;
-        var count = _workspace.VisibleEntriesFor(_workspace.ActivePane).Count;
+        var searchCount = _searchMode && _searchPane == _workspace.ActivePane
+            ? _activeSearchResults.Count
+            : (int?)null;
+        var count = searchCount ?? _workspace.VisibleEntriesFor(_workspace.ActivePane).Count;
         var paneLabel = _workspace.ActivePaneLabel;
-        CountText.Text = count == 1 ? "1 item" : $"{count} items";
+        CountText.Text = searchCount is null
+            ? (count == 1 ? "1 item" : $"{count} items")
+            : (count == 1 ? "1 search result" : $"{count} search results");
         if (!string.IsNullOrEmpty(paneLabel))
         {
             CountText.Text = $"{paneLabel} · {CountText.Text}";
@@ -157,6 +189,12 @@ public sealed partial class MainWindow : Window
         else if (!string.IsNullOrEmpty(_workspace.ErrorMessage))
         {
             StatusText.Text = _workspace.ErrorMessage;
+        }
+        else if (_searchMode && _searchPane == _workspace.ActivePane)
+        {
+            StatusText.Text = string.IsNullOrWhiteSpace(SearchBox.Text)
+                ? "Search results"
+                : $"Search results for \"{SearchBox.Text.Trim()}\"";
         }
         else if (!string.IsNullOrEmpty(_workspace.StatusMessage))
         {
@@ -179,6 +217,8 @@ public sealed partial class MainWindow : Window
         {
             MessageBar.IsOpen = false;
         }
+
+        QueueWatchActiveDirectory();
 
         if (_workspace.PendingReconnect is { } drive && !_reconnectDialogOpen)
         {
@@ -299,6 +339,19 @@ public sealed partial class MainWindow : Window
     private static void SelectRow(ListView list, ObservableCollection<FileRow> rows, string? path)
     {
         list.SelectedItem = path is null ? null : rows.FirstOrDefault(row => row.Path == path);
+    }
+
+    private static FileRow SearchRowFrom(SearchResult result)
+    {
+        return FileRow.From(new FileEntry
+        {
+            Name = result.Name,
+            Path = result.Path,
+            IsDir = result.IsDir,
+            Size = result.Size,
+            Modified = result.Modified,
+            Extension = result.Extension,
+        });
     }
 
     private static void Replace<T>(ObservableCollection<T> target, IEnumerable<T> source)
@@ -790,8 +843,82 @@ public sealed partial class MainWindow : Window
         StatusText.Text = message;
     }
 
+    private void QueueWatchActiveDirectory()
+    {
+        if (_workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        var path = _workspace.Active.Path;
+        if (string.IsNullOrWhiteSpace(path)
+            || string.Equals(path, _watchTargetPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _watchTargetPath = path;
+        _ = WatchDirectoryAsync(path);
+    }
+
+    private async Task WatchDirectoryAsync(string path)
+    {
+        try
+        {
+            await (_workspace?.FileOps?.WatchDirectoryAsync(path) ?? Task.CompletedTask);
+            _watchedPath = path;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            if (string.Equals(path, _watchTargetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _watchTargetPath = null;
+            }
+
+            StatusText.Text = exception.Message;
+        }
+    }
+
+    private void OnFileChange(FileChangeEvent change)
+    {
+        DispatcherQueue.TryEnqueue(async () =>
+        {
+            if (_workspace is null || string.IsNullOrEmpty(_watchedPath))
+            {
+                return;
+            }
+
+            var name = System.IO.Path.GetFileName(change.Path);
+            StatusText.Text = string.IsNullOrEmpty(name)
+                ? $"{change.Kind}: {change.Path}"
+                : $"{change.Kind}: {name}";
+
+            if (!_searchMode
+                && (PathRules.PathContains(_workspace.Active.Path, change.Path)
+                    || string.Equals(_workspace.Active.Path, _watchedPath, StringComparison.OrdinalIgnoreCase)))
+            {
+                await _workspace.RefreshAsync();
+            }
+        });
+    }
+
     private async void OnClosed(object sender, WindowEventArgs args)
     {
+        _fileChangeSubscription?.Dispose();
+        _fileChangeSubscription = null;
+
+        if (_workspace?.FileOps is not null)
+        {
+            try
+            {
+                await _workspace.FileOps.UnwatchDirectoryAsync();
+            }
+            catch
+            {
+                // Best-effort shutdown cleanup.
+            }
+        }
+
         if (_workspace is not null)
         {
             _workspace.Changed -= OnWorkspaceChanged;
@@ -1004,15 +1131,24 @@ public sealed partial class MainWindow : Window
 
         try
         {
+            var progress = new Progress<ProgressUpdate>(OnTransferProgress);
             if (clipboard.Operation == ClipboardOperation.Copy)
             {
                 await _workspace.FileOps.CopyAsync(
-                    clipboard.SourcePaths, destination, "keep-both");
+                    clipboard.SourcePaths,
+                    destination,
+                    "keep-both",
+                    progress,
+                    operationId => StartTransferProgress(operationId, "Copying..."));
             }
             else
             {
                 await _workspace.FileOps.MoveAsync(
-                    clipboard.SourcePaths, destination, "keep-both");
+                    clipboard.SourcePaths,
+                    destination,
+                    "keep-both",
+                    progress,
+                    operationId => StartTransferProgress(operationId, "Moving..."));
                 clipboard.Clear();
             }
             await _workspace.RefreshAsync();
@@ -1020,6 +1156,208 @@ public sealed partial class MainWindow : Window
         catch (IpcException ex)
         {
             ShowMessage("Paste", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private void StartTransferProgress(string operationId, string label)
+    {
+        _currentOperationId = operationId;
+        FileProgressPanel.Start(label);
+    }
+
+    private void OnTransferProgress(ProgressUpdate update)
+    {
+        if (_currentOperationId is not null
+            && !string.Equals(update.OperationId, _currentOperationId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        FileProgressPanel.UpdateProgress(update);
+        if (update.Status is "completed" or "cancelled" or "error")
+        {
+            _currentOperationId = null;
+        }
+    }
+
+    private async void OnFileProgressCancelRequested(object? sender, EventArgs e)
+    {
+        var operationId = _currentOperationId;
+        if (string.IsNullOrEmpty(operationId) || _workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        FileProgressPanel.SetCancelling();
+        try
+        {
+            await _workspace.FileOps.CancelOperationAsync(operationId);
+        }
+        catch (IpcException ex)
+        {
+            ShowMessage("Cancel operation", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private async Task StartSearchAsync()
+    {
+        if (_workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        var query = SearchBox.Text.Trim();
+        if (query.Length == 0)
+        {
+            await CancelActiveSearchAsync();
+            ClearSearchState();
+            SyncFromWorkspace();
+            return;
+        }
+
+        await CancelActiveSearchAsync();
+
+        var pane = _workspace.ActivePane;
+        var root = _workspace.Active.Path;
+        var searchId = $"search_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Interlocked.Increment(ref _searchCounter)}";
+        _activeSearchId = searchId;
+        _searchMode = true;
+        _searchPane = pane;
+        _searchRoot = root;
+        _activeSearchResults.Clear();
+        SearchCancelButton.IsEnabled = true;
+        ApplySearchRows();
+        StatusText.Text = $"Searching {root}...";
+
+        var options = new SearchOptions
+        {
+            Query = query,
+            SearchPath = root,
+            CaseSensitive = false,
+            IncludeHidden = false,
+            MaxResults = 1000,
+            MaxDepth = 10,
+            SearchId = searchId,
+            ContentSearch = false,
+        };
+
+        try
+        {
+            var results = await _workspace.FileOps.SearchAsync(
+                options,
+                batch => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (!string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+
+                    _activeSearchResults.AddRange(batch);
+                    ApplySearchRows();
+                    StatusText.Text = $"Searching... {_activeSearchResults.Count} result(s)";
+                }),
+                count => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+                    {
+                        StatusText.Text = $"Search complete: {count} result(s)";
+                    }
+                }));
+
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            {
+                _activeSearchResults.Clear();
+                _activeSearchResults.AddRange(results);
+                ApplySearchRows();
+                StatusText.Text = $"Search complete: {results.Length} result(s)";
+            }
+        }
+        catch (IpcException ex)
+        {
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            {
+                ShowMessage("Search", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+        finally
+        {
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            {
+                _activeSearchId = null;
+                SearchCancelButton.IsEnabled = false;
+            }
+        }
+    }
+
+    private void ApplySearchRows()
+    {
+        if (_searchPane == PaneId.Secondary)
+        {
+            Replace(SecondaryFiles, _activeSearchResults.Select(SearchRowFrom));
+        }
+        else
+        {
+            Replace(PrimaryFiles, _activeSearchResults.Select(SearchRowFrom));
+        }
+
+        CountText.Text = _activeSearchResults.Count == 1
+            ? "1 search result"
+            : $"{_activeSearchResults.Count} search results";
+    }
+
+    private async Task CancelActiveSearchAsync()
+    {
+        var searchId = _activeSearchId;
+        if (string.IsNullOrEmpty(searchId) || _workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _workspace.FileOps.CancelSearchAsync(searchId);
+            StatusText.Text = "Search cancelled";
+        }
+        catch (IpcException ex)
+        {
+            ShowMessage("Cancel search", ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _activeSearchId = null;
+            SearchCancelButton.IsEnabled = false;
+        }
+    }
+
+    private void ClearSearchState()
+    {
+        _searchMode = false;
+        _searchRoot = null;
+        _activeSearchId = null;
+        _activeSearchResults.Clear();
+        SearchCancelButton.IsEnabled = false;
+    }
+
+    private async void OnSearchClick(object sender, RoutedEventArgs e) => await StartSearchAsync();
+
+    private async void OnCancelSearchClick(object sender, RoutedEventArgs e)
+    {
+        await CancelActiveSearchAsync();
+    }
+
+    private async void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key == VirtualKey.Enter)
+        {
+            e.Handled = true;
+            await StartSearchAsync();
+        }
+        else if (e.Key == VirtualKey.Escape)
+        {
+            e.Handled = true;
+            await CancelActiveSearchAsync();
+            ClearSearchState();
+            SyncFromWorkspace();
         }
     }
 

@@ -53,6 +53,29 @@
                     <Button x:Name="SidebarLeftButton" Click="OnSidebarLeft" Content="Left" ToolTipService.ToolTip="Navigate left pane" />
                     <Button x:Name="SidebarRightButton" Click="OnSidebarRight" Content="Right" ToolTipService.ToolTip="Navigate right pane" />
                 </StackPanel>
+                <Grid ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="SearchBox"
+                        PlaceholderText="Search current folder"
+                        KeyDown="OnSearchKeyDown" />
+                    <Button
+                        Grid.Column="1"
+                        Click="OnSearchClick"
+                        Content="🔎"
+                        ToolTipService.ToolTip="Search current folder" />
+                    <Button
+                        x:Name="SearchCancelButton"
+                        Grid.Column="2"
+                        Click="OnCancelSearchClick"
+                        Content="✕"
+                        IsEnabled="False"
+                        ToolTipService.ToolTip="Cancel search" />
+                </Grid>
             </StackPanel>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel Padding="8,0,8,16" Spacing="12">

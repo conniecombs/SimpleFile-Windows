@@ -7,11 +7,11 @@ The existing Svelte/Tauri app remains the shipping UI. See `docs/winui-migration
 ## What this host does
 
 - Starts `simplefile-service` (job object `KILL_ON_JOB_CLOSE`) and speaks named-pipe JSON-RPC.
-- `SimpleFile.Ipc` multiplexes request/response, `list_directory.chunk` notifications, client-side cancellation, and typed `IpcException`s.
+- `SimpleFile.Ipc` multiplexes request/response, `list_directory.chunk` notifications, transfer progress, watcher/search notifications, client-side cancellation, and typed `IpcException`s.
 - `SimpleFile.Core.ExplorerWorkspace` ports Svelte `loadDirectory` / history / `getParentPath` / Quick Access / drive status.
 - `SimpleFile.App` shows a dark explorer chrome: sidebar (Quick Access + My PC), dual pane (F6), pane-local tabs, back/forward/up, breadcrumbs, path edit, list columns.
 
-Not ported yet: tree expand, watcher, open-file, archives, search, transfers, tags, settings persistence.
+Not ported yet: tree expand, archives, tags, settings persistence. Transfers, watcher refresh, and basic search now use IPC-backed events; deeper UI parity remains incremental.
 
 ## Projects
 

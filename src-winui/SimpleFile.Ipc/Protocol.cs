@@ -36,6 +36,10 @@ public static class Protocol
     public const string CopyWithProgressMethod = "copy_with_progress";
     public const string MoveWithProgressMethod = "move_with_progress";
     public const string CancelOperationMethod = "cancel_operation";
+    public const string SearchFilesMethod = "search_files";
+    public const string CancelSearchMethod = "cancel_search";
+    public const string WatchDirectoryMethod = "watch_directory";
+    public const string UnwatchDirectoryMethod = "unwatch_directory";
     public const string ListDirectoryChunkEvent = "list_directory.chunk";
     public const string OperationProgressEvent = "operation-progress";
     public const string FileChangeEvent = "file-change";

@@ -162,6 +162,96 @@ public class NamedPipeJsonClientTests
     }
 
     [Fact]
+    public async Task SearchFiles_StreamsBatchesCompletionAndUnsubscribes()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var batches = new List<SearchResult[]>();
+        var completions = new List<int>();
+        var search = client.SearchFilesAsync(
+            new SearchOptions
+            {
+                Query = "alpha",
+                SearchPath = @"C:\Users\Public",
+                SearchId = "search-test",
+                MaxResults = 10,
+            },
+            batches.Add,
+            completions.Add);
+
+        var request = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.SearchFilesMethod, request.Method);
+        var parameters = Assert.IsType<JsonElement>(request.Params);
+        var options = parameters.GetProperty("options");
+        Assert.Equal(@"C:\Users\Public", options.GetProperty("search_path").GetString());
+        Assert.Equal("search-test", options.GetProperty("search_id").GetString());
+
+        await server.SendNotificationAsync(
+            Protocol.SearchResultsBatchEvent,
+            new[]
+            {
+                new SearchResult { Name = "alpha.txt", Path = @"C:\Users\Public\alpha.txt" },
+            });
+        await server.SendNotificationAsync(Protocol.SearchCompleteEvent, 1);
+        await server.SendResultAsync(
+            request.Id,
+            new[]
+            {
+                new SearchResult { Name = "alpha.txt", Path = @"C:\Users\Public\alpha.txt" },
+            });
+
+        var results = await search;
+        Assert.Single(results);
+        Assert.Single(batches);
+        Assert.Equal([1], completions);
+
+        var after = client.HealthAsync();
+        var afterRequest = await server.ReadRequestAsync();
+        await server.SendNotificationAsync(
+            Protocol.SearchResultsBatchEvent,
+            new[]
+            {
+                new SearchResult { Name = "beta.txt", Path = @"C:\Users\Public\beta.txt" },
+            });
+        await server.SendNotificationAsync(Protocol.SearchCompleteEvent, 2);
+        await server.SendResultAsync(afterRequest.Id, new HealthResult { Ok = true, ProtocolVersion = 1 });
+        await after;
+
+        Assert.Single(batches);
+        Assert.Equal([1], completions);
+    }
+
+    [Fact]
+    public async Task WatchAndSearchCancellation_UseNamedMethods()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var watch = client.WatchDirectoryAsync(@"C:\Users\Public");
+        var watchRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.WatchDirectoryMethod, watchRequest.Method);
+        await server.SendResultAsync(watchRequest.Id, null);
+        await watch;
+
+        var cancel = client.CancelSearchAsync("search-test");
+        var cancelRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.CancelSearchMethod, cancelRequest.Method);
+        var cancelParams = Assert.IsType<JsonElement>(cancelRequest.Params);
+        Assert.Equal("search-test", cancelParams.GetProperty("searchId").GetString());
+        await server.SendResultAsync(cancelRequest.Id, null);
+        await cancel;
+
+        var unwatch = client.UnwatchDirectoryAsync();
+        var unwatchRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.UnwatchDirectoryMethod, unwatchRequest.Method);
+        await server.SendResultAsync(unwatchRequest.Id, null);
+        await unwatch;
+    }
+
+    [Fact]
     public async Task Cancellation_AbandonsAwaitWithoutSendingCancel()
     {
         var (server, client) = await FakeIpcServer.ConnectAsync();

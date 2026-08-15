@@ -4173,7 +4173,10 @@ dependencies = [
 name = "simplefile-service"
 version = "1.1.0"
 dependencies = [
+ "chrono",
  "getrandom 0.4.3",
+ "glob",
+ "notify",
  "serde",
  "serde_json",
  "simplefile-core",

@@ -1,11 +1,29 @@
-use serde_json::{json, Value};
+use serde::Serialize;
+use serde_json::Value;
 use simplefile_ipc::frame::{decode_length, encode_frame, FrameError};
 use simplefile_ipc::rpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
-use simplefile_ipc::{LIST_DIRECTORY_CHUNK, MAX_FRAME_BYTES, PREFIX_RESULT_TOO_LARGE};
+use simplefile_ipc::{
+    FILE_CHANGE, LIST_DIRECTORY_CHUNK, MAX_FRAME_BYTES, OPERATION_PROGRESS,
+    PREFIX_RESULT_TOO_LARGE, SEARCH_COMPLETE, SEARCH_RESULTS_BATCH,
+};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::dispatch::{dispatch, Dispatch, ProgressCopyMoveParams, SessionState};
 use crate::progress::OperationRegistry;
+use crate::watcher::WatcherState;
+
+#[derive(Clone)]
+struct EventSink {
+    sender: tokio::sync::mpsc::UnboundedSender<JsonRpcNotification>,
+}
+
+impl EventSink {
+    fn emit<T: Serialize>(&self, method: &str, params: &T) {
+        if let Ok(params) = serde_json::to_value(params) {
+            let _ = self.sender.send(JsonRpcNotification::new(method, params));
+        }
+    }
+}
 
 pub async fn serve_connection<R, W>(
     mut reader: R,
@@ -17,7 +35,19 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
 {
     let writer = std::sync::Arc::new(tokio::sync::Mutex::new(writer));
-    let registry = std::sync::Arc::new(OperationRegistry::default());
+    let operations = std::sync::Arc::new(OperationRegistry::default());
+    let searches = std::sync::Arc::new(OperationRegistry::default());
+    let mut watcher_state = WatcherState::default();
+    let (event_tx, mut event_rx) = tokio::sync::mpsc::unbounded_channel();
+    let events = EventSink { sender: event_tx };
+    let event_writer = writer.clone();
+    tokio::spawn(async move {
+        while let Some(notification) = event_rx.recv().await {
+            if write_json(&event_writer, &notification).await.is_err() {
+                break;
+            }
+        }
+    });
 
     loop {
         let payload = match read_frame(&mut reader).await {
@@ -38,16 +68,60 @@ where
                 list_directory_and_reply(&writer, id, path).await?;
             }
             Dispatch::CopyWithProgress { id, params } => {
-                copy_move_with_progress(&writer, &registry, id, params, true).await?;
+                spawn_copy_move_with_progress(
+                    writer.clone(),
+                    operations.clone(),
+                    events.clone(),
+                    id,
+                    params,
+                    true,
+                );
             }
             Dispatch::MoveWithProgress { id, params } => {
-                copy_move_with_progress(&writer, &registry, id, params, false).await?;
+                spawn_copy_move_with_progress(
+                    writer.clone(),
+                    operations.clone(),
+                    events.clone(),
+                    id,
+                    params,
+                    false,
+                );
             }
             Dispatch::CancelOperation { id, operation_id } => {
-                registry.cancel(&operation_id).await;
+                operations.cancel(&operation_id).await;
+                write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
+            }
+            Dispatch::SearchFiles { id, options } => {
+                spawn_search_files(
+                    writer.clone(),
+                    searches.clone(),
+                    events.clone(),
+                    id,
+                    options,
+                );
+            }
+            Dispatch::CancelSearch { id, search_id } => {
+                searches.cancel(&search_id).await;
+                write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
+            }
+            Dispatch::WatchDirectory { id, path } => {
+                let events = events.clone();
+                let result =
+                    crate::watcher::watch_directory(path, &mut watcher_state, move |change| {
+                        events.emit(FILE_CHANGE, &change);
+                    });
+                let response = match result {
+                    Ok(()) => JsonRpcResponse::result(id, Value::Null),
+                    Err(message) => JsonRpcResponse::application_error(id, message),
+                };
+                write_json(&writer, &response).await?;
+            }
+            Dispatch::UnwatchDirectory { id } => {
+                crate::watcher::unwatch_directory(&mut watcher_state);
                 write_json(&writer, &JsonRpcResponse::result(id, Value::Null)).await?;
             }
             Dispatch::Shutdown(response) => {
+                crate::watcher::unwatch_directory(&mut watcher_state);
                 write_json(&writer, &response).await?;
                 state.shutdown = true;
                 return Ok(());
@@ -99,64 +173,106 @@ where
     }
 }
 
-async fn copy_move_with_progress<W>(
-    writer: &std::sync::Arc<tokio::sync::Mutex<W>>,
-    registry: &std::sync::Arc<OperationRegistry>,
+fn spawn_copy_move_with_progress<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    registry: std::sync::Arc<OperationRegistry>,
+    events: EventSink,
     id: Option<Value>,
     params: ProgressCopyMoveParams,
     is_copy: bool,
-) -> Result<(), String>
-where
+) where
     W: AsyncWrite + Unpin + Send + 'static,
 {
-    let op_id = params.operation_id.clone().unwrap_or_else(|| {
-        let mut buf = [0u8; 8];
-        let _ = getrandom::fill(&mut buf);
-        buf.iter().map(|b| format!("{b:02x}")).collect()
-    });
-    let cancel = registry.register(&op_id).await;
+    tokio::spawn(async move {
+        let op_id = params
+            .operation_id
+            .unwrap_or_else(crate::progress::generate_transfer_operation_id);
+        let cancel = registry.register(&op_id).await;
+        let sources = params.sources;
+        let destination = params.destination;
+        let conflict_action = params.conflict_action;
+        let operation_type = if is_copy { "copy" } else { "move" };
+        let events_for_task = events.clone();
+        let op_id_for_task = op_id.clone();
 
-    let sources = params.sources;
-    let destination = params.destination;
-    let conflict_action = params.conflict_action;
-    let total = sources.len();
+        let join = tokio::task::spawn_blocking(move || {
+            let emit = |update| events_for_task.emit(OPERATION_PROGRESS, &update);
+            crate::progress::transfer_with_progress_blocking(
+                operation_type,
+                sources,
+                destination,
+                op_id_for_task,
+                conflict_action,
+                cancel,
+                &emit,
+            )
+        });
 
-    let join = tokio::task::spawn_blocking(move || {
-        let mut results: Vec<Value> = Vec::with_capacity(total);
-        for (i, source) in sources.iter().enumerate() {
-            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-                return Err("Operation cancelled".to_string());
+        let response = match join.await {
+            Ok(Ok(results)) => match serde_json::to_value(results) {
+                Ok(result) => JsonRpcResponse::result(id, result),
+                Err(error) => JsonRpcResponse::application_error(
+                    id,
+                    format!("failed to serialize transfer result: {error}"),
+                ),
+            },
+            Ok(Err(message)) => JsonRpcResponse::application_error(id, message),
+            Err(error) => {
+                JsonRpcResponse::application_error(id, format!("transfer task failed: {error}"))
             }
-            let result = if is_copy {
-                simplefile_core::file_ops::copy_entry_resolved(source, &destination, &conflict_action)
-            } else {
-                simplefile_core::file_ops::move_entry_resolved(source, &destination, &conflict_action)
-            };
-            match result {
-                Ok(dest_path) => {
-                    results.push(json!({"source": source, "destination": dest_path}));
-                }
-                Err(e) => return Err(e),
-            }
-            let _ = i; // progress index available for future notification use
-        }
-        Ok(results)
+        };
+
+        let _ = write_json(&writer, &response).await;
+        registry.remove(&op_id).await;
     });
+}
 
-    match join
-        .await
-        .map_err(|error| format!("transfer task failed: {error}"))?
-    {
-        Ok(results) => {
-            write_json(writer, &JsonRpcResponse::result(id, json!(results))).await?;
-        }
-        Err(message) => {
-            write_json(writer, &JsonRpcResponse::application_error(id, message)).await?;
-        }
-    }
+fn spawn_search_files<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    registry: std::sync::Arc<OperationRegistry>,
+    events: EventSink,
+    id: Option<Value>,
+    options: simplefile_core::models::SearchOptions,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let search_id = options.search_id.clone();
+        let cancel = if let Some(search_id) = search_id.as_deref() {
+            registry.register(search_id).await
+        } else {
+            std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false))
+        };
 
-    registry.remove(&op_id).await;
-    Ok(())
+        let events_for_task = events.clone();
+        let join = tokio::task::spawn_blocking(move || {
+            let emit_batch = |batch| events_for_task.emit(SEARCH_RESULTS_BATCH, &batch);
+            let result = crate::search::search_files_blocking(options, cancel, &emit_batch);
+            if let Ok(results) = &result {
+                events_for_task.emit(SEARCH_COMPLETE, &results.len());
+            }
+            result
+        });
+
+        let response = match join.await {
+            Ok(Ok(results)) => match serde_json::to_value(results) {
+                Ok(result) => JsonRpcResponse::result(id, result),
+                Err(error) => JsonRpcResponse::application_error(
+                    id,
+                    format!("failed to serialize search result: {error}"),
+                ),
+            },
+            Ok(Err(message)) => JsonRpcResponse::application_error(id, message),
+            Err(error) => {
+                JsonRpcResponse::application_error(id, format!("search task failed: {error}"))
+            }
+        };
+
+        let _ = write_json(&writer, &response).await;
+        if let Some(search_id) = search_id {
+            registry.remove(&search_id).await;
+        }
+    });
 }
 
 async fn read_frame<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Vec<u8>, FrameError> {

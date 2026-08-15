@@ -55,4 +55,8 @@ public interface ISimpleFileIpc : IAsyncDisposable
     Task<TransferResult[]> CopyWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default);
     Task<TransferResult[]> MoveWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default);
     Task CancelOperationAsync(string operationId, CancellationToken ct = default);
+    Task<SearchResult[]> SearchFilesAsync(SearchOptions options, Action<SearchResult[]>? onBatch = null, Action<int>? onComplete = null, CancellationToken ct = default);
+    Task CancelSearchAsync(string searchId, CancellationToken ct = default);
+    Task WatchDirectoryAsync(string path, CancellationToken ct = default);
+    Task UnwatchDirectoryAsync(CancellationToken ct = default);
 }

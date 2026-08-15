@@ -19,6 +19,12 @@ public class FileOperationServiceTests
         public Func<string, string, CancellationToken, Task<string>>? RenameEntryHandler;
         public Func<string[], CancellationToken, Task>? MoveToTrashHandler;
         public Func<string[], string, string?, string, CancellationToken, Task<TransferResult[]>>? CopyWithProgressHandler;
+        public Func<string, CancellationToken, Task>? CancelOperationHandler { get; set; }
+        public Func<SearchOptions, Action<SearchResult[]>?, Action<int>?, CancellationToken, Task<SearchResult[]>>? SearchFilesHandler { get; set; }
+        public Func<string, CancellationToken, Task>? CancelSearchHandler { get; set; }
+        public Func<string, CancellationToken, Task>? WatchDirectoryHandler { get; set; }
+        public Func<CancellationToken, Task>? UnwatchDirectoryHandler { get; set; }
+        private readonly Dictionary<string, List<object>> _handlers = new();
 
         public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default)
             => CreateDirectoryHandler?.Invoke(path, name, ct) ?? throw new NotImplementedException();
@@ -39,6 +45,33 @@ public class FileOperationServiceTests
         public Task<TransferResult[]> CopyWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default)
             => CopyWithProgressHandler?.Invoke(sources, destination, operationId, conflictAction, ct) ?? throw new NotImplementedException();
 
+        public Task CancelOperationAsync(string operationId, CancellationToken ct = default)
+            => CancelOperationHandler?.Invoke(operationId, ct) ?? throw new NotImplementedException();
+
+        public Task<SearchResult[]> SearchFilesAsync(SearchOptions options, Action<SearchResult[]>? onBatch = null, Action<int>? onComplete = null, CancellationToken ct = default)
+            => SearchFilesHandler?.Invoke(options, onBatch, onComplete, ct) ?? throw new NotImplementedException();
+
+        public Task CancelSearchAsync(string searchId, CancellationToken ct = default)
+            => CancelSearchHandler?.Invoke(searchId, ct) ?? throw new NotImplementedException();
+
+        public Task WatchDirectoryAsync(string path, CancellationToken ct = default)
+            => WatchDirectoryHandler?.Invoke(path, ct) ?? throw new NotImplementedException();
+
+        public Task UnwatchDirectoryAsync(CancellationToken ct = default)
+            => UnwatchDirectoryHandler?.Invoke(ct) ?? throw new NotImplementedException();
+
+        public int SubscriptionCount(string eventName)
+            => _handlers.TryGetValue(eventName, out var handlers) ? handlers.Count : 0;
+
+        public void Emit<T>(string eventName, T payload)
+        {
+            if (!_handlers.TryGetValue(eventName, out var handlers)) return;
+            foreach (var handler in handlers.OfType<Action<T>>().ToArray())
+            {
+                handler(payload);
+            }
+        }
+
         // Dummy implementations for the rest
         public bool IsConnected => throw new NotImplementedException();
 #pragma warning disable CS0067
@@ -47,7 +80,16 @@ public class FileOperationServiceTests
         public Task<HandshakeResult> HandshakeAsync(string authToken, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<TResult> InvokeAsync<TResult>(string method, object? args, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task InvokeAsync(string method, object? args, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public IDisposable On<T>(string eventName, Action<T> handler) => throw new NotImplementedException();
+        public IDisposable On<T>(string eventName, Action<T> handler)
+        {
+            if (!_handlers.TryGetValue(eventName, out var handlers))
+            {
+                handlers = new List<object>();
+                _handlers[eventName] = handlers;
+            }
+            handlers.Add(handler);
+            return new TestSubscription(() => handlers.Remove(handler));
+        }
         public Task<DirectoryListing> ListDirectoryAsync(string path, Action<DirectoryListingChunk>? onChunk = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<HealthResult> HealthAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<string> GetAppVersionAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
@@ -69,8 +111,37 @@ public class FileOperationServiceTests
         public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<TransferResult[]> MoveWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task CancelOperationAsync(string operationId, CancellationToken ct = default) => throw new NotImplementedException();
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TestSubscription : IDisposable
+    {
+        private readonly Action _dispose;
+        private bool _disposed;
+
+        public TestSubscription(Action dispose)
+        {
+            _dispose = dispose;
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _dispose();
+        }
+    }
+
+    private sealed class InlineProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _report;
+
+        public InlineProgress(Action<T> report)
+        {
+            _report = report;
+        }
+
+        public void Report(T value) => _report(value);
     }
 
     [Fact]
@@ -173,5 +244,86 @@ public class FileOperationServiceTests
 
         Assert.NotNull(capturedOpId);
         Assert.Matches(@"^op_\d+_\d+$", capturedOpId);
+    }
+
+    [Fact]
+    public async Task CopyAsync_ReportsProgressAndDisposesSubscription()
+    {
+        var seen = new List<ProgressUpdate>();
+        var stub = new StubIpc();
+        stub.CopyWithProgressHandler = (sources, dest, opId, conflictAction, ct) =>
+        {
+            stub.Emit(
+                Protocol.OperationProgressEvent,
+                new ProgressUpdate
+                {
+                    OperationId = opId!,
+                    OperationType = "copy",
+                    Current = 1,
+                    Total = 2,
+                    Status = "running",
+                });
+            return Task.FromResult(Array.Empty<TransferResult>());
+        };
+        var service = new FileOperationService(stub);
+
+        await service.CopyAsync(
+            new[] { "a" },
+            "b",
+            "error",
+            new InlineProgress<ProgressUpdate>(seen.Add));
+
+        Assert.Single(seen);
+        Assert.Equal(0, stub.SubscriptionCount(Protocol.OperationProgressEvent));
+
+        stub.Emit(
+            Protocol.OperationProgressEvent,
+            new ProgressUpdate { OperationId = seen[0].OperationId, Status = "running" });
+        Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task CancelOperationAsync_CallsNamedIpcCancel()
+    {
+        string? cancelled = null;
+        var stub = new StubIpc
+        {
+            CancelOperationHandler = (operationId, ct) =>
+            {
+                cancelled = operationId;
+                return Task.CompletedTask;
+            }
+        };
+        var service = new FileOperationService(stub);
+
+        await service.CancelOperationAsync("op_123_4");
+
+        Assert.Equal("op_123_4", cancelled);
+    }
+
+    [Fact]
+    public async Task SearchAsync_StreamsEventsAndDisposesSubscriptions()
+    {
+        var batches = new List<SearchResult[]>();
+        var completes = new List<int>();
+        var stub = new StubIpc
+        {
+            SearchFilesHandler = (options, onBatch, onComplete, ct) =>
+            {
+                onBatch?.Invoke(new[] { new SearchResult { Name = "alpha.txt", Path = @"C:\alpha.txt" } });
+                onComplete?.Invoke(1);
+                return Task.FromResult(new[] { new SearchResult { Name = "alpha.txt", Path = @"C:\alpha.txt" } });
+            }
+        };
+        var service = new FileOperationService(stub);
+
+        var results = await service.SearchAsync(
+            new SearchOptions { Query = "alpha", SearchPath = @"C:\" },
+            batches.Add,
+            completes.Add);
+
+        Assert.Single(results);
+        Assert.Single(batches);
+        Assert.Equal([1], completes);
     }
 }
