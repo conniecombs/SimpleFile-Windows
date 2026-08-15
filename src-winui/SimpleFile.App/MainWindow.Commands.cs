@@ -114,7 +114,7 @@ public sealed partial class MainWindow
         var visible = _workspace?.Settings.PreviewVisible != false;
         PreviewPane.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         PreviewColumn.Width = visible ? new GridLength(320) : new GridLength(0);
-        PreviewToggleButton.Content = visible ? "Preview" : "Show preview";
+        ToolTipService.SetToolTip(PreviewToggleButton, visible ? "Hide preview pane" : "Show preview pane");
     }
 
     private void ApplyTheme(string? theme)
@@ -125,12 +125,12 @@ public sealed partial class MainWindow
             "dark" => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
-        if (RootGrid.RequestedTheme == next)
+        if (RootGrid.RequestedTheme != next)
         {
-            return;
+            RootGrid.RequestedTheme = next;
         }
 
-        RootGrid.RequestedTheme = next;
+        ApplyCaptionButtonColors(next);
     }
 
     private void OpenCommandPalette()

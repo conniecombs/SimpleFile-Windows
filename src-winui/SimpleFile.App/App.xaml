@@ -7,122 +7,314 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
-            <FontFamily x:Key="SfIconFont">Segoe MDL2 Assets</FontFamily>
-            <Color x:Key="SfBgPrimary">#1B1D24</Color>
-            <Color x:Key="SfBgSecondary">#23262F</Color>
-            <Color x:Key="SfBgHover">#2F3542</Color>
-            <Color x:Key="SfBgSelected">#264F78</Color>
-            <Color x:Key="SfTextPrimary">#F3F6FC</Color>
-            <Color x:Key="SfTextMuted">#A8B3C7</Color>
-            <Color x:Key="SfAccent">#4CC2FF</Color>
-            <Color x:Key="SfBorder">#3A4150</Color>
-            <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#1B1D24" />
-            <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#23262F" />
-            <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2F3542" />
-            <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#264F78" />
-            <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F3F6FC" />
-            <SolidColorBrush x:Key="SfTextMutedBrush" Color="#A8B3C7" />
-            <SolidColorBrush x:Key="SfAccentBrush" Color="#4CC2FF" />
-            <SolidColorBrush x:Key="SfBorderBrush" Color="#3A4150" />
+
+            <FontFamily x:Key="SfIconFont">Segoe Fluent Icons</FontFamily>
+            <x:Double x:Key="SfTitleBarHeight">40</x:Double>
+            <x:Double x:Key="SfSidebarWidth">252</x:Double>
+
+            <Color x:Key="SfBgPrimary">#161821</Color>
+            <Color x:Key="SfBgSecondary">#1C1E28</Color>
+            <Color x:Key="SfBgTertiary">#12141B</Color>
+            <Color x:Key="SfBgHover">#2A2D3A</Color>
+            <Color x:Key="SfBgPressed">#323644</Color>
+            <Color x:Key="SfBgSelected">#243044</Color>
+            <Color x:Key="SfTextPrimary">#F2F4F8</Color>
+            <Color x:Key="SfTextMuted">#8B93A7</Color>
+            <Color x:Key="SfAccent">#5AC8FA</Color>
+            <Color x:Key="SfBorder">#2E3340</Color>
+
+            <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#161821" />
+            <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#1C1E28" />
+            <SolidColorBrush x:Key="SfBgTertiaryBrush" Color="#12141B" />
+            <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2A2D3A" />
+            <SolidColorBrush x:Key="SfBgPressedBrush" Color="#323644" />
+            <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#243044" />
+            <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F2F4F8" />
+            <SolidColorBrush x:Key="SfTextMutedBrush" Color="#8B93A7" />
+            <SolidColorBrush x:Key="SfAccentBrush" Color="#5AC8FA" />
+            <SolidColorBrush x:Key="SfAccentSoftBrush" Color="#335AC8FA" />
+            <SolidColorBrush x:Key="SfBorderBrush" Color="#2E3340" />
             <SolidColorBrush x:Key="SfFolderBrush" Color="#F8D147" />
             <SolidColorBrush x:Key="SfFileBrush" Color="#9CDCFE" />
+            <SolidColorBrush x:Key="SfTransparentBrush" Color="Transparent" />
+
             <Style x:Key="SfCompactAppBarStyle" TargetType="AppBarButton">
                 <Setter Property="IsCompact" Value="True" />
-                <Setter Property="Width" Value="40" />
-                <Setter Property="Height" Value="40" />
+                <Setter Property="Width" Value="36" />
+                <Setter Property="Height" Value="36" />
                 <Setter Property="AllowFocusOnInteraction" Value="True" />
             </Style>
-            <Style x:Key="SfIconButtonStyle" TargetType="Button">
-                <Setter Property="Padding" Value="6" />
-                <Setter Property="MinWidth" Value="32" />
-                <Setter Property="MinHeight" Value="28" />
+
+            <Style x:Key="SfGhostButtonStyle" TargetType="Button">
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Padding" Value="8,4" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="28" />
+                <Setter Property="Foreground" Value="{ThemeResource SfTextPrimaryBrush}" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid
+                                x:Name="RootGrid"
+                                Padding="{TemplateBinding Padding}"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}">
+                                <ContentPresenter
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    Foreground="{TemplateBinding Foreground}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource SfBgHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Background" Value="{ThemeResource SfBgPressedBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Opacity" Value="0.38" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
             </Style>
+
+            <Style x:Key="SfIconButtonStyle" TargetType="Button" BasedOn="{StaticResource SfGhostButtonStyle}">
+                <Setter Property="Padding" Value="6" />
+                <Setter Property="MinWidth" Value="32" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Width" Value="32" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+            </Style>
+
+            <Style x:Key="SfToolbarButtonStyle" TargetType="Button" BasedOn="{StaticResource SfGhostButtonStyle}">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="MinWidth" Value="32" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Width" Value="32" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
+                <Setter Property="ToolTipService.Placement" Value="Bottom" />
+            </Style>
+
+            <Style x:Key="SfSidebarIconButtonStyle" TargetType="Button" BasedOn="{StaticResource SfGhostButtonStyle}">
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="MinWidth" Value="24" />
+                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="Width" Value="24" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="HorizontalAlignment" Value="Right" />
+            </Style>
+
+            <Style x:Key="SfBreadcrumbButtonStyle" TargetType="Button" BasedOn="{StaticResource SfGhostButtonStyle}">
+                <Setter Property="Padding" Value="6,2" />
+                <Setter Property="MinHeight" Value="24" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="Foreground" Value="{ThemeResource SfTextMutedBrush}" />
+            </Style>
+
+            <Style x:Key="SfTabItemStyle" TargetType="Button" BasedOn="{StaticResource SfGhostButtonStyle}">
+                <Setter Property="Padding" Value="10,5,6,5" />
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="CornerRadius" Value="8" />
+            </Style>
+
             <Style x:Key="SfSidebarHeaderStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="11" />
                 <Setter Property="FontWeight" Value="SemiBold" />
-                <Setter Property="Foreground" Value="{StaticResource SfTextMutedBrush}" />
-                <Setter Property="Margin" Value="8,8,8,4" />
+                <Setter Property="CharacterSpacing" Value="60" />
+                <Setter Property="Foreground" Value="{ThemeResource SfTextMutedBrush}" />
+                <Setter Property="VerticalAlignment" Value="Center" />
             </Style>
+
+            <Style x:Key="SfEmptyHintStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{ThemeResource SfTextMutedBrush}" />
+                <Setter Property="Margin" Value="8,2,8,6" />
+                <Setter Property="Opacity" Value="0.8" />
+            </Style>
+
             <Style x:Key="SfSidebarListStyle" TargetType="ListView">
                 <Setter Property="IsItemClickEnabled" Value="True" />
                 <Setter Property="SelectionMode" Value="None" />
+                <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Disabled" />
+                <Setter Property="ScrollViewer.VerticalScrollMode" Value="Disabled" />
             </Style>
-            <Style x:Key="SfSidebarItemStyle" TargetType="ListViewItem">
+
+            <Style x:Key="SfNavListItemStyle" TargetType="ListViewItem">
                 <Setter Property="MinHeight" Value="32" />
                 <Setter Property="Padding" Value="8,4" />
+                <Setter Property="Margin" Value="0,1" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Background" Value="Transparent" />
+            </Style>
+
+            <Style x:Key="SfDriveListItemStyle" TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="44" />
+                <Setter Property="Padding" Value="8,6" />
+                <Setter Property="Margin" Value="0,2" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Background" Value="Transparent" />
+            </Style>
+
+            <Style x:Key="SfFileListItemStyle" TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="Padding" Value="10,3" />
+                <Setter Property="Margin" Value="4,1" />
+                <Setter Property="CornerRadius" Value="6" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             </Style>
+
+            <Style x:Key="SfTextBoxStyle" TargetType="TextBox">
+                <Setter Property="Background" Value="{ThemeResource SfBgTertiaryBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource SfBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Padding" Value="10,6" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Foreground" Value="{ThemeResource SfTextPrimaryBrush}" />
+            </Style>
+
             <Style x:Key="SfColumnHeaderButtonStyle" TargetType="Button">
                 <Setter Property="HorizontalAlignment" Value="Stretch" />
                 <Setter Property="HorizontalContentAlignment" Value="Left" />
                 <Setter Property="VerticalContentAlignment" Value="Center" />
                 <Setter Property="Background" Value="Transparent" />
                 <Setter Property="BorderThickness" Value="0" />
-                <Setter Property="Padding" Value="8,4" />
+                <Setter Property="Padding" Value="8,6" />
                 <Setter Property="MinHeight" Value="0" />
-                <Setter Property="FontSize" Value="12" />
-                <Setter Property="FontWeight" Value="Normal" />
-                <Setter Property="Foreground" Value="{StaticResource SfTextMutedBrush}" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="CharacterSpacing" Value="40" />
+                <Setter Property="Foreground" Value="{ThemeResource SfTextMutedBrush}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <ContentPresenter
-                                Padding="{TemplateBinding Padding}"
-                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                Content="{TemplateBinding Content}"
-                                Foreground="{TemplateBinding Foreground}" />
+                            <Grid x:Name="Root" Background="Transparent" Padding="{TemplateBinding Padding}">
+                                <ContentPresenter
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                    Content="{TemplateBinding Content}"
+                                    Foreground="{TemplateBinding Foreground}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="{ThemeResource SfBgHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Root.Background" Value="{ThemeResource SfBgPressedBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled" />
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <Style x:Key="SfUsageBarStyle" TargetType="ProgressBar">
+                <Setter Property="Height" Value="4" />
+                <Setter Property="Foreground" Value="{ThemeResource SfAccentBrush}" />
+                <Setter Property="Background" Value="{ThemeResource SfBorderBrush}" />
+                <Setter Property="CornerRadius" Value="2" />
+            </Style>
+
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Default">
-                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#1B1D24" />
-                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#23262F" />
-                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2F3542" />
-                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#264F78" />
-                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F3F6FC" />
-                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#A8B3C7" />
-                    <SolidColorBrush x:Key="SfAccentBrush" Color="#4CC2FF" />
-                    <SolidColorBrush x:Key="SfBorderBrush" Color="#3A4150" />
+                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#161821" />
+                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#1C1E28" />
+                    <SolidColorBrush x:Key="SfBgTertiaryBrush" Color="#12141B" />
+                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2A2D3A" />
+                    <SolidColorBrush x:Key="SfBgPressedBrush" Color="#323644" />
+                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#243044" />
+                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F2F4F8" />
+                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#8B93A7" />
+                    <SolidColorBrush x:Key="SfAccentBrush" Color="#5AC8FA" />
+                    <SolidColorBrush x:Key="SfAccentSoftBrush" Color="#335AC8FA" />
+                    <SolidColorBrush x:Key="SfBorderBrush" Color="#2E3340" />
                     <SolidColorBrush x:Key="SfFolderBrush" Color="#F8D147" />
                     <SolidColorBrush x:Key="SfFileBrush" Color="#9CDCFE" />
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#5AC8FA" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4AA8D4" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
-                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#1B1D24" />
-                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#23262F" />
-                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2F3542" />
-                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#264F78" />
-                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F3F6FC" />
-                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#A8B3C7" />
-                    <SolidColorBrush x:Key="SfAccentBrush" Color="#4CC2FF" />
-                    <SolidColorBrush x:Key="SfBorderBrush" Color="#3A4150" />
+                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#161821" />
+                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#1C1E28" />
+                    <SolidColorBrush x:Key="SfBgTertiaryBrush" Color="#12141B" />
+                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2A2D3A" />
+                    <SolidColorBrush x:Key="SfBgPressedBrush" Color="#323644" />
+                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#243044" />
+                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F2F4F8" />
+                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#8B93A7" />
+                    <SolidColorBrush x:Key="SfAccentBrush" Color="#5AC8FA" />
+                    <SolidColorBrush x:Key="SfAccentSoftBrush" Color="#335AC8FA" />
+                    <SolidColorBrush x:Key="SfBorderBrush" Color="#2E3340" />
                     <SolidColorBrush x:Key="SfFolderBrush" Color="#F8D147" />
                     <SolidColorBrush x:Key="SfFileBrush" Color="#9CDCFE" />
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#5AC8FA" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#4AA8D4" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#F4F7FB" />
+                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#F4F6FA" />
                     <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#E8EEF7" />
-                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#CDE4F7" />
+                    <SolidColorBrush x:Key="SfBgTertiaryBrush" Color="#EEF1F6" />
+                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#E6EBF3" />
+                    <SolidColorBrush x:Key="SfBgPressedBrush" Color="#D9E0EB" />
+                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#D5E8F7" />
                     <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#1B2430" />
                     <SolidColorBrush x:Key="SfTextMutedBrush" Color="#5B677A" />
                     <SolidColorBrush x:Key="SfAccentBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="SfAccentSoftBrush" Color="#330078D4" />
                     <SolidColorBrush x:Key="SfBorderBrush" Color="#D5DDE8" />
                     <SolidColorBrush x:Key="SfFolderBrush" Color="#E6B422" />
                     <SolidColorBrush x:Key="SfFileBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#006CBE" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#000000" />
                     <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#000000" />
+                    <SolidColorBrush x:Key="SfBgTertiaryBrush" Color="#000000" />
                     <SolidColorBrush x:Key="SfBgHoverBrush" Color="#1A1A1A" />
+                    <SolidColorBrush x:Key="SfBgPressedBrush" Color="#2A2A2A" />
                     <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#1A1A1A" />
                     <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="SfTextMutedBrush" Color="#FFFFFF" />
                     <SolidColorBrush x:Key="SfAccentBrush" Color="#FFFF00" />
+                    <SolidColorBrush x:Key="SfAccentSoftBrush" Color="#33FFFF00" />
                     <SolidColorBrush x:Key="SfBorderBrush" Color="#FFFFFF" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>

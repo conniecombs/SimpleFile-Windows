@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using Microsoft.UI;
+using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -10,6 +12,7 @@ using SimpleFile.Ipc;
 using Windows.Graphics;
 using Windows.System;
 using Windows.Storage.Streams;
+using Windows.UI;
 
 namespace SimpleFile.App;
 
@@ -61,7 +64,10 @@ public sealed partial class MainWindow : Window
 
         Title = "SimpleFile";
         SystemBackdrop = new MicaBackdrop();
-        AppWindow.Resize(new SizeInt32(1200, 800));
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
+        ApplyCaptionButtonColors(ElementTheme.Default);
+        AppWindow.Resize(new SizeInt32(1280, 840));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.IsResizable = true;
@@ -198,12 +204,13 @@ public sealed partial class MainWindow : Window
 
         DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
         QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        QuickAccessCollapseButton.Content = _quickAccessCollapsed ? "▸" : "▾";
-        MyPcCollapseButton.Content = _myPcCollapsed ? "▸" : "▾";
+        SetExpandGlyph(QuickAccessCollapseButton, _quickAccessCollapsed);
+        SetExpandGlyph(MyPcCollapseButton, _myPcCollapsed);
         RefreshSmartFolders();
         BindItemsSource(FolderTreeList, _workspace.FolderTreeRows);
         BindItemsSource(BookmarksList, _workspace.Bookmarks);
         BindItemsSource(RecentsList, _workspace.RecentPaths);
+        UpdateSidebarEmptyStates();
         ApplyPreviewVisibility();
         ApplyColumnWidths();
         ApplyTheme(_workspace.Settings.Theme);
@@ -211,11 +218,14 @@ public sealed partial class MainWindow : Window
 
         ApplyDualPaneLayout();
         PrimaryPaneRoot.BorderThickness = new Thickness(
-            _workspace.DualPaneEnabled && _workspace.ActivePane == PaneId.Primary ? 2 : 0);
+            _workspace.DualPaneEnabled && _workspace.ActivePane == PaneId.Primary ? 2 : 0, 0, 0, 0);
         SecondaryPaneRoot.BorderThickness = new Thickness(
-            _workspace.DualPaneEnabled && _workspace.ActivePane == PaneId.Secondary ? 2 : 0);
+            _workspace.DualPaneEnabled && _workspace.ActivePane == PaneId.Secondary ? 2 : 0, 0, 0, 0);
         SidebarTargetSwitch.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
-        DualPaneButton.Content = _workspace.DualPaneEnabled ? "Single pane" : "Dual pane";
+        HighlightSidebarTarget();
+        ToolTipService.SetToolTip(
+            DualPaneButton,
+            _workspace.DualPaneEnabled ? "Single pane (F6)" : "Toggle dual pane (F6)");
 
         if (!_editingPrimaryPath)
         {
@@ -283,26 +293,33 @@ public sealed partial class MainWindow : Window
 
         host.Tag = key;
         host.Children.Clear();
+        var lastIndex = crumbs.Count - 1;
         for (var index = 0; index < crumbs.Count; index++)
         {
             var segment = crumbs[index];
+            var isLast = index == lastIndex;
             var button = new Button
             {
                 Content = segment.Label,
                 Tag = new PanePath(pane, segment.Path),
-                Padding = new Thickness(6, 2, 6, 2),
+                Style = ChromeStyle("SfBreadcrumbButtonStyle"),
+                FontWeight = isLast ? FontWeights.SemiBold : FontWeights.Normal,
+                Foreground = Brush(isLast ? "SfTextPrimaryBrush" : "SfTextMutedBrush"),
             };
             button.Click += OnBreadcrumbClick;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"Navigate to {segment.Label}");
             host.Children.Add(button);
-            if (index < crumbs.Count - 1)
+            if (!isLast)
             {
-                host.Children.Add(new TextBlock
+                host.Children.Add(new FontIcon
                 {
-                    Text = "/",
-                    Margin = new Thickness(4, 0, 4, 0),
+                    Glyph = "\uE76C",
+                    FontSize = 8,
+                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    Foreground = Brush("SfTextMutedBrush"),
+                    Margin = new Thickness(2, 0, 2, 0),
                     VerticalAlignment = VerticalAlignment.Center,
-                    Opacity = 0.6,
+                    Opacity = 0.7,
                 });
             }
         }
@@ -320,68 +337,193 @@ public sealed partial class MainWindow : Window
 
         host.Tag = key;
         host.Children.Clear();
-        var hasActive = pane.Tabs.Any(tab => tab.Id == pane.ActiveTabId);
         foreach (var tab in pane.Tabs)
         {
             var isActive = tab.Id == pane.ActiveTabId;
-            var tabButton = new Button
+            var tabId = new PaneTab(paneId, tab.Id);
+            var select = new Button
             {
-                Padding = new Thickness(8, 4, 4, 4),
-                Tag = new PaneTab(paneId, tab.Id),
+                Style = ChromeStyle("SfGhostButtonStyle"),
+                Tag = tabId,
+                Padding = new Thickness(6, 2, 4, 2),
+                HorizontalAlignment = HorizontalAlignment.Left,
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Spacing = 6,
+                    Spacing = 8,
                     Children =
                     {
-                        new FontIcon { Glyph = "\uE8B7", FontSize = 12, FontFamily = new FontFamily("Segoe Fluent Icons") },
-                        new TextBlock { Text = tab.Title, MaxWidth = 140, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center },
+                        new FontIcon
+                        {
+                            Glyph = "\uE8B7",
+                            FontSize = 12,
+                            FontFamily = new FontFamily("Segoe Fluent Icons"),
+                            Foreground = Brush(isActive ? "SfAccentBrush" : "SfTextMutedBrush"),
+                            VerticalAlignment = VerticalAlignment.Center,
+                        },
+                        new TextBlock
+                        {
+                            Text = tab.Title,
+                            MaxWidth = 140,
+                            TextTrimming = TextTrimming.CharacterEllipsis,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            FontSize = 12,
+                            FontWeight = isActive ? FontWeights.SemiBold : FontWeights.Normal,
+                        },
                     },
                 },
             };
-            ToolTipService.SetToolTip(tabButton, tab.Path);
-            tabButton.Click += OnTabClick;
-            tabButton.PointerPressed += OnTabPointerPressed;
-            tabButton.KeyDown += OnTabKeyDown;
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tabButton, $"Tab {tab.Title}");
-            host.Children.Add(tabButton);
+            ToolTipService.SetToolTip(select, tab.Path);
+            select.Click += OnTabClick;
+            select.PointerPressed += OnTabPointerPressed;
+            select.KeyDown += OnTabKeyDown;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(select, $"Tab {tab.Title}");
 
-            var close = new Button
+            var chrome = new Border
             {
-                Content = "×",
-                Padding = new Thickness(6, 2, 6, 2),
-                Tag = new PaneTab(paneId, tab.Id),
-            };
-            close.Click += OnTabCloseClick;
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, $"Close tab {tab.Title}");
-            host.Children.Add(close);
-
-            if (isActive)
-            {
-                var add = new Button
+                Tag = tabId,
+                Background = isActive ? Brush("SfBgHoverBrush") : Brush("SfTransparentBrush"),
+                BorderBrush = isActive ? Brush("SfAccentBrush") : Brush("SfTransparentBrush"),
+                BorderThickness = isActive ? new Thickness(0, 0, 0, 2) : new Thickness(0),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(2, 1, 2, 1),
+                Child = new StackPanel
                 {
-                    Content = "+",
-                    Padding = new Thickness(8, 2, 8, 2),
-                    Tag = paneId,
-                };
-                ToolTipService.SetToolTip(add, "New Tab");
-                add.Click += OnNewTabClick;
-                host.Children.Add(add);
-            }
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 2,
+                    Children =
+                    {
+                        select,
+                        CreateTabCloseButton(tabId, tab.Title),
+                    },
+                },
+            };
+            chrome.PointerPressed += OnTabPointerPressed;
+            host.Children.Add(chrome);
         }
 
-        if (!hasActive)
+        var add = new Button
         {
-            var add = new Button
+            Style = ChromeStyle("SfToolbarButtonStyle"),
+            Content = new FontIcon
             {
-                Content = "+",
-                Padding = new Thickness(8, 2, 8, 2),
-                Tag = paneId,
-            };
-            ToolTipService.SetToolTip(add, "New Tab");
-            add.Click += OnNewTabClick;
-            host.Children.Add(add);
+                Glyph = "\uE710",
+                FontSize = 11,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+            },
+            Tag = paneId,
+        };
+        ToolTipService.SetToolTip(add, "New Tab");
+        add.Click += OnNewTabClick;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(add, "New tab");
+        host.Children.Add(add);
+    }
+
+    private Button CreateTabCloseButton(PaneTab tabId, string title)
+    {
+        var close = new Button
+        {
+            Style = ChromeStyle("SfSidebarIconButtonStyle"),
+            Width = 20,
+            Height = 20,
+            MinWidth = 20,
+            MinHeight = 20,
+            Padding = new Thickness(0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Content = new FontIcon
+            {
+                Glyph = "\uE711",
+                FontSize = 9,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+            },
+            Tag = tabId,
+        };
+        close.Click += OnTabCloseClick;
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(close, $"Close tab {title}");
+        return close;
+    }
+
+    private void UpdateSidebarEmptyStates()
+    {
+        if (_workspace is null)
+        {
+            return;
         }
+
+        FolderTreeEmptyText.Visibility = _workspace.FolderTreeRows.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        BookmarksEmptyText.Visibility = _workspace.Bookmarks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RecentsEmptyText.Visibility = _workspace.RecentPaths.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        SmartFoldersEmptyText.Visibility = _workspace.SmartFolders.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void HighlightSidebarTarget()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var leftActive = !_workspace.DualPaneEnabled || _workspace.SidebarTarget == PaneId.Primary;
+        SidebarLeftButton.Background = leftActive ? Brush("SfBgHoverBrush") : Brush("SfTransparentBrush");
+        SidebarRightButton.Background = !leftActive ? Brush("SfBgHoverBrush") : Brush("SfTransparentBrush");
+        SidebarLeftButton.FontWeight = leftActive ? FontWeights.SemiBold : FontWeights.Normal;
+        SidebarRightButton.FontWeight = !leftActive ? FontWeights.SemiBold : FontWeights.Normal;
+    }
+
+    private void ApplyCaptionButtonColors(ElementTheme theme)
+    {
+        var titleBar = AppWindow.TitleBar;
+        titleBar.ButtonBackgroundColor = Colors.Transparent;
+        titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        var light = theme switch
+        {
+            ElementTheme.Light => true,
+            ElementTheme.Dark => false,
+            _ => Application.Current.RequestedTheme == ApplicationTheme.Light,
+        };
+        if (light)
+        {
+            titleBar.ButtonForegroundColor = Color.FromArgb(255, 27, 36, 48);
+            titleBar.ButtonHoverForegroundColor = Color.FromArgb(255, 27, 36, 48);
+            titleBar.ButtonPressedForegroundColor = Color.FromArgb(255, 27, 36, 48);
+            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 91, 103, 122);
+            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 230, 235, 243);
+            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 217, 224, 235);
+        }
+        else
+        {
+            titleBar.ButtonForegroundColor = Color.FromArgb(255, 242, 244, 248);
+            titleBar.ButtonHoverForegroundColor = Color.FromArgb(255, 242, 244, 248);
+            titleBar.ButtonPressedForegroundColor = Color.FromArgb(255, 242, 244, 248);
+            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 139, 147, 167);
+            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 42, 45, 58);
+            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 50, 54, 68);
+        }
+    }
+
+    private static void SetExpandGlyph(Button button, bool collapsed)
+    {
+        if (button.Content is FontIcon icon)
+        {
+            icon.Glyph = collapsed ? "\uE76C" : "\uE70D";
+        }
+    }
+
+    private static Style? ChromeStyle(string key)
+    {
+        return Application.Current.Resources.TryGetValue(key, out var value) && value is Style style
+            ? style
+            : null;
+    }
+
+    private static Brush Brush(string key)
+    {
+        if (Application.Current.Resources.TryGetValue(key, out var value) && value is Brush brush)
+        {
+            return brush;
+        }
+
+        return new SolidColorBrush(Colors.Transparent);
     }
 
     private static void SelectRow(ListView list, ObservableCollection<FileRow> rows, string? path)
@@ -597,7 +739,7 @@ public sealed partial class MainWindow : Window
             _workspace.Settings.QuickAccessCollapsed = _quickAccessCollapsed;
         }
 
-        QuickAccessCollapseButton.Content = _quickAccessCollapsed ? "▸" : "▾";
+        SetExpandGlyph(QuickAccessCollapseButton, _quickAccessCollapsed);
         QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -609,7 +751,7 @@ public sealed partial class MainWindow : Window
             _workspace.Settings.MyPcCollapsed = _myPcCollapsed;
         }
 
-        MyPcCollapseButton.Content = _myPcCollapsed ? "▸" : "▾";
+        SetExpandGlyph(MyPcCollapseButton, _myPcCollapsed);
         DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -1380,7 +1522,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnTabClick(object sender, RoutedEventArgs e)
     {
-        if (_workspace is not null && sender is Button { Tag: PaneTab tab })
+        if (_workspace is not null && sender is FrameworkElement { Tag: PaneTab tab })
         {
             await _workspace.SwitchToTabAsync(tab.TabId, tab.Pane);
         }

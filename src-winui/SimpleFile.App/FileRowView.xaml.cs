@@ -1,7 +1,9 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using SimpleFile.Core;
+using Windows.UI;
 
 namespace SimpleFile.App;
 
@@ -61,6 +63,7 @@ public sealed partial class FileRowView : UserControl
         SizeText.Text = Row.SizeText;
         DateText.Text = Row.ModifiedText;
         TypeText.Text = Row.TypeText;
+        ApplyTagPip(Row.TagColor);
         Opacity = Row.IsCut ? 0.45 : 1.0;
         AutomationProperties.SetName(this, Row.AutomationName);
     }
@@ -71,6 +74,45 @@ public sealed partial class FileRowView : UserControl
         SizeColumn.Width = new GridLength(columns.WidthOf("size"));
         DateColumn.Width = new GridLength(columns.WidthOf("date"));
         TypeColumn.Width = new GridLength(columns.WidthOf("type"));
+    }
+
+    private void ApplyTagPip(string color)
+    {
+        var brush = TryBrush(color);
+        if (brush is null)
+        {
+            TagPip.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        TagPip.Fill = brush;
+        TagPip.Visibility = Visibility.Visible;
+    }
+
+    private static Brush? TryBrush(string color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return null;
+        }
+
+        try
+        {
+            var hex = color.Trim().TrimStart('#');
+            if (hex.Length != 6)
+            {
+                return null;
+            }
+
+            var r = Convert.ToByte(hex[..2], 16);
+            var g = Convert.ToByte(hex[2..4], 16);
+            var b = Convert.ToByte(hex[4..6], 16);
+            return new SolidColorBrush(Color.FromArgb(255, r, g, b));
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 
