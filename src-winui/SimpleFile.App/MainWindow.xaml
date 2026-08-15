@@ -395,7 +395,7 @@
                             </ListView.ContextFlyout>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:FileRow">
-                                    <local:FileRowView Row="{x:Bind}" />
+                                    <local:FileRowView Row="{x:Bind}" ContextRequested="OnFileRowContextRequested" />
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -528,7 +528,7 @@
                             </ListView.ContextFlyout>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:FileRow">
-                                    <local:FileRowView Row="{x:Bind}" />
+                                    <local:FileRowView Row="{x:Bind}" ContextRequested="OnFileRowContextRequested" />
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>

@@ -1,6 +1,8 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using SimpleFile.Core;
 using SimpleFile.Ipc;
 using Windows.ApplicationModel.DataTransfer;
@@ -318,9 +320,74 @@ public sealed partial class MainWindow
         }
     }
 
+    private void OnFileRowContextRequested(object sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not FileRowView view || view.Row is null || _workspace is null)
+        {
+            return;
+        }
+
+        var list = FindAncestor<ListView>(view);
+        if (list is null)
+        {
+            return;
+        }
+
+        _workspace.ActivatePane(ReferenceEquals(list, SecondaryFileList) ? PaneId.Secondary : PaneId.Primary);
+
+        var row = view.Row;
+        if (!list.SelectedItems.OfType<FileRow>().Any(selected =>
+                string.Equals(selected.Path, row.Path, StringComparison.OrdinalIgnoreCase)))
+        {
+            list.SelectedItems.Clear();
+            list.SelectedItem = row;
+        }
+
+        if (list.ContextFlyout is not MenuFlyout flyout)
+        {
+            return;
+        }
+
+        PopulateFileListContextFlyout(flyout);
+        if (e.TryGetPosition(list, out var point))
+        {
+            flyout.ShowAt(list, new FlyoutShowOptions { Position = point });
+        }
+        else
+        {
+            flyout.ShowAt(view);
+        }
+
+        e.Handled = true;
+    }
+
+    private static T? FindAncestor<T>(DependencyObject start) where T : class
+    {
+        var current = VisualTreeHelper.GetParent(start);
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
     private void OnFileListContextOpening(object sender, object e)
     {
-        if (sender is not MenuFlyout flyout || _workspace is null)
+        if (sender is MenuFlyout flyout)
+        {
+            PopulateFileListContextFlyout(flyout);
+        }
+    }
+
+    private void PopulateFileListContextFlyout(MenuFlyout flyout)
+    {
+        if (_workspace is null)
         {
             return;
         }
