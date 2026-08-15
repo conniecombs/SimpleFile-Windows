@@ -37,7 +37,7 @@ async fn run() -> Result<(), String> {
         };
         let (reader, writer) = tokio::io::split(server);
         serve_connection(reader, writer, state).await?;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(windows))]
