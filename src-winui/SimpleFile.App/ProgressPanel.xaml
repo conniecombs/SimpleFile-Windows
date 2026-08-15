@@ -8,10 +8,10 @@
         Padding="16"
         HorizontalAlignment="Right"
         VerticalAlignment="Bottom"
-        Background="{ThemeResource SfBgSecondaryBrush}"
-        BorderBrush="{ThemeResource SfBorderBrush}"
+        Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+        BorderBrush="{ThemeResource SurfaceStrokeColorFlyoutBrush}"
         BorderThickness="1"
-        CornerRadius="10">
+        CornerRadius="8">
         <StackPanel Spacing="8">
             <TextBlock
                 x:Name="OperationLabel"

@@ -304,7 +304,7 @@ public sealed partial class MainWindow : Window
                 Tag = new PanePath(pane, segment.Path),
                 Style = ChromeStyle("SfBreadcrumbButtonStyle"),
                 FontWeight = isLast ? FontWeights.SemiBold : FontWeights.Normal,
-                Foreground = Brush(isLast ? "SfTextPrimaryBrush" : "SfTextMutedBrush"),
+                Foreground = Brush(isLast ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"),
             };
             button.Click += OnBreadcrumbClick;
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"Navigate to {segment.Label}");
@@ -316,7 +316,7 @@ public sealed partial class MainWindow : Window
                     Glyph = "\uE76C",
                     FontSize = 8,
                     FontFamily = new FontFamily("Segoe Fluent Icons"),
-                    Foreground = Brush("SfTextMutedBrush"),
+                    Foreground = Brush("TextFillColorSecondaryBrush"),
                     Margin = new Thickness(2, 0, 2, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                     Opacity = 0.7,
@@ -358,7 +358,7 @@ public sealed partial class MainWindow : Window
                             Glyph = "\uE8B7",
                             FontSize = 12,
                             FontFamily = new FontFamily("Segoe Fluent Icons"),
-                            Foreground = Brush(isActive ? "SfAccentBrush" : "SfTextMutedBrush"),
+                            Foreground = Brush(isActive ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"),
                             VerticalAlignment = VerticalAlignment.Center,
                         },
                         new TextBlock
@@ -382,11 +382,9 @@ public sealed partial class MainWindow : Window
             var chrome = new Border
             {
                 Tag = tabId,
-                Background = isActive ? Brush("SfBgHoverBrush") : Brush("SfTransparentBrush"),
-                BorderBrush = isActive ? Brush("SfAccentBrush") : Brush("SfTransparentBrush"),
-                BorderThickness = isActive ? new Thickness(0, 0, 0, 2) : new Thickness(0),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(2, 1, 2, 1),
+                Background = isActive ? Brush("ControlFillColorDefaultBrush") : Brush("SfTransparentBrush"),
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(2, 0, 2, 0),
                 Child = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -483,21 +481,21 @@ public sealed partial class MainWindow : Window
         };
         if (light)
         {
-            titleBar.ButtonForegroundColor = Color.FromArgb(255, 27, 36, 48);
-            titleBar.ButtonHoverForegroundColor = Color.FromArgb(255, 27, 36, 48);
-            titleBar.ButtonPressedForegroundColor = Color.FromArgb(255, 27, 36, 48);
-            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 91, 103, 122);
-            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 230, 235, 243);
-            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 217, 224, 235);
+            titleBar.ButtonForegroundColor = Color.FromArgb(255, 32, 32, 32);
+            titleBar.ButtonHoverForegroundColor = Color.FromArgb(255, 32, 32, 32);
+            titleBar.ButtonPressedForegroundColor = Color.FromArgb(255, 32, 32, 32);
+            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 118, 118, 118);
+            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(26, 0, 0, 0);
+            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(38, 0, 0, 0);
         }
         else
         {
-            titleBar.ButtonForegroundColor = Color.FromArgb(255, 242, 244, 248);
-            titleBar.ButtonHoverForegroundColor = Color.FromArgb(255, 242, 244, 248);
-            titleBar.ButtonPressedForegroundColor = Color.FromArgb(255, 242, 244, 248);
-            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 139, 147, 167);
-            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(255, 42, 45, 58);
-            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(255, 50, 54, 68);
+            titleBar.ButtonForegroundColor = Color.FromArgb(255, 255, 255, 255);
+            titleBar.ButtonHoverForegroundColor = Color.FromArgb(255, 255, 255, 255);
+            titleBar.ButtonPressedForegroundColor = Color.FromArgb(255, 255, 255, 255);
+            titleBar.ButtonInactiveForegroundColor = Color.FromArgb(255, 158, 158, 158);
+            titleBar.ButtonHoverBackgroundColor = Color.FromArgb(26, 255, 255, 255);
+            titleBar.ButtonPressedBackgroundColor = Color.FromArgb(38, 255, 255, 255);
         }
     }
 
