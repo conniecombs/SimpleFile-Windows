@@ -46,6 +46,8 @@ const requiredWorkflowSnippets = [
     'cargo tauri build --ci',
     'latest.json',
     "Extension -eq '.sig'",
+    'latest-winui.json',
+    'x64-winui-setup.exe',
 ];
 
 for (const snippet of requiredWorkflowSnippets) {

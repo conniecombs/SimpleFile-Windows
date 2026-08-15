@@ -56,3 +56,22 @@ Start-Process src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\wi
 ```
 
 If the window never appears, check `%LOCALAPPDATA%\SimpleFile\startup.log`. The usual cause is a missing `resources.pri` or `MainWindow.xbf`.
+
+## Dual-stack packaging
+
+Tauri NSIS/MSI/`latest.json` remains the shipping updater until retirement. WinUI artifacts are extra:
+
+```powershell
+npm run build:winui:release
+```
+
+Writes `dist/winui/`:
+
+- `payload\` — `SimpleFile.exe` + `simplefile-service.exe` + WASDK files
+- `SimpleFile_*_x64-winui-portable.zip`
+- `SimpleFile_*_x64-winui-setup.exe` (NSIS, if `makensis` is installed)
+- `SimpleFile_*_x64-winui.msi` (WiX v3, if `candle`/`heat`/`light` are installed)
+- `latest-winui.json`
+
+Smokes: `npm run smoke:winui`, `npm run smoke:winui-msi`, `npm run smoke:winui-installer`.
+The old `release:build` / `smoke:release` / `smoke:msi` / `smoke:installer` scripts stay until the Tauri retirement PR.

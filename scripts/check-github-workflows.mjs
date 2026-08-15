@@ -65,6 +65,10 @@ const ciSnippets = [
     'node scripts/cargo-audit-release.mjs',
     'x86_64-pc-windows-msvc',
     'cargo build --locked --release --all-features --target ${{ matrix.target }}',
+    'uses: actions/setup-dotnet@v4',
+    'dotnet-version: 8.0.x',
+    'npm run check:winui',
+    'cargo build -p simplefile-service --locked --release',
 ];
 
 for (const snippet of ciSnippets) {
@@ -102,6 +106,11 @@ const releaseSnippets = [
     'softprops/action-gh-release@v3',
     'fail_on_unmatched_files: true',
     'Windows installer and portable artifacts are attached below:',
+    'build-winui-release.ps1',
+    'latest-winui.json',
+    'x64-winui-portable.zip',
+    'x64-winui-setup.exe',
+    'x64-winui.msi',
 ];
 
 for (const snippet of releaseSnippets) {
@@ -125,6 +134,7 @@ const releaseBuildSnippets = [
     "npm run release:build -- $($releaseArgs -join ' ')",
     "src-tauri/target/release/bundle/nsis/*",
     "src-tauri/target/release/bundle/msi/*",
+    'dist/winui',
     'uses: actions/upload-artifact@v4',
     'retention-days: 30',
 ];
@@ -149,6 +159,7 @@ const installerSmokeSnippets = [
     'npm run smoke:release',
     'npm run smoke:msi',
     'npm run smoke:installer',
+    'smoke:winui',
     'tauri.local.conf.json',
     'Install WiX Toolset (MSI)',
     'function Resolve-WixBin',

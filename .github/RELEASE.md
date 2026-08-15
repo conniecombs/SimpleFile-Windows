@@ -61,6 +61,10 @@ The release workflow will:
 5. Build the signed Windows NSIS/MSI installers, stage a portable executable zip,
    and upload those artifacts plus signed updater artifacts, signatures, and
    `latest.json` to the draft GitHub release.
+   The same job also builds the dual-stack WinUI host (`scripts/build-winui-release.ps1`):
+   `SimpleFile_*_x64-winui-setup.exe`, `SimpleFile_*_x64-winui.msi`,
+   `SimpleFile_*_x64-winui-portable.zip` (inner `SimpleFile.exe` + `simplefile-service.exe`),
+   and `latest-winui.json`. Tauri `latest.json` remains the shipping updater until Gate 6.
 6. Keep tag-triggered releases as drafts by default so assets can be reviewed before publishing.
 7. Publish the release only after the Windows build succeeds when manual
    `draft=false` is selected.

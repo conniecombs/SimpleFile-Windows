@@ -57,10 +57,11 @@ jobs:
 
           MANIFEST_VERSION="$(python3 -c 'import json; print(json.load(open("src-tauri/tauri.conf.json"))["version"])')"
           CARGO_VERSION="$(sed -n 's/^version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' src-tauri/Cargo.toml | head -n1)"
+          WINUI_VERSION="$(python3 -c 'import re,sys; t=open("src-winui/Directory.Build.props").read(); print(re.search(r"<Version>([^<]+)</Version>", t).group(1))')"
           TAG_VERSION="${VERSION#v}"
 
-          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ] || [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
-            echo "Version mismatch: tag=$TAG_VERSION tauri.conf.json=$MANIFEST_VERSION Cargo.toml=$CARGO_VERSION" >&2
+          if [ "$MANIFEST_VERSION" != "$TAG_VERSION" ] || [ "$CARGO_VERSION" != "$TAG_VERSION" ] || [ "$WINUI_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: tag=$TAG_VERSION tauri.conf.json=$MANIFEST_VERSION Cargo.toml=$CARGO_VERSION Directory.Build.props=$WINUI_VERSION" >&2
             exit 1
           fi
 
@@ -269,6 +270,66 @@ jobs:
             throw 'Updater signature files were not staged.'
           }
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+          $nsis = @(
+            'C:\Program Files (x86)\NSIS',
+            'C:\Program Files\NSIS'
+          ) | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'makensis.exe') } | Select-Object -First 1
+          if ($nsis) {
+            echo $nsis | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+          Get-Command makensis.exe | Select-Object -ExpandProperty Source
+
+      - name: Build WinUI host, Rust IPC service, and dual-stack artifacts
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-winui-release.ps1 -SkipChecks -RequireInstaller
+
+      - name: Stage WinUI release assets
+        shell: pwsh
+        run: |
+          $root = (Get-Location).Path
+          $assetsDir = Join-Path $root 'release-assets'
+          $winuiDir = Join-Path $root 'dist\winui'
+          New-Item -ItemType Directory -Force -Path $assetsDir | Out-Null
+
+          $required = @(
+            'SimpleFile_*_x64-winui-portable.zip',
+            'SimpleFile_*_x64-winui-setup.exe',
+            'SimpleFile_*_x64-winui.msi',
+            'latest-winui.json'
+          )
+          foreach ($pattern in $required) {
+            $files = Get-ChildItem -Path (Join-Path $winuiDir $pattern) -File -ErrorAction SilentlyContinue
+            if (-not $files) {
+              throw "Missing WinUI artifact $pattern under $winuiDir"
+            }
+            foreach ($file in $files) {
+              Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $assetsDir $file.Name) -Force
+            }
+          }
+
+          Get-ChildItem -Path (Join-Path $winuiDir '*.sig') -File -ErrorAction SilentlyContinue |
+            ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $assetsDir -Force }
+
+          $assets = Get-ChildItem -LiteralPath $assetsDir -File
+          if (-not ($assets | Where-Object { $_.Name -eq 'latest-winui.json' })) {
+            throw 'latest-winui.json was not staged.'
+          }
+
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '## Release assets'
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '| File | Size |'
@@ -291,6 +352,7 @@ jobs:
             - MSI installer for managed deployment.
             - Portable zip containing the standalone executable.
             - Signed updater artifacts, signatures, and latest.json.
+            - Dual-stack WinUI host artifacts: x64-winui-setup.exe, x64-winui.msi, x64-winui-portable.zip, and latest-winui.json.
 
             See [docs/CHANGELOG.md](https://github.com/conniecombs/SimpleFile-Windows/blob/main/docs/CHANGELOG.md) for release notes and upgrade details.
           draft: true

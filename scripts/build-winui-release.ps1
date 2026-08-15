@@ -1,0 +1,340 @@
+#requires -Version 5.1
+[CmdletBinding()]
+param(
+    [switch]$SkipChecks,
+    [switch]$SkipSmoke,
+    [switch]$SkipInstaller,
+    [switch]$RequireInstaller,
+    [switch]$Clean,
+    [string]$Configuration = "Release"
+)
+
+Set-StrictMode -Version 3.0
+$ErrorActionPreference = "Stop"
+
+$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$distRoot = Join-Path $root "dist\winui"
+$payloadDir = Join-Path $distRoot "payload"
+$iconPath = Join-Path $root "src-tauri\icons\icon.ico"
+$appProject = Join-Path $root "src-winui\SimpleFile.App\SimpleFile.App.csproj"
+
+function Write-Step {
+    param([Parameter(Mandatory = $true)][string]$Message)
+    Write-Host ""
+    Write-Host "==> $Message"
+}
+
+function Invoke-Native {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$ArgumentList = @(),
+        [string]$WorkingDirectory = $root
+    )
+
+    Write-Step ("{0} {1}" -f $FilePath, ($ArgumentList -join " "))
+    Push-Location -LiteralPath $WorkingDirectory
+    try {
+        & $FilePath @ArgumentList
+        if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) {
+            throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($ArgumentList -join ' ')"
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Read-JsonFile {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+}
+
+function Get-ReleaseVersion {
+    $tauriConfig = Read-JsonFile (Join-Path $root "src-tauri\tauri.conf.json")
+    $tauriVersion = [string]$tauriConfig.version
+    $props = Get-Content -LiteralPath (Join-Path $root "src-winui\Directory.Build.props") -Raw
+    if ($props -notmatch '<Version>([^<]+)</Version>') {
+        throw "Could not read Version from src-winui\Directory.Build.props."
+    }
+    $winuiVersion = $Matches[1]
+    if ($tauriVersion -ne $winuiVersion) {
+        throw "Version mismatch: tauri.conf.json=$tauriVersion Directory.Build.props=$winuiVersion"
+    }
+    return $tauriVersion
+}
+
+function Find-ServiceExecutable {
+    $candidates = @(
+        (Join-Path $root "target\release\simplefile-service.exe"),
+        (Join-Path $root "src-tauri\target\release\simplefile-service.exe"),
+        (Join-Path $root "target\x86_64-pc-windows-msvc\release\simplefile-service.exe")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return (Resolve-Path -LiteralPath $candidate).Path
+        }
+    }
+    return $null
+}
+
+function Find-PublishDirectory {
+    $candidates = @(
+        (Join-Path $root "src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"),
+        (Join-Path $root "src-winui\SimpleFile.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish")
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath (Join-Path $candidate "SimpleFile.App.exe")) {
+            return $candidate
+        }
+        if (Test-Path -LiteralPath (Join-Path $candidate "SimpleFile.exe")) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+function Resolve-Tool {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string[]]$CandidateDirs = @()
+    )
+
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    foreach ($dir in $CandidateDirs) {
+        $path = Join-Path $dir $Name
+        if (Test-Path -LiteralPath $path) {
+            return $path
+        }
+    }
+
+    $searchRoots = @(
+        "${env:ProgramFiles(x86)}",
+        $env:ProgramFiles
+    ) | Where-Object { $_ }
+    foreach ($rootDir in $searchRoots) {
+        $found = Get-ChildItem -Path $rootDir -Filter $Name -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($found) {
+            return $found.FullName
+        }
+    }
+
+    return $null
+}
+
+function Assert-Payload {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    foreach ($required in @("SimpleFile.exe", "simplefile-service.exe", "resources.pri", "MainWindow.xbf")) {
+        $path = Join-Path $Directory $required
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "WinUI payload is missing $required under $Directory."
+        }
+    }
+}
+
+function New-WinUIPayload {
+    param(
+        [Parameter(Mandatory = $true)][string]$PublishDir,
+        [Parameter(Mandatory = $true)][string]$ServiceExe,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    if (Test-Path -LiteralPath $Destination) {
+        Remove-Item -LiteralPath $Destination -Recurse -Force
+    }
+    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    Copy-Item -Path (Join-Path $PublishDir "*") -Destination $Destination -Recurse -Force
+
+    $appExe = Join-Path $Destination "SimpleFile.App.exe"
+    $uiExe = Join-Path $Destination "SimpleFile.exe"
+    if ((Test-Path -LiteralPath $appExe) -and -not (Test-Path -LiteralPath $uiExe)) {
+        Move-Item -LiteralPath $appExe -Destination $uiExe -Force
+    }
+
+    Copy-Item -LiteralPath $ServiceExe -Destination (Join-Path $Destination "simplefile-service.exe") -Force
+    Assert-Payload $Destination
+}
+
+$version = Get-ReleaseVersion
+Write-Host "WinUI release version: $version"
+
+if ($Clean -and (Test-Path -LiteralPath $distRoot)) {
+    Write-Step "Cleaning $distRoot"
+    Remove-Item -LiteralPath $distRoot -Recurse -Force
+}
+
+New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
+
+if (-not $SkipChecks) {
+    Invoke-Native npm @("run", "check:winui-packaging")
+    Invoke-Native npm @("run", "check:winui")
+}
+
+Write-Step "Build simplefile-service"
+Invoke-Native cargo @("build", "-p", "simplefile-service", "--locked", "--release")
+
+$serviceExe = Find-ServiceExecutable
+if (-not $serviceExe) {
+    throw "simplefile-service.exe was not produced. Expected target\release or src-tauri\target\release."
+}
+
+Write-Step "Publish WinUI unpackaged host"
+Invoke-Native dotnet @(
+    "publish", $appProject,
+    "-c", $Configuration,
+    "-r", "win-x64",
+    "--self-contained", "true",
+    "--nologo"
+)
+
+$publishDir = Find-PublishDirectory
+if (-not $publishDir) {
+    throw "dotnet publish did not produce SimpleFile.App.exe under src-winui\\SimpleFile.App\\bin\\**\\publish."
+}
+
+New-WinUIPayload -PublishDir $publishDir -ServiceExe $serviceExe -Destination $payloadDir
+
+$portableZip = Join-Path $distRoot "SimpleFile_${version}_x64-winui-portable.zip"
+if (Test-Path -LiteralPath $portableZip) {
+    Remove-Item -LiteralPath $portableZip -Force
+}
+Compress-Archive -Path (Join-Path $payloadDir "*") -DestinationPath $portableZip -Force
+Write-Host "Wrote $portableZip"
+
+$setupName = "SimpleFile_${version}_x64-winui-setup.exe"
+$setupPath = Join-Path $distRoot $setupName
+$msiPath = Join-Path $distRoot "SimpleFile_${version}_x64-winui.msi"
+$builtSetup = $false
+$builtMsi = $false
+
+if (-not $SkipInstaller) {
+    $makensis = Resolve-Tool "makensis.exe" @(
+        "C:\Program Files (x86)\NSIS",
+        "C:\Program Files\NSIS"
+    )
+    if ($makensis) {
+        Write-Step "Build NSIS WinUI setup"
+        $nsi = Join-Path $root "packaging\winui\simplefile-winui.nsi"
+        $payloadNsis = $payloadDir.Replace('\', '/')
+        $setupNsis = $setupPath.Replace('\', '/')
+        $iconNsis = $iconPath.Replace('\', '/')
+        Invoke-Native $makensis @(
+            "/DVERSION=$version",
+            "/DPAYLOAD=$payloadNsis",
+            "/DOUTFILE=$setupNsis",
+            "/DICON=$iconNsis",
+            $nsi
+        )
+        $builtSetup = Test-Path -LiteralPath $setupPath
+    }
+    else {
+        $message = "makensis.exe was not found; skipped NSIS WinUI setup."
+        if ($RequireInstaller) { throw $message }
+        Write-Warning $message
+    }
+
+    $candle = Resolve-Tool "candle.exe" @(
+        "C:\Program Files (x86)\WiX Toolset v3.14\bin",
+        "C:\Program Files (x86)\WiX Toolset v3.11\bin",
+        "C:\Program Files\WiX Toolset v3.14\bin"
+    )
+    $light = $null
+    $heat = $null
+    if ($candle) {
+        $wixBin = Split-Path -Parent $candle
+        $light = Join-Path $wixBin "light.exe"
+        $heat = Join-Path $wixBin "heat.exe"
+    }
+
+    if ($candle -and (Test-Path -LiteralPath $light) -and (Test-Path -LiteralPath $heat)) {
+        Write-Step "Build WiX WinUI MSI"
+        $wixOut = Join-Path $distRoot "wix"
+        New-Item -ItemType Directory -Force -Path $wixOut | Out-Null
+        $harvested = Join-Path $wixOut "harvested.wxs"
+        $productWxs = Join-Path $root "packaging\winui\Product.wxs"
+        Invoke-Native $heat @(
+            "dir", $payloadDir,
+            "-nologo",
+            "-cg", "SimpleFileWinUIFiles",
+            "-gg",
+            "-sfrag",
+            "-srd",
+            "-sreg",
+            "-dr", "INSTALLDIR",
+            "-var", "var.PayloadDir",
+            "-out", $harvested
+        )
+        Invoke-Native $candle @(
+            "-nologo",
+            "-dProductVersion=$version",
+            "-dPayloadDir=$payloadDir",
+            "-dIconFile=$iconPath",
+            "-out", (Join-Path $wixOut "\"),
+            $productWxs,
+            $harvested
+        )
+        Invoke-Native $light @(
+            "-nologo",
+            "-spdb",
+            "-out", $msiPath,
+            (Join-Path $wixOut "Product.wixobj"),
+            (Join-Path $wixOut "harvested.wixobj")
+        )
+        $builtMsi = Test-Path -LiteralPath $msiPath
+    }
+    else {
+        $message = "WiX v3 candle/heat/light was not found; skipped WinUI MSI."
+        if ($RequireInstaller) { throw $message }
+        Write-Warning $message
+    }
+}
+
+$signature = ""
+if ($builtSetup -and $env:TAURI_SIGNING_PRIVATE_KEY) {
+    Write-Step "Sign WinUI setup for latest-winui.json"
+    try {
+        Invoke-Native cargo @("tauri", "signer", "sign", "-f", $setupPath) (Join-Path $root "src-tauri")
+        $sigFile = Get-ChildItem -Path "$setupPath*.sig" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($sigFile) {
+            Copy-Item -LiteralPath $sigFile.FullName -Destination $distRoot -Force
+            $signature = (Get-Content -LiteralPath $sigFile.FullName -Raw).Trim()
+        }
+    }
+    catch {
+        Write-Warning "WinUI updater signing failed: $($_.Exception.Message)"
+        if ($RequireInstaller) { throw }
+    }
+}
+
+$latestArgs = @(
+    "scripts/write-latest-winui.mjs",
+    "--version=$version",
+    "--setup=$setupName",
+    "--out=$distRoot",
+    "--signature=$signature"
+)
+Invoke-Native node $latestArgs
+
+if (-not $SkipSmoke) {
+    Invoke-Native powershell @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts\smoke-winui-startup.ps1")
+    if ($builtMsi) {
+        Invoke-Native powershell @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts\smoke-winui-msi.ps1")
+    }
+}
+
+Write-Step "WinUI artifacts"
+Get-ChildItem -LiteralPath $distRoot -File | Sort-Object Name | ForEach-Object {
+    "{0}`t{1:N1} MB" -f $_.Name, ($_.Length / 1MB)
+}
+
+if ($RequireInstaller -and -not $builtSetup) {
+    throw "NSIS WinUI setup was required but not produced."
+}
+if ($RequireInstaller -and -not $builtMsi) {
+    throw "WinUI MSI was required but not produced."
+}

@@ -117,3 +117,36 @@ jobs:
       - name: Build backend
         working-directory: src-tauri
         run: cargo build --locked --release --all-features --target ${{ matrix.target }}
+
+  winui:
+    name: WinUI host
+    runs-on: windows-latest
+    needs: [quality]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: .
+          key: winui-service
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build Rust IPC service
+        run: cargo build -p simplefile-service --locked --release
+
+      - name: Run WinUI tests
+        run: npm run check:winui
+
+      - name: Check WinUI packaging surface
+        run: node scripts/check-winui-packaging.mjs

@@ -101,6 +101,30 @@ jobs:
       - name: Smoke NSIS install, launch, and uninstall
         run: npm run smoke:installer
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis.exe -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+
+      - name: Build WinUI dual-stack installers
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-winui-release.ps1 -SkipChecks -SkipSmoke -RequireInstaller
+
+      - name: Smoke WinUI payload startup
+        run: npm run smoke:winui
+
+      - name: Smoke WinUI MSI extract and launch
+        run: npm run smoke:winui-msi
+
+      - name: Smoke WinUI NSIS install, launch, and uninstall
+        run: npm run smoke:winui-installer
+
       - name: Upload installer artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -110,5 +134,9 @@ jobs:
             src-tauri/target/release/simplefile.exe
             src-tauri/target/release/bundle/nsis/*
             src-tauri/target/release/bundle/msi/*
+            dist/winui/SimpleFile_*_x64-winui-portable.zip
+            dist/winui/SimpleFile_*_x64-winui-setup.exe
+            dist/winui/SimpleFile_*_x64-winui.msi
+            dist/winui/latest-winui.json
           if-no-files-found: warn
           retention-days: 14
