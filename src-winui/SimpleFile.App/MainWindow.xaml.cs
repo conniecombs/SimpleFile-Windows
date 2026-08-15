@@ -1920,4 +1920,234 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         await PasteFromClipboard();
     }
+
+    private FileRow[] GetSelectedEntries() => ActiveSelectedRows.ToArray();
+    private void ShowError(string message) => ShowMessage("Error", message, Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error);
+    private void RefreshView() => SyncFromWorkspace();
+
+    private void OnOpenTerminalAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        OnOpenTerminalClicked(sender, new RoutedEventArgs());
+    }
+
+    private void OnSettingsAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        args.Handled = true;
+        OnSettingsClicked(sender, new RoutedEventArgs());
+    }
+
+    private async void OnSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        var dialog = new SettingsDialog { XamlRoot = Content.XamlRoot };
+        await dialog.LoadSettingsAsync(_workspace.FileOps);
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            await dialog.SaveSettingsAsync(_workspace.FileOps);
+        }
+    }
+
+    private async void OnViewArchiveClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        var selected = GetSelectedEntries();
+        if (selected.Length != 1) return;
+        var entry = selected[0];
+        try
+        {
+            var info = await _workspace.FileOps.ListArchiveAsync(entry.Path);
+            var dialog = new ArchiveViewerDialog { XamlRoot = Content.XamlRoot };
+            dialog.ArchiveData = info;
+            var result = await dialog.ShowAsync();
+            if (dialog.ExtractRequested)
+            {
+                await ShowExtractDialogAsync(info);
+            }
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async Task ShowExtractDialogAsync(SimpleFile.Ipc.ArchiveInfo info)
+    {
+        if (_workspace?.FileOps == null) return;
+        var dialog = new ExtractArchiveDialog { XamlRoot = Content.XamlRoot };
+        dialog.ArchiveData = info;
+        dialog.SetBaseDirectory(_workspace.Active.Path);
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            await _workspace.FileOps.ExtractArchiveAsync(info.Path, dialog.Destination);
+            await _workspace.RefreshAsync();
+        }
+    }
+
+    private async void OnExtractArchiveClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        var selected = GetSelectedEntries();
+        if (selected.Length != 1) return;
+        try
+        {
+            var info = await _workspace.FileOps.ListArchiveAsync(selected[0].Path);
+            await ShowExtractDialogAsync(info);
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async void OnCreateArchiveClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        var selected = GetSelectedEntries();
+        if (selected.Length == 0) return;
+        var dialog = new CreateArchiveDialog { XamlRoot = Content.XamlRoot };
+        dialog.SelectedPaths = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Path));
+        dialog.SelectedNames = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Name));
+        dialog.TargetDirectory = _workspace.Active.Path;
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            await _workspace.FileOps.CreateArchiveAsync(
+                dialog.SelectedPaths, 
+                System.IO.Path.Combine(dialog.TargetDirectory, dialog.ArchiveName),
+                dialog.ArchiveFormat);
+            await _workspace.RefreshAsync();
+        }
+    }
+
+    private async void OnDuplicateCheckerClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        var dialog = new DuplicateCheckerDialog { XamlRoot = Content.XamlRoot, Directory = _workspace.Active.Path };
+        dialog.ShowConfiguration();
+        var configResult = await dialog.ShowAsync();
+        if (configResult != ContentDialogResult.None) return;
+        var minSizeKb = dialog.MinSizeKb;
+        var progress = new Progress<Ipc.ProgressUpdate>(update => {
+            DispatcherQueue.TryEnqueue(() => dialog.UpdateProgress(update));
+        });
+        try
+        {
+            dialog.ShowScanning();
+            _ = dialog.ShowAsync();
+            var result = await _workspace.FileOps.DuplicateCheckAsync(
+                _workspace.Active.Path, minSizeKb * 1024, null, progress);
+            dialog.ShowResults(result);
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async void OnDiskCleanupClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        var dialog = new DiskCleanupDialog { XamlRoot = Content.XamlRoot, Directory = _workspace.Active.Path };
+        dialog.ShowConfiguration();
+        var configResult = await dialog.ShowAsync();
+        if (configResult != ContentDialogResult.None) return;
+        var progress = new Progress<Ipc.ProgressUpdate>(update => {
+            DispatcherQueue.TryEnqueue(() => dialog.UpdateProgress(update));
+        });
+        try
+        {
+            dialog.ShowScanning();
+            _ = dialog.ShowAsync();
+            var result = await _workspace.FileOps.DiskCleanupAsync(
+                _workspace.Active.Path, dialog.ThresholdBytes, progress);
+            dialog.ShowResults(result);
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
+
+    private async void OnSetColorLabelClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace == null) return;
+        var selected = GetSelectedEntries();
+        if (selected.Length == 0) return;
+        var dialog = new TagPickerDialog { XamlRoot = Content.XamlRoot };
+        dialog.SetTags(System.Linq.Enumerable.ToArray(_workspace.AllTags));
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            var paths = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Path));
+            if (dialog.SelectedTagId.HasValue)
+                await _workspace.SetColorLabelAsync(paths, dialog.SelectedTagId.Value);
+            else
+                await _workspace.RemoveColorLabelAsync(paths);
+            RefreshView();
+        }
+    }
+
+    private async void OnOpenTerminalClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace?.FileOps == null) return;
+        await _workspace.FileOps.OpenTerminalAsync(_workspace.Active.Path);
+    }
+
+    private void RefreshSmartFolders()
+    {
+        if (_workspace == null) return;
+        SmartFoldersList.ItemsSource = _workspace.SmartFolders;
+    }
+
+    private async void OnSmartFolderClicked(object sender, ItemClickEventArgs e)
+    {
+        if (_workspace == null || e.ClickedItem is not SimpleFile.Ipc.SmartFolder folder) return;
+        
+        await CancelActiveSearchAsync();
+        
+        var pane = _workspace.ActivePane;
+        var root = folder.SearchOptions.SearchPath;
+        if (string.IsNullOrEmpty(root)) root = _workspace.Active.Path;
+        
+        var searchId = $"search_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Interlocked.Increment(ref _searchCounter)}";
+        folder.SearchOptions.SearchId = searchId;
+        
+        _activeSearchId = searchId;
+        _searchMode = true;
+        _searchPane = pane;
+        _searchRoot = root;
+        _activeSearchResults.Clear();
+        SearchCancelButton.IsEnabled = true;
+        ApplySearchRows();
+        StatusText.Text = $"Searching Smart Folder...";
+        
+        try
+        {
+            var results = await _workspace.FileOps!.SearchAsync(
+                folder.SearchOptions,
+                batch => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (!string.Equals(_activeSearchId, searchId, StringComparison.Ordinal)) return;
+                    _activeSearchResults.AddRange(batch);
+                    ApplySearchRows();
+                    StatusText.Text = $"Searching... {_activeSearchResults.Count} result(s)";
+                }),
+                count => DispatcherQueue.TryEnqueue(() =>
+                {
+                    if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+                        StatusText.Text = $"Search complete: {count} result(s)";
+                }));
+            
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            {
+                _activeSearchResults.Clear();
+                _activeSearchResults.AddRange(results);
+                ApplySearchRows();
+                StatusText.Text = $"Search complete: {results.Length} result(s)";
+            }
+        }
+        catch (Exception ex)
+        {
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+                StatusText.Text = ex.Message;
+        }
+    }
+
+    private async void OnDeleteSmartFolderClicked(object sender, RoutedEventArgs e)
+    {
+        if (_workspace == null || sender is not FrameworkElement fe || fe.Tag is not string folderId) return;
+        await _workspace.DeleteSmartFolderAsync(folderId);
+        RefreshSmartFolders();
+    }
 }

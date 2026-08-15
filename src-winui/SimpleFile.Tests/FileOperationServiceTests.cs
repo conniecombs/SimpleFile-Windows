@@ -17,6 +17,8 @@ public class FileOperationServiceTests
         public Func<string, string, CancellationToken, Task<string>>? CreateDirectoryHandler;
         public Func<string, string, CancellationToken, Task<string>>? CreateFileHandler;
         public Func<string, string, CancellationToken, Task<string>>? RenameEntryHandler;
+        public Func<string, CancellationToken, Task<string?>>? GetDbSettingHandler { get; set; }
+        public Func<string, string, CancellationToken, Task>? SetDbSettingHandler { get; set; }
         public Func<string[], CancellationToken, Task>? MoveToTrashHandler;
         public Func<string[], string, string?, string, CancellationToken, Task<TransferResult[]>>? CopyWithProgressHandler;
         public Func<string, CancellationToken, Task>? CancelOperationHandler { get; set; }
@@ -41,6 +43,12 @@ public class FileOperationServiceTests
 
         public Task<string> RenameEntryAsync(string path, string newName, CancellationToken ct = default)
             => RenameEntryHandler?.Invoke(path, newName, ct) ?? throw new NotImplementedException();
+
+        public Task<string?> GetDbSettingAsync(string key, CancellationToken ct = default)
+            => GetDbSettingHandler?.Invoke(key, ct) ?? throw new NotImplementedException();
+
+        public Task SetDbSettingAsync(string key, string value, CancellationToken ct = default)
+            => SetDbSettingHandler?.Invoke(key, value, ct) ?? throw new NotImplementedException();
 
         public Task MoveToTrashAsync(string[] paths, CancellationToken ct = default)
         {
@@ -144,6 +152,37 @@ public class FileOperationServiceTests
         public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<TransferResult[]> MoveWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task OpenTerminalAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task OpenPowershellAdminAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<GitStatus> GetGitStatusAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<FileEntry[]> GetGitFileStatusesAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task GitPullAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task GitPushAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<SmartFolder[]> LoadSmartFoldersAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<SmartFolder[]> SaveSmartFolderAsync(SmartFolder folder, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<SmartFolder[]> DeleteSmartFolderAsync(string id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<AppAboutInfo> GetAppAboutInfoAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task InstallUpdateAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task CancelFolderSizeAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task CancelFolderItemCountAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task CancelCountItemsAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<bool> CheckRarInstalledAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<RarInstallPlan> PrepareRarInstallAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task DiscardRarInstallAsync(string confirmationToken, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<string> InstallRarAsync(string confirmationToken, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<CleanupResult> DiskCleanupAsync(string path, ulong? minSize, string? opId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task CancelDiskCleanupAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<DuplicateCheckResult> DuplicateCheckAsync(string path, ulong? minSize, ulong? hashBytes, string? opId, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task CancelDuplicateCheckAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Tag[]> GetAllTagsAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Tag> CreateTagAsync(string name, string color, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Tag> UpdateTagAsync(long id, string name, string color, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task DeleteTagAsync(long id, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Tag[]> GetTagsForPathAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task SetTagsForPathAsync(string path, long[] tags, CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<Dictionary<string, Tag>> GetAllFileTagsAsync(CancellationToken ct = default) => throw new NotImplementedException();
+        public Task<string[]> GetFilesWithTagAsync(long id, CancellationToken ct = default) => throw new NotImplementedException();
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
@@ -265,7 +304,7 @@ public class FileOperationServiceTests
         string? capturedOpId = null;
         var stub = new StubIpc
         {
-            CopyWithProgressHandler = (sources, dest, opId, conflictAction, ct) => 
+            CopyWithProgressHandler = (sources, dest, opId, conflictAction, ct) =>
             {
                 capturedOpId = opId;
                 return Task.FromResult(Array.Empty<TransferResult>());
@@ -455,5 +494,33 @@ public class FileOperationServiceTests
         Assert.Equal([@"C:\a.txt", @"C:\b.txt"], created.Value.Paths);
         Assert.Equal(@"C:\pack.zip", created.Value.Archive);
         Assert.Equal("zip", created.Value.Format);
+    }
+
+    [Fact]
+    public async Task SettingsMethods_CallTypedIpc()
+    {
+        string? requestedKey = null;
+        (string Key, string Value)? saved = null;
+        var stub = new StubIpc
+        {
+            GetDbSettingHandler = (key, ct) =>
+            {
+                requestedKey = key;
+                return Task.FromResult<string?>("{\"version\":1}");
+            },
+            SetDbSettingHandler = (key, value, ct) =>
+            {
+                saved = (key, value);
+                return Task.CompletedTask;
+            },
+        };
+        var service = new FileOperationService(stub);
+
+        var value = await service.GetSettingAsync("winui.workspace.layout.v1");
+        await service.SetSettingAsync("winui.workspace.layout.v1", "{\"version\":1}");
+
+        Assert.Equal("winui.workspace.layout.v1", requestedKey);
+        Assert.Equal("{\"version\":1}", value);
+        Assert.Equal(("winui.workspace.layout.v1", "{\"version\":1}"), saved);
     }
 }

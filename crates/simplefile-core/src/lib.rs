@@ -14,5 +14,6 @@ pub mod models;
 pub mod native_accel;
 pub mod open_with;
 pub mod preview;
+pub mod settings_store;
 pub mod state;
 pub mod utils;

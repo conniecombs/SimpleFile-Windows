@@ -36,6 +36,9 @@ public interface ISimpleFileIpc : IAsyncDisposable
 
     Task ShutdownAsync(CancellationToken cancellationToken = default);
 
+    Task<string?> GetDbSettingAsync(string key, CancellationToken ct = default);
+    Task SetDbSettingAsync(string key, string value, CancellationToken ct = default);
+
     Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default);
     Task<string> CreateFileAsync(string path, string name, CancellationToken ct = default);
     Task DeleteEntryAsync(string path, CancellationToken ct = default);
@@ -71,4 +74,35 @@ public interface ISimpleFileIpc : IAsyncDisposable
     Task CancelSearchAsync(string searchId, CancellationToken ct = default);
     Task WatchDirectoryAsync(string path, CancellationToken ct = default);
     Task UnwatchDirectoryAsync(CancellationToken ct = default);
+    Task CancelFolderSizeAsync(CancellationToken ct = default);
+    Task CancelFolderItemCountAsync(CancellationToken ct = default);
+    Task CancelCountItemsAsync(CancellationToken ct = default);
+    Task<bool> CheckRarInstalledAsync(CancellationToken ct = default);
+    Task<RarInstallPlan> PrepareRarInstallAsync(CancellationToken ct = default);
+    Task DiscardRarInstallAsync(string confirmationToken, CancellationToken ct = default);
+    Task<string> InstallRarAsync(string confirmationToken, CancellationToken ct = default);
+    Task<CleanupResult> DiskCleanupAsync(string directory, ulong? sizeThreshold, string? operationId, CancellationToken ct = default);
+    Task CancelDiskCleanupAsync(CancellationToken ct = default);
+    Task<DuplicateCheckResult> DuplicateCheckAsync(string directory, ulong? minSize, ulong? partialHashBytes, string? operationId, CancellationToken ct = default);
+    Task CancelDuplicateCheckAsync(CancellationToken ct = default);
+    Task<Tag[]> GetAllTagsAsync(CancellationToken ct = default);
+    Task<Tag> CreateTagAsync(string name, string color, CancellationToken ct = default);
+    Task<Tag> UpdateTagAsync(long id, string name, string color, CancellationToken ct = default);
+    Task DeleteTagAsync(long id, CancellationToken ct = default);
+    Task<Tag[]> GetTagsForPathAsync(string path, CancellationToken ct = default);
+    Task SetTagsForPathAsync(string path, long[] tagIds, CancellationToken ct = default);
+    Task<Dictionary<string, Tag>> GetAllFileTagsAsync(CancellationToken ct = default);
+    Task<string[]> GetFilesWithTagAsync(long tagId, CancellationToken ct = default);
+    Task<SmartFolder[]> LoadSmartFoldersAsync(CancellationToken ct = default);
+    Task<SmartFolder[]> SaveSmartFolderAsync(SmartFolder folder, CancellationToken ct = default);
+    Task<SmartFolder[]> DeleteSmartFolderAsync(string id, CancellationToken ct = default);
+    Task<AppAboutInfo> GetAppAboutInfoAsync(CancellationToken ct = default);
+    Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default);
+    Task InstallUpdateAsync(CancellationToken ct = default);
+    Task OpenTerminalAsync(string path, CancellationToken ct = default);
+    Task OpenPowershellAdminAsync(string path, CancellationToken ct = default);
+    Task<GitStatus> GetGitStatusAsync(string path, CancellationToken ct = default);
+    Task<FileEntry[]> GetGitFileStatusesAsync(string path, CancellationToken ct = default);
+    Task GitPullAsync(string path, CancellationToken ct = default);
+    Task GitPushAsync(string path, CancellationToken ct = default);
 }

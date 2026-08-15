@@ -16,6 +16,8 @@ public static class Protocol
     public const string ListDirectoryMethod = "list_directory";
     public const string SelectDirectoryMethod = "select_directory";
     public const string ShowMainWindowMethod = "show_main_window";
+    public const string GetDbSettingMethod = "get_db_setting";
+    public const string SetDbSettingMethod = "set_db_setting";
 
     public const string CreateDirectoryMethod = "create_directory";
     public const string CreateFileMethod = "create_file";
@@ -52,6 +54,39 @@ public static class Protocol
     public const string CancelSearchMethod = "cancel_search";
     public const string WatchDirectoryMethod = "watch_directory";
     public const string UnwatchDirectoryMethod = "unwatch_directory";
+
+    public const string CancelFolderSizeMethod = "cancel_folder_size";
+    public const string CancelFolderItemCountMethod = "cancel_folder_item_count";
+    public const string CancelCountItemsMethod = "cancel_count_items";
+    public const string CheckRarInstalledMethod = "check_rar_installed";
+    public const string PrepareRarInstallMethod = "prepare_rar_install";
+    public const string DiscardRarInstallMethod = "discard_rar_install";
+    public const string InstallRarMethod = "install_rar";
+    public const string DiskCleanupMethod = "disk_cleanup";
+    public const string CancelDiskCleanupMethod = "cancel_disk_cleanup";
+    public const string DuplicateCheckMethod = "duplicate_check";
+    public const string CancelDuplicateCheckMethod = "cancel_duplicate_check";
+    public const string GetAllTagsMethod = "get_all_tags";
+    public const string CreateTagMethod = "create_tag";
+    public const string UpdateTagMethod = "update_tag";
+    public const string DeleteTagMethod = "delete_tag";
+    public const string GetTagsForPathMethod = "get_tags_for_path";
+    public const string SetTagsForPathMethod = "set_tags_for_path";
+    public const string GetAllFileTagsMethod = "get_all_file_tags";
+    public const string GetFilesWithTagMethod = "get_files_with_tag";
+    public const string LoadSmartFoldersMethod = "load_smart_folders";
+    public const string SaveSmartFolderMethod = "save_smart_folder";
+    public const string DeleteSmartFolderMethod = "delete_smart_folder";
+    public const string GetAppAboutInfoMethod = "get_app_about_info";
+    public const string CheckForUpdateMethod = "check_for_update";
+    public const string InstallUpdateMethod = "install_update";
+    public const string OpenTerminalMethod = "open_terminal";
+    public const string OpenPowershellAdminMethod = "open_powershell_admin";
+    public const string GetGitStatusMethod = "get_git_status";
+    public const string GetGitFileStatusesMethod = "get_git_file_statuses";
+    public const string GitPullMethod = "git_pull";
+    public const string GitPushMethod = "git_push";
+
     public const string ListDirectoryChunkEvent = "list_directory.chunk";
     public const string OperationProgressEvent = "operation-progress";
     public const string FileChangeEvent = "file-change";

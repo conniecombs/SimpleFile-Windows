@@ -420,3 +420,104 @@ public sealed class ArchiveInfo
     [JsonPropertyName("compressed_size")]
     public ulong CompressedSize { get; set; }
 }
+
+public sealed class Tag
+{
+    [JsonPropertyName("id")] public long Id { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("color")] public string Color { get; set; } = "";
+}
+
+public sealed class SmartFolder
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("icon")] public string? Icon { get; set; }
+    [JsonPropertyName("search_options")] public SearchOptions SearchOptions { get; set; } = new();
+}
+
+public sealed class CleanupFile
+{
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+    [JsonPropertyName("size")] public ulong Size { get; set; }
+}
+
+public sealed class DuplicateGroup
+{
+    [JsonPropertyName("hash")] public string Hash { get; set; } = "";
+    [JsonPropertyName("files")] public List<string> Files { get; set; } = [];
+}
+
+public sealed class CleanupResult
+{
+    [JsonPropertyName("large_files")] public List<CleanupFile> LargeFiles { get; set; } = [];
+    [JsonPropertyName("duplicates")] public List<DuplicateGroup> Duplicates { get; set; } = [];
+    [JsonPropertyName("scanned_files")] public ulong ScannedFiles { get; set; }
+}
+
+public sealed class DuplicateCheckFile
+{
+    [JsonPropertyName("path")] public string Path { get; set; } = "";
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("size")] public ulong Size { get; set; }
+    [JsonPropertyName("modified")] public string Modified { get; set; } = "";
+}
+
+public sealed class DuplicateCheckGroup
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = "";
+    [JsonPropertyName("hash")] public string Hash { get; set; } = "";
+    [JsonPropertyName("size")] public ulong Size { get; set; }
+    [JsonPropertyName("files")] public List<DuplicateCheckFile> Files { get; set; } = [];
+    [JsonPropertyName("wasted_bytes")] public ulong WastedBytes { get; set; }
+}
+
+public sealed class DuplicateCheckResult
+{
+    [JsonPropertyName("groups")] public List<DuplicateCheckGroup> Groups { get; set; } = [];
+    [JsonPropertyName("scanned_files")] public ulong ScannedFiles { get; set; }
+    [JsonPropertyName("candidate_files")] public ulong CandidateFiles { get; set; }
+    [JsonPropertyName("hashed_files")] public ulong HashedFiles { get; set; }
+    [JsonPropertyName("skipped_files")] public ulong SkippedFiles { get; set; }
+    [JsonPropertyName("errors")] public List<string> Errors { get; set; } = [];
+    [JsonPropertyName("total_reclaimable_bytes")] public ulong TotalReclaimableBytes { get; set; }
+}
+
+public sealed class RarInstallPlan
+{
+    [JsonPropertyName("confirmation_token")] public string ConfirmationToken { get; set; } = "";
+    [JsonPropertyName("download_url")] public string DownloadUrl { get; set; } = "";
+    [JsonPropertyName("file_name")] public string FileName { get; set; } = "";
+    [JsonPropertyName("installer_path")] public string InstallerPath { get; set; } = "";
+    [JsonPropertyName("publisher")] public string Publisher { get; set; } = "";
+    [JsonPropertyName("sha256")] public string Sha256 { get; set; } = "";
+}
+
+public sealed class AppAboutInfo
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
+    [JsonPropertyName("version")] public string Version { get; set; } = "";
+    [JsonPropertyName("identifier")] public string Identifier { get; set; } = "";
+    [JsonPropertyName("os")] public string Os { get; set; } = "";
+    [JsonPropertyName("arch")] public string Arch { get; set; } = "";
+    [JsonPropertyName("authors")] public string Authors { get; set; } = "";
+    [JsonPropertyName("repository")] public string Repository { get; set; } = "";
+}
+
+public sealed class UpdateInfo
+{
+    [JsonPropertyName("version")] public string Version { get; set; } = "";
+    [JsonPropertyName("date")] public string? Date { get; set; }
+    [JsonPropertyName("body")] public string? Body { get; set; }
+}
+
+public sealed class GitStatus
+{
+    [JsonPropertyName("is_repo")] public bool IsRepo { get; set; }
+    [JsonPropertyName("branch")] public string? Branch { get; set; }
+    [JsonPropertyName("modified")] public int Modified { get; set; }
+    [JsonPropertyName("staged")] public int Staged { get; set; }
+    [JsonPropertyName("untracked")] public int Untracked { get; set; }
+    [JsonPropertyName("ahead")] public int Ahead { get; set; }
+    [JsonPropertyName("behind")] public int Behind { get; set; }
+}

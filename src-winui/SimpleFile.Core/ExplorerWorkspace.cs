@@ -61,6 +61,10 @@ public sealed class ExplorerWorkspace
     public PaneId PendingReconnectPane { get; private set; } = PaneId.Primary;
     public bool FileOpenUnsupported { get; private set; }
 
+    public List<SmartFolder> SmartFolders { get; private set; } = [];
+    public List<Tag> AllTags { get; private set; } = [];
+    public Dictionary<string, Tag> FileTags { get; private set; } = new();
+
     public IReadOnlyList<DriveInfo> Drives => _drives;
 
     public PaneId SidebarTarget =>
@@ -106,6 +110,9 @@ public sealed class ExplorerWorkspace
     {
         HomePath = await _backend.GetHomeDirAsync(cancellationToken).ConfigureAwait(false);
         await RefreshDrivesAsync(quiet: true, cancellationToken).ConfigureAwait(false);
+
+        await LoadSmartFoldersAsync().ConfigureAwait(false);
+        await LoadTagsAsync().ConfigureAwait(false);
         await NavigatePaneAsync(PaneId.Primary, HomePath, HistoryMode.Push, activate: false, cancellationToken)
             .ConfigureAwait(false);
     }
@@ -515,6 +522,9 @@ public sealed class ExplorerWorkspace
         }
 
         await RefreshDrivesAsync(quiet: true, cancellationToken).ConfigureAwait(false);
+
+        await LoadSmartFoldersAsync().ConfigureAwait(false);
+        await LoadTagsAsync().ConfigureAwait(false);
         var updated = DrivePresentation.FindDriveForPath(pending.Path, _drives);
         if (updated is not null && DrivePresentation.IsAvailable(updated))
         {
@@ -752,6 +762,96 @@ public sealed class ExplorerWorkspace
         return Pane(pane).VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, filter);
     }
 
+    // --- Smart Folders ---
+
+    private async Task LoadSmartFoldersAsync()
+    {
+        try
+        {
+            var ops = RequireFileOps();
+            var folders = await ops.LoadSmartFoldersAsync().ConfigureAwait(false);
+            SmartFolders = [.. folders];
+        }
+        catch
+        {
+            SmartFolders = [];
+        }
+    }
+
+    public async Task SaveSmartFolderAsync(SmartFolder folder)
+    {
+        var ops = RequireFileOps();
+        var updated = await ops.SaveSmartFolderAsync(folder).ConfigureAwait(false);
+        SmartFolders = [.. updated];
+        RaiseChanged();
+    }
+
+    public async Task DeleteSmartFolderAsync(string id)
+    {
+        var ops = RequireFileOps();
+        var updated = await ops.DeleteSmartFolderAsync(id).ConfigureAwait(false);
+        SmartFolders = [.. updated];
+        RaiseChanged();
+    }
+
+    // --- Tags ---
+
+    private static readonly Tag[] DefaultTags =
+    [
+        new() { Name = "Red", Color = "#ef4444" },
+        new() { Name = "Orange", Color = "#f97316" },
+        new() { Name = "Yellow", Color = "#eab308" },
+        new() { Name = "Green", Color = "#22c55e" },
+        new() { Name = "Blue", Color = "#3b82f6" },
+        new() { Name = "Purple", Color = "#a855f7" },
+    ];
+
+    private async Task LoadTagsAsync()
+    {
+        try
+        {
+            var ops = RequireFileOps();
+            var tags = await ops.GetAllTagsAsync().ConfigureAwait(false);
+            if (tags.Length == 0)
+            {
+                foreach (var dt in DefaultTags)
+                {
+                    await ops.CreateTagAsync(dt.Name, dt.Color).ConfigureAwait(false);
+                }
+                tags = await ops.GetAllTagsAsync().ConfigureAwait(false);
+            }
+            AllTags = [.. tags];
+            FileTags = await ops.GetAllFileTagsAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            AllTags = [];
+            FileTags = new();
+        }
+    }
+
+    public async Task SetColorLabelAsync(string[] paths, long tagId)
+    {
+        var ops = RequireFileOps();
+        foreach (var path in paths)
+        {
+            await ops.SetTagsForPathAsync(path, [tagId]).ConfigureAwait(false);
+        }
+        FileTags = await ops.GetAllFileTagsAsync().ConfigureAwait(false);
+        RaiseChanged();
+    }
+
+    public async Task RemoveColorLabelAsync(string[] paths)
+    {
+        var ops = RequireFileOps();
+        foreach (var path in paths)
+        {
+            await ops.SetTagsForPathAsync(path, []).ConfigureAwait(false);
+        }
+        FileTags = await ops.GetAllFileTagsAsync().ConfigureAwait(false);
+        RaiseChanged();
+    }
+
     private void RaiseChanged()
     {
         Changed?.Invoke(this, EventArgs.Empty);
@@ -809,3 +909,4 @@ public sealed class ExplorerWorkspace
         await RequireFileOps().RevealInFolderAsync(path).ConfigureAwait(false);
     }
 }
+

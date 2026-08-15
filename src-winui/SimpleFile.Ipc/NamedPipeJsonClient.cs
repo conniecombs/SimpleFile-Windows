@@ -105,6 +105,12 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
         return InvokeAsync(Protocol.ShutdownMethod, new { }, cancellationToken);
     }
 
+    public Task<string?> GetDbSettingAsync(string key, CancellationToken ct = default)
+        => InvokeAsync<string?>(Protocol.GetDbSettingMethod, new { key }, ct);
+
+    public Task SetDbSettingAsync(string key, string value, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.SetDbSettingMethod, new { key, value }, ct);
+
     public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default)
         => InvokeAsync<string>(Protocol.CreateDirectoryMethod, new { path, name }, ct);
 
@@ -239,6 +245,99 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
 
     public Task UnwatchDirectoryAsync(CancellationToken ct = default)
         => InvokeAsync<object?>(Protocol.UnwatchDirectoryMethod, new { }, ct);
+
+    public Task CancelFolderSizeAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelFolderSizeMethod, new { }, ct);
+
+    public Task CancelFolderItemCountAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelFolderItemCountMethod, new { }, ct);
+
+    public Task CancelCountItemsAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelCountItemsMethod, new { }, ct);
+
+    public Task<bool> CheckRarInstalledAsync(CancellationToken ct = default)
+        => InvokeAsync<bool>(Protocol.CheckRarInstalledMethod, new { }, ct);
+
+    public Task<RarInstallPlan> PrepareRarInstallAsync(CancellationToken ct = default)
+        => InvokeAsync<RarInstallPlan>(Protocol.PrepareRarInstallMethod, new { }, ct);
+
+    public Task DiscardRarInstallAsync(string confirmationToken, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.DiscardRarInstallMethod, new { confirmationToken }, ct);
+
+    public Task<string> InstallRarAsync(string confirmationToken, CancellationToken ct = default)
+        => InvokeAsync<string>(Protocol.InstallRarMethod, new { confirmationToken }, ct);
+
+    public Task<CleanupResult> DiskCleanupAsync(string directory, ulong? sizeThreshold, string? operationId, CancellationToken ct = default)
+        => InvokeAsync<CleanupResult>(Protocol.DiskCleanupMethod, new { directory, sizeThreshold, operationId }, ct);
+
+    public Task CancelDiskCleanupAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelDiskCleanupMethod, new { }, ct);
+
+    public Task<DuplicateCheckResult> DuplicateCheckAsync(string directory, ulong? minSize, ulong? partialHashBytes, string? operationId, CancellationToken ct = default)
+        => InvokeAsync<DuplicateCheckResult>(Protocol.DuplicateCheckMethod, new { directory, minSize, partialHashBytes, operationId }, ct);
+
+    public Task CancelDuplicateCheckAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.CancelDuplicateCheckMethod, new { }, ct);
+
+    public Task<Tag[]> GetAllTagsAsync(CancellationToken ct = default)
+        => InvokeAsync<Tag[]>(Protocol.GetAllTagsMethod, new { }, ct);
+
+    public Task<Tag> CreateTagAsync(string name, string color, CancellationToken ct = default)
+        => InvokeAsync<Tag>(Protocol.CreateTagMethod, new { name, color }, ct);
+
+    public Task<Tag> UpdateTagAsync(long id, string name, string color, CancellationToken ct = default)
+        => InvokeAsync<Tag>(Protocol.UpdateTagMethod, new { id, name, color }, ct);
+
+    public Task DeleteTagAsync(long id, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.DeleteTagMethod, new { id }, ct);
+
+    public Task<Tag[]> GetTagsForPathAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<Tag[]>(Protocol.GetTagsForPathMethod, new { path }, ct);
+
+    public Task SetTagsForPathAsync(string path, long[] tagIds, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.SetTagsForPathMethod, new { path, tagIds }, ct);
+
+    public Task<Dictionary<string, Tag>> GetAllFileTagsAsync(CancellationToken ct = default)
+        => InvokeAsync<Dictionary<string, Tag>>(Protocol.GetAllFileTagsMethod, new { }, ct);
+
+    public Task<string[]> GetFilesWithTagAsync(long tagId, CancellationToken ct = default)
+        => InvokeAsync<string[]>(Protocol.GetFilesWithTagMethod, new { tagId }, ct);
+
+    public Task<SmartFolder[]> LoadSmartFoldersAsync(CancellationToken ct = default)
+        => InvokeAsync<SmartFolder[]>(Protocol.LoadSmartFoldersMethod, new { }, ct);
+
+    public Task<SmartFolder[]> SaveSmartFolderAsync(SmartFolder folder, CancellationToken ct = default)
+        => InvokeAsync<SmartFolder[]>(Protocol.SaveSmartFolderMethod, new { folder }, ct);
+
+    public Task<SmartFolder[]> DeleteSmartFolderAsync(string id, CancellationToken ct = default)
+        => InvokeAsync<SmartFolder[]>(Protocol.DeleteSmartFolderMethod, new { id }, ct);
+
+    public Task<AppAboutInfo> GetAppAboutInfoAsync(CancellationToken ct = default)
+        => InvokeAsync<AppAboutInfo>(Protocol.GetAppAboutInfoMethod, new { }, ct);
+
+    public Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default)
+        => InvokeAsync<UpdateInfo?>(Protocol.CheckForUpdateMethod, new { }, ct);
+
+    public Task InstallUpdateAsync(CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.InstallUpdateMethod, new { }, ct);
+
+    public Task OpenTerminalAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.OpenTerminalMethod, new { path }, ct);
+
+    public Task OpenPowershellAdminAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.OpenPowershellAdminMethod, new { path }, ct);
+
+    public Task<GitStatus> GetGitStatusAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<GitStatus>(Protocol.GetGitStatusMethod, new { path }, ct);
+
+    public Task<FileEntry[]> GetGitFileStatusesAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<FileEntry[]>(Protocol.GetGitFileStatusesMethod, new { path }, ct);
+
+    public Task GitPullAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.GitPullMethod, new { path }, ct);
+
+    public Task GitPushAsync(string path, CancellationToken ct = default)
+        => InvokeAsync<object?>(Protocol.GitPushMethod, new { path }, ct);
 
     public async Task<DirectoryListing> ListDirectoryAsync(
         string path,

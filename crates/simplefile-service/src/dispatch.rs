@@ -160,6 +160,17 @@ struct ExternalUrlParams {
 }
 
 #[derive(Debug, Deserialize)]
+struct SettingKeyParams {
+    key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SettingValueParams {
+    key: String,
+    value: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct OpenWithParams {
     path: String,
     application: String,
@@ -235,6 +246,28 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
                 request.id.clone(),
                 message,
             )),
+        },
+        "get_db_setting" => match parse_params::<SettingKeyParams>(request) {
+            Ok(p) => match simplefile_core::settings_store::get_db_setting(p.key) {
+                Ok(value) => {
+                    Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(value)))
+                }
+                Err(message) => Dispatch::Reply(JsonRpcResponse::application_error(
+                    request.id.clone(),
+                    message,
+                )),
+            },
+            Err(response) => Dispatch::Reply(response),
+        },
+        "set_db_setting" => match parse_params::<SettingValueParams>(request) {
+            Ok(p) => match simplefile_core::settings_store::set_db_setting(p.key, p.value) {
+                Ok(()) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null)),
+                Err(message) => Dispatch::Reply(JsonRpcResponse::application_error(
+                    request.id.clone(),
+                    message,
+                )),
+            },
+            Err(response) => Dispatch::Reply(response),
         },
         "list_directory" => match parse_path_params(request) {
             Ok(path) => Dispatch::ListDirectory {
@@ -668,7 +701,9 @@ fn parse_params<T: for<'de> Deserialize<'de>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
     use std::fs;
+    use std::sync::{Mutex, OnceLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn request(method: &str, id: u64, params: Value) -> JsonRpcRequest {
@@ -689,6 +724,34 @@ mod tests {
             std::env::temp_dir().join(format!("simplefile-service-dispatch-{name}-{nanos}.txt"));
         fs::write(&path, content).expect("write temp file");
         path
+    }
+
+    fn metadata_db_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: &std::path::Path) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
     }
 
     #[test]
@@ -756,6 +819,54 @@ mod tests {
             panic!("expected reply");
         };
         assert_eq!(response.error.unwrap().code, ERR_METHOD_NOT_FOUND);
+    }
+
+    #[test]
+    fn settings_methods_round_trip_through_metadata_db() {
+        let _lock = metadata_db_env_lock().lock().expect("env lock");
+        let db_path = temp_file("settings-db", b"");
+        fs::remove_file(&db_path).expect("remove seed temp file");
+        let _env = EnvVarGuard::set("SIMPLEFILE_METADATA_DB", &db_path);
+        let mut state = SessionState {
+            handshake_done: true,
+            ..SessionState::default()
+        };
+
+        let set = dispatch(
+            &mut state,
+            &request(
+                "set_db_setting",
+                5,
+                json!({ "key": "winui.layout", "value": "{\"dualPane\":true}" }),
+            ),
+        );
+        let Dispatch::Reply(set_response) = set else {
+            panic!("expected settings set reply");
+        };
+        assert!(set_response.error.is_none());
+
+        let get = dispatch(
+            &mut state,
+            &request("get_db_setting", 6, json!({ "key": "winui.layout" })),
+        );
+        let Dispatch::Reply(get_response) = get else {
+            panic!("expected settings get reply");
+        };
+        assert_eq!(
+            get_response.result.unwrap().as_str(),
+            Some("{\"dualPane\":true}")
+        );
+
+        let missing = dispatch(
+            &mut state,
+            &request("get_db_setting", 7, json!({ "key": "missing" })),
+        );
+        let Dispatch::Reply(missing_response) = missing else {
+            panic!("expected missing settings reply");
+        };
+        assert!(missing_response.result.unwrap().is_null());
+
+        let _ = fs::remove_file(db_path);
     }
 
     #[test]

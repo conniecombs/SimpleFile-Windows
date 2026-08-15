@@ -220,6 +220,112 @@ public sealed class FileOperationService
         return _ipc.GetFileMetadataAsync(path, ct);
     }
 
+    public Task<Tag[]> GetAllTagsAsync(CancellationToken ct = default) => _ipc.GetAllTagsAsync(ct);
+    public Task<Tag> CreateTagAsync(string name, string color, CancellationToken ct = default) => _ipc.CreateTagAsync(name, color, ct);
+    public Task UpdateTagAsync(long id, string name, string color, CancellationToken ct = default) => _ipc.UpdateTagAsync(id, name, color, ct);
+    public Task DeleteTagAsync(long id, CancellationToken ct = default) => _ipc.DeleteTagAsync(id, ct);
+    public Task<Tag[]> GetTagsForPathAsync(string path, CancellationToken ct = default) => _ipc.GetTagsForPathAsync(path, ct);
+    public Task SetTagsForPathAsync(string path, long[] tagIds, CancellationToken ct = default) => _ipc.SetTagsForPathAsync(path, tagIds, ct);
+    public Task<Dictionary<string, Tag>> GetAllFileTagsAsync(CancellationToken ct = default) => _ipc.GetAllFileTagsAsync(ct);
+    public Task<string[]> GetFilesWithTagAsync(long tagId, CancellationToken ct = default) => _ipc.GetFilesWithTagAsync(tagId, ct);
+
+    public Task<SmartFolder[]> LoadSmartFoldersAsync(CancellationToken ct = default) => _ipc.LoadSmartFoldersAsync(ct);
+    public Task<SmartFolder[]> SaveSmartFolderAsync(SmartFolder folder, CancellationToken ct = default) => _ipc.SaveSmartFolderAsync(folder, ct);
+    public Task<SmartFolder[]> DeleteSmartFolderAsync(string id, CancellationToken ct = default) => _ipc.DeleteSmartFolderAsync(id, ct);
+
+    public Task<string?> GetSettingAsync(string key, CancellationToken ct = default) => _ipc.GetDbSettingAsync(key, ct);
+    public Task SetSettingAsync(string key, string value, CancellationToken ct = default) => _ipc.SetDbSettingAsync(key, value, ct);
+    public Task<string> GetAppVersionAsync(CancellationToken ct = default) => _ipc.GetAppVersionAsync(ct);
+
+    public async Task<CleanupResult> DiskCleanupAsync(
+        string directory,
+        ulong? sizeThreshold = null,
+        IProgress<ProgressUpdate>? progress = null,
+        CancellationToken ct = default)
+    {
+        var operationId = GenerateOperationId();
+        IDisposable? subscription = null;
+        if (progress != null)
+        {
+            subscription = _ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
+            {
+                if (update.OperationId == operationId && update.OperationType == "cleanup")
+                    progress.Report(update);
+            });
+        }
+        try
+        {
+            return await _ipc.DiskCleanupAsync(directory, sizeThreshold, operationId, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            subscription?.Dispose();
+        }
+    }
+
+    public async Task<DuplicateCheckResult> DuplicateCheckAsync(
+        string directory,
+        ulong? minSize = null,
+        ulong? partialHashBytes = null,
+        IProgress<ProgressUpdate>? progress = null,
+        CancellationToken ct = default)
+    {
+        var operationId = GenerateOperationId();
+        IDisposable? subscription = null;
+        if (progress != null)
+        {
+            subscription = _ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
+            {
+                if (update.OperationId == operationId && update.OperationType == "duplicate-check")
+                    progress.Report(update);
+            });
+        }
+        try
+        {
+            return await _ipc.DuplicateCheckAsync(directory, minSize, partialHashBytes, operationId, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            subscription?.Dispose();
+        }
+    }
+
+    public Task CancelDiskCleanupAsync(CancellationToken ct = default) => _ipc.CancelDiskCleanupAsync(ct);
+    public Task CancelDuplicateCheckAsync(CancellationToken ct = default) => _ipc.CancelDuplicateCheckAsync(ct);
+    public Task CancelFolderSizeAsync(CancellationToken ct = default) => _ipc.CancelFolderSizeAsync(ct);
+    public Task CancelFolderItemCountAsync(CancellationToken ct = default) => _ipc.CancelFolderItemCountAsync(ct);
+
+    public Task<bool> CheckRarInstalledAsync(CancellationToken ct = default) => _ipc.CheckRarInstalledAsync(ct);
+    public Task<RarInstallPlan> PrepareRarInstallAsync(CancellationToken ct = default) => _ipc.PrepareRarInstallAsync(ct);
+    public Task DiscardRarInstallAsync(string confirmationToken, CancellationToken ct = default) => _ipc.DiscardRarInstallAsync(confirmationToken, ct);
+    public Task<string> InstallRarAsync(string confirmationToken, CancellationToken ct = default) => _ipc.InstallRarAsync(confirmationToken, ct);
+
+    public Task<AppAboutInfo> GetAppAboutInfoAsync(CancellationToken ct = default) => _ipc.GetAppAboutInfoAsync(ct);
+    public Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default) => _ipc.CheckForUpdateAsync(ct);
+    
+    public async Task InstallUpdateAsync(IProgress<long[]>? progress = null, CancellationToken ct = default)
+    {
+        IDisposable? subscription = null;
+        if (progress != null)
+        {
+            subscription = _ipc.On<long[]>(Protocol.UpdateChunkEvent, update =>
+            {
+                progress.Report(update);
+            });
+        }
+        try
+        {
+            await _ipc.InstallUpdateAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            subscription?.Dispose();
+        }
+    }
+
+    public Task OpenTerminalAsync(string path, CancellationToken ct = default) => _ipc.OpenTerminalAsync(path, ct);
+    public Task OpenPowershellAdminAsync(string path, CancellationToken ct = default) => _ipc.OpenPowershellAdminAsync(path, ct);
+
     // Check if an IpcException represents a conflict.
     public static bool IsConflict(IpcException ex)
         => ex.Message.StartsWith(Protocol.PrefixConflict, StringComparison.Ordinal);
@@ -237,3 +343,4 @@ public sealed class FileOperationService
         return $"op_{timestamp}_{counter}";
     }
 }
+

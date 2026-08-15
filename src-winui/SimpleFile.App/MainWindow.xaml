@@ -3,6 +3,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:SimpleFile.App"
+    xmlns:core="using:SimpleFile.Core"
+    xmlns:ipc="using:SimpleFile.Ipc"
     Title="SimpleFile - File Explorer">
     <Grid x:Name="RootGrid" RequestedTheme="Dark" Background="{StaticResource SfBgPrimaryBrush}">
         <Grid.KeyboardAccelerators>
@@ -27,6 +29,8 @@
             <KeyboardAccelerator Key="C" Modifiers="Control" Invoked="OnCopyAccelerator" />
             <KeyboardAccelerator Key="X" Modifiers="Control" Invoked="OnCutAccelerator" />
             <KeyboardAccelerator Key="V" Modifiers="Control" Invoked="OnPasteAccelerator" />
+            <KeyboardAccelerator Key="F4" Invoked="OnOpenTerminalAccelerator" />
+            <KeyboardAccelerator Key="S" Modifiers="Control,Shift" Invoked="OnSettingsAccelerator" />
         </Grid.KeyboardAccelerators>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="240" />
@@ -100,6 +104,32 @@
                                         <TextBlock Text="{x:Bind Icon}" />
                                         <TextBlock Text="{x:Bind Name}" Foreground="{StaticResource SfTextPrimaryBrush}" />
                                     </StackPanel>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <Grid>
+                            <TextBlock VerticalAlignment="Center" FontSize="12" Foreground="{StaticResource SfTextMutedBrush}" Text="Smart Folders" />
+                        </Grid>
+                        <ListView
+                            x:Name="SmartFoldersList"
+                            IsItemClickEnabled="True"
+                            ItemClick="OnSmartFolderClicked"
+                            SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Padding="4" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="🔍" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="{StaticResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <Button Grid.Column="2" Content="×" Padding="4,2" Click="OnDeleteSmartFolderClicked" Tag="{Binding Id}" Background="Transparent" BorderThickness="0" />
+                                    </Grid>
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
@@ -221,6 +251,28 @@
                             <Button Click="OnPrimaryNewFile" Content="📄+" ToolTipService.ToolTip="New File (Ctrl+N)" />
                             <Button Click="OnPrimaryRename" Content="✏️" ToolTipService.ToolTip="Rename (F2)" />
                             <Button Click="OnPrimaryDelete" Content="🗑️" ToolTipService.ToolTip="Trash (Delete)" />
+                            <Button Click="OnSettingsClicked" Content="⚙" ToolTipService.ToolTip="Settings" />
+                            <DropDownButton Content="🏷" ToolTipService.ToolTip="Tags">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
+                            <DropDownButton Content="⋮" ToolTipService.ToolTip="More Actions">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="View Archive Contents" Click="OnViewArchiveClicked" />
+                                        <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
+                                        <MenuFlyoutItem Text="Create Archive" Click="OnCreateArchiveClicked" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Find Duplicates" Click="OnDuplicateCheckerClicked" />
+                                        <MenuFlyoutItem Text="Disk Cleanup" Click="OnDiskCleanupClicked" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Open Terminal Here" Click="OnOpenTerminalClicked" />
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
                         </StackPanel>
                     </Grid>
                     <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
@@ -244,6 +296,14 @@
                         KeyDown="OnPrimaryFileKeyDown"
                         SelectionChanged="OnPrimarySelectionChanged"
                         SelectionMode="Multiple">
+                        <ListView.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
+                                <MenuFlyoutItem Text="Compress to Archive" Click="OnCreateArchiveClicked" />
+                                <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
+                            </MenuFlyout>
+                        </ListView.ContextFlyout>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:FileRow">
                                 <Grid ColumnSpacing="8">
@@ -322,6 +382,28 @@
                             <Button Click="OnSecondaryNewFile" Content="📄+" ToolTipService.ToolTip="New File (Ctrl+N)" />
                             <Button Click="OnSecondaryRename" Content="✏️" ToolTipService.ToolTip="Rename (F2)" />
                             <Button Click="OnSecondaryDelete" Content="🗑️" ToolTipService.ToolTip="Trash (Delete)" />
+                            <Button Click="OnSettingsClicked" Content="⚙" ToolTipService.ToolTip="Settings" />
+                            <DropDownButton Content="🏷" ToolTipService.ToolTip="Tags">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
+                            <DropDownButton Content="⋮" ToolTipService.ToolTip="More Actions">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="View Archive Contents" Click="OnViewArchiveClicked" />
+                                        <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
+                                        <MenuFlyoutItem Text="Create Archive" Click="OnCreateArchiveClicked" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Find Duplicates" Click="OnDuplicateCheckerClicked" />
+                                        <MenuFlyoutItem Text="Disk Cleanup" Click="OnDiskCleanupClicked" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="Open Terminal Here" Click="OnOpenTerminalClicked" />
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
                         </StackPanel>
                     </Grid>
                     <Grid Grid.Row="2" Padding="12,4,12,4" Background="{StaticResource SfBgSecondaryBrush}" BorderBrush="{StaticResource SfBorderBrush}" BorderThickness="0,1,0,1">
@@ -345,6 +427,14 @@
                         KeyDown="OnSecondaryFileKeyDown"
                         SelectionChanged="OnSecondarySelectionChanged"
                         SelectionMode="Multiple">
+                        <ListView.ContextFlyout>
+                            <MenuFlyout>
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem Text="Set Color Label" Click="OnSetColorLabelClicked" />
+                                <MenuFlyoutItem Text="Compress to Archive" Click="OnCreateArchiveClicked" />
+                                <MenuFlyoutItem Text="Extract Archive" Click="OnExtractArchiveClicked" />
+                            </MenuFlyout>
+                        </ListView.ContextFlyout>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:FileRow">
                                 <Grid ColumnSpacing="8">

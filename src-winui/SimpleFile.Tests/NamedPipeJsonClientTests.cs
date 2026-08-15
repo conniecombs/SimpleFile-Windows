@@ -252,6 +252,37 @@ public class NamedPipeJsonClientTests
     }
 
     [Fact]
+    public async Task SettingsMethods_UseContractNamesAndCasing()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var get = client.GetDbSettingAsync("winui.workspace.layout.v1");
+        var getRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.GetDbSettingMethod, getRequest.Method);
+        var getParams = Assert.IsType<JsonElement>(getRequest.Params);
+        Assert.Equal("winui.workspace.layout.v1", getParams.GetProperty("key").GetString());
+        await server.SendResultAsync(getRequest.Id, "{\"version\":1}");
+        Assert.Equal("{\"version\":1}", await get);
+
+        var missing = client.GetDbSettingAsync("missing");
+        var missingRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.GetDbSettingMethod, missingRequest.Method);
+        await server.SendResultAsync(missingRequest.Id, null);
+        Assert.Null(await missing);
+
+        var set = client.SetDbSettingAsync("winui.workspace.layout.v1", "{\"version\":1}");
+        var setRequest = await server.ReadRequestAsync();
+        Assert.Equal(Protocol.SetDbSettingMethod, setRequest.Method);
+        var setParams = Assert.IsType<JsonElement>(setRequest.Params);
+        Assert.Equal("winui.workspace.layout.v1", setParams.GetProperty("key").GetString());
+        Assert.Equal("{\"version\":1}", setParams.GetProperty("value").GetString());
+        await server.SendResultAsync(setRequest.Id, null);
+        await set;
+    }
+
+    [Fact]
     public async Task InspectionMethods_UseContractNamesAndCasing()
     {
         var (server, client) = await FakeIpcServer.ConnectAsync();
