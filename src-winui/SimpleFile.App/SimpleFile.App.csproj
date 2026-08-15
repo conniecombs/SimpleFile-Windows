@@ -32,4 +32,48 @@
   <ItemGroup>
     <ProjectReference Include="..\SimpleFile.Core\SimpleFile.Core.csproj" />
   </ItemGroup>
+
+  <!-- WASDK self-contained deletes the merged resources.pri after MSIX extract.
+       XamlControlsResources then cannot resolve
+       ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml and the process
+       dies with 0xC000027B before a window appears. Restore that PRI. -->
+  <Target Name="CopyWindowsAppSdkMergedPri"
+          AfterTargets="ExtractMicrosoftWindowsAppSDKMsixFiles"
+          Condition="'$(WindowsAppSDKSelfContained)'=='true'">
+    <PropertyGroup>
+      <_WasdkMsixArch Condition="'$(_WasdkMsixArch)'=='' and ('$(Platform)'=='x64' or '$(RuntimeIdentifier)'=='win-x64')">x64</_WasdkMsixArch>
+      <_WasdkMsixArch Condition="'$(_WasdkMsixArch)'==''">x64</_WasdkMsixArch>
+      <_WasdkPriDir>$([MSBuild]::NormalizeDirectory('$(IntermediateOutputPath)','WasdkMergedPri'))</_WasdkPriDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_WasdkRuntimeMsix Include="$([MSBuild]::NormalizeDirectory('$(MicrosoftWindowsAppSDKPackageDir)','tools\MSIX\win10-$(_WasdkMsixArch)'))Microsoft.WindowsAppRuntime.*.Msix" />
+    </ItemGroup>
+    <MakeDir Directories="$(_WasdkPriDir)" />
+    <Unzip SourceFiles="@(_WasdkRuntimeMsix)"
+           DestinationFolder="$(_WasdkPriDir)"
+           SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_WasdkPriDir)resources.pri"
+          DestinationFiles="$(OutDir)resources.pri"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(_WasdkPriDir)resources.pri')" />
+    <ItemGroup Condition="Exists('$(_WasdkPriDir)resources.pri')">
+      <Content Include="$(_WasdkPriDir)resources.pri"
+               CopyToPublishDirectory="PreserveNewest"
+               TargetPath="resources.pri"
+               Visible="false" />
+    </ItemGroup>
+  </Target>
+
+  <!-- `dotnet publish` does not copy compiled XBF pages. Without them,
+       MainWindow.InitializeComponent cannot load ms-appx:///MainWindow.xaml. -->
+  <Target Name="PublishUnpackagedXamlPayload" AfterTargets="Publish">
+    <ItemGroup>
+      <_XamlXbf Include="$(OutDir)*.xbf" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_XamlXbf)" DestinationFolder="$(PublishDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(OutDir)resources.pri"
+          DestinationFolder="$(PublishDir)"
+          SkipUnchangedFiles="true"
+          Condition="Exists('$(OutDir)resources.pri')" />
+  </Target>
 </Project>

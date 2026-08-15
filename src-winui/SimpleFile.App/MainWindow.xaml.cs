@@ -46,7 +46,16 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
-        InitializeComponent();
+        try
+        {
+            InitializeComponent();
+        }
+        catch (Exception exception)
+        {
+            App.LogCrash("MainWindow.InitializeComponent", exception);
+            throw;
+        }
+
         Title = "SimpleFile - File Explorer";
         AppWindow.Resize(new SizeInt32(1200, 800));
         if (AppWindow.Presenter is OverlappedPresenter presenter)

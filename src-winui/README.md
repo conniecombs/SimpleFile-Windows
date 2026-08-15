@@ -43,3 +43,16 @@ npm run dev:winui
 ```
 
 `dev:winui` builds `simplefile-service` then runs `SimpleFile.App`. Override the service path with `SIMPLEFILE_SERVICE_PATH` if needed.
+
+## Runnable folder (Release)
+
+The unpackaged exe needs `resources.pri` (WinUI theme map) and the `*.xbf` pages next to `SimpleFile.App.exe`. A normal `dotnet publish` omitted those; the project now copies them.
+
+```powershell
+dotnet publish src-winui\SimpleFile.App\SimpleFile.App.csproj -c Release -r win-x64 --self-contained true
+Copy-Item src-tauri\target\release\simplefile-service.exe `
+  src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\ -Force
+Start-Process src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\SimpleFile.App.exe
+```
+
+If the window never appears, check `%LOCALAPPDATA%\SimpleFile\startup.log`. The usual cause is a missing `resources.pri` or `MainWindow.xbf`.
