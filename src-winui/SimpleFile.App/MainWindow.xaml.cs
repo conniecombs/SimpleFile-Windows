@@ -98,8 +98,8 @@ public sealed partial class MainWindow : Window
             _fileChangeSubscription = _backend.Client!.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
             await _workspace.InitializeAsync();
             ApplyTheme(_workspace.Settings.Theme);
-            _quickAccessCollapsed = _workspace.Settings.QuickAccessCollapsed;
-            _myPcCollapsed = _workspace.Settings.MyPcCollapsed;
+            _quickAccessCollapsed = false;
+            _myPcCollapsed = false;
             ApplyPreviewVisibility();
             ApplyColumnWidths();
             SyncFromWorkspace();

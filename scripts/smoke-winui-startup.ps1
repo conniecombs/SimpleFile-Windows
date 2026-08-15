@@ -4,7 +4,7 @@ $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $payloadDir = Join-Path $root "dist\winui\payload"
 $exePath = Join-Path $payloadDir "SimpleFile.exe"
 $servicePath = Join-Path $payloadDir "simplefile-service.exe"
-$expectedTitle = "SimpleFile - File Explorer"
+$expectedTitle = "SimpleFile"
 $timeoutSeconds = 25
 
 if (-not (Test-Path -LiteralPath $exePath)) {

@@ -10,7 +10,7 @@ $installer = Get-ChildItem -Path $bundleDir -Filter "SimpleFile_*_x64-winui-setu
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
-$expectedTitle = "SimpleFile - File Explorer"
+$expectedTitle = "SimpleFile"
 $props = Get-Content -Path (Join-Path $root "src-winui\Directory.Build.props") -Raw
 if ($props -notmatch '<Version>([^<]+)</Version>') {
     throw "Could not read Version from src-winui\Directory.Build.props."

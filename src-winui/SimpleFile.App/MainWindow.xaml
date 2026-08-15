@@ -83,24 +83,24 @@
                         AutomationProperties.Name="Search current folder"
                         PlaceholderText="Search current folder"
                         KeyDown="OnSearchKeyDown" />
-                    <AppBarButton
+                    <Button
                         Grid.Column="1"
-                        Icon="Find"
-                        Label="Search"
-                        Width="40"
+                        Style="{StaticResource SfIconButtonStyle}"
                         AutomationProperties.Name="Search"
                         Click="OnSearchClick"
-                        ToolTipService.ToolTip="Search current folder" />
-                    <AppBarButton
+                        ToolTipService.ToolTip="Search current folder">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE721;" />
+                    </Button>
+                    <Button
                         x:Name="SearchCancelButton"
                         Grid.Column="2"
-                        Icon="Cancel"
-                        Label="Cancel"
-                        Width="40"
+                        Style="{StaticResource SfIconButtonStyle}"
                         AutomationProperties.Name="Cancel search"
                         Click="OnCancelSearchClick"
                         IsEnabled="False"
-                        ToolTipService.ToolTip="Cancel search" />
+                        ToolTipService.ToolTip="Cancel search">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE711;" />
+                    </Button>
                 </Grid>
                 <TextBox
                     x:Name="QuickFilterBox"
@@ -125,11 +125,13 @@
                             x:Name="QuickAccessList"
                             IsItemClickEnabled="True"
                             ItemClick="OnQuickAccessClick"
-                            SelectionMode="None">
+                            SelectionMode="None"
+                            ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                            ScrollViewer.VerticalScrollMode="Disabled">
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:QuickAccessRow">
                                     <StackPanel Orientation="Horizontal" Spacing="8" Padding="4">
-                                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" VerticalAlignment="Center" />
+                                        <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" Foreground="{ThemeResource SfAccentBrush}" VerticalAlignment="Center" />
                                         <TextBlock Text="{x:Bind Name}" Foreground="{ThemeResource SfTextPrimaryBrush}" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </DataTemplate>
@@ -232,12 +234,14 @@
                             x:Name="DriveList"
                             IsItemClickEnabled="True"
                             ItemClick="OnDriveClick"
-                            SelectionMode="None">
+                            SelectionMode="None"
+                            ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                            ScrollViewer.VerticalScrollMode="Disabled">
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="local:DriveRow">
                                     <StackPanel Padding="4" Spacing="2">
                                         <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" VerticalAlignment="Center" />
+                                            <TextBlock FontFamily="Segoe MDL2 Assets" FontSize="16" Text="{x:Bind Icon}" Foreground="{ThemeResource SfAccentBrush}" VerticalAlignment="Center" />
                                             <TextBlock Text="{x:Bind Name}" TextWrapping="NoWrap" Foreground="{ThemeResource SfTextPrimaryBrush}" />
                                             <TextBlock Text="{x:Bind Badge}" FontSize="11" Foreground="{ThemeResource SfTextMutedBrush}" />
                                         </StackPanel>
@@ -315,9 +319,9 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
-                            <AppBarButton x:Name="PrimaryBackButton" Icon="Back" Label="Back" Width="40" Click="OnPrimaryBack" ToolTipService.ToolTip="Back" AutomationProperties.Name="Go back" />
-                            <AppBarButton x:Name="PrimaryForwardButton" Icon="Forward" Label="Forward" Width="40" Click="OnPrimaryForward" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Go forward" />
-                            <AppBarButton x:Name="PrimaryUpButton" Icon="Up" Label="Up" Width="40" Click="OnPrimaryUp" ToolTipService.ToolTip="Up" AutomationProperties.Name="Go up" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" x:Name="PrimaryBackButton" Icon="Back" Label="Back" Width="40" Click="OnPrimaryBack" ToolTipService.ToolTip="Back" AutomationProperties.Name="Go back" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" x:Name="PrimaryForwardButton" Icon="Forward" Label="Forward" Width="40" Click="OnPrimaryForward" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Go forward" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" x:Name="PrimaryUpButton" Icon="Up" Label="Up" Width="40" Click="OnPrimaryUp" ToolTipService.ToolTip="Up" AutomationProperties.Name="Go up" />
                         </StackPanel>
                         <Grid x:Name="PrimaryPathBar" Grid.Column="1" Background="{ThemeResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
                             <ScrollViewer x:Name="PrimaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -330,22 +334,23 @@
                                 KeyDown="OnPrimaryPathKeyDown"
                                 LostFocus="OnPrimaryPathLostFocus" />
                         </Grid>
-                        <AppBarButton Grid.Column="2" Icon="Edit" Label="Edit path" Width="40" Click="OnEditPrimaryPath" ToolTipService.ToolTip="Edit path" />
+                        <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Grid.Column="2" Icon="Edit" Label="Edit path" Width="40" Click="OnEditPrimaryPath" ToolTipService.ToolTip="Edit path" />
                         <StackPanel Grid.Column="3" Orientation="Horizontal">
-                            <AppBarButton Icon="Folder" Label="New folder" Width="40" Click="OnPrimaryNewFolder" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
-                            <AppBarButton Icon="Document" Label="New file" Width="40" Click="OnPrimaryNewFile" ToolTipService.ToolTip="New File (Ctrl+N)" />
-                            <AppBarButton Icon="Edit" Label="Rename" Width="40" Click="OnPrimaryRename" ToolTipService.ToolTip="Rename (F2)" />
-                            <AppBarButton Icon="Delete" Label="Delete" Width="40" Click="OnPrimaryDelete" ToolTipService.ToolTip="Trash (Delete)" />
-                            <AppBarButton Icon="Tag" Label="Tags" Width="40" ToolTipService.ToolTip="Tags">
-                                <AppBarButton.Flyout>
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Folder" Label="New folder" Width="40" Click="OnPrimaryNewFolder" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Document" Label="New file" Width="40" Click="OnPrimaryNewFile" ToolTipService.ToolTip="New File (Ctrl+N)" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Edit" Label="Rename" Width="40" Click="OnPrimaryRename" ToolTipService.ToolTip="Rename (F2)" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Delete" Label="Delete" Width="40" Click="OnPrimaryDelete" ToolTipService.ToolTip="Trash (Delete)" />
+                            <Button Style="{StaticResource SfIconButtonStyle}" ToolTipService.ToolTip="Tags" AutomationProperties.Name="Tags">
+                                <Button.Flyout>
                                     <MenuFlyout>
                                         <MenuFlyoutItem Text="Set color label" Click="OnSetColorLabelClicked" />
                                     </MenuFlyout>
-                                </AppBarButton.Flyout>
-                            </AppBarButton>
-                            <AppBarButton Icon="Setting" Label="Settings" Width="40" Click="OnSettingsClicked" ToolTipService.ToolTip="Settings" />
-                            <AppBarButton Icon="More" Label="More" Width="40" ToolTipService.ToolTip="More">
-                                <AppBarButton.Flyout>
+                                </Button.Flyout>
+                                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8EC;" FontSize="16" />
+                            </Button>
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Setting" Label="Settings" Click="OnSettingsClicked" ToolTipService.ToolTip="Settings" />
+                            <Button Style="{StaticResource SfIconButtonStyle}" ToolTipService.ToolTip="More" AutomationProperties.Name="More">
+                                <Button.Flyout>
                                     <MenuFlyout>
                                         <MenuFlyoutItem Text="View archive contents" Click="OnViewArchiveClicked" />
                                         <MenuFlyoutItem Text="Extract archive" Click="OnExtractArchiveClicked" />
@@ -356,8 +361,9 @@
                                         <MenuFlyoutSeparator />
                                         <MenuFlyoutItem Text="Open terminal here" Click="OnOpenTerminalClicked" />
                                     </MenuFlyout>
-                                </AppBarButton.Flyout>
-                            </AppBarButton>
+                                </Button.Flyout>
+                                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE712;" FontSize="16" />
+                            </Button>
                         </StackPanel>
                     </Grid>
                     <Grid x:Name="PrimaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
@@ -370,13 +376,13 @@
                             <ColumnDefinition Width="6" />
                             <ColumnDefinition x:Name="PrimaryTypeCol" Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
+                        <Button Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
                         <Border Grid.Column="1" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name" />
-                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
+                        <Button Grid.Column="2" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
                         <Border Grid.Column="3" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size" />
-                        <Button Grid.Column="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
+                        <Button Grid.Column="4" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
                         <Border Grid.Column="5" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date" />
-                        <Button Grid.Column="6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
+                        <Button Grid.Column="6" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
                     </Grid>
                     <Grid Grid.Row="3">
                         <ListView
@@ -456,9 +462,9 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
-                            <AppBarButton x:Name="SecondaryBackButton" Icon="Back" Label="Back" Width="40" Click="OnSecondaryBack" ToolTipService.ToolTip="Back" AutomationProperties.Name="Go back" />
-                            <AppBarButton x:Name="SecondaryForwardButton" Icon="Forward" Label="Forward" Width="40" Click="OnSecondaryForward" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Go forward" />
-                            <AppBarButton x:Name="SecondaryUpButton" Icon="Up" Label="Up" Width="40" Click="OnSecondaryUp" ToolTipService.ToolTip="Up" AutomationProperties.Name="Go up" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" x:Name="SecondaryBackButton" Icon="Back" Label="Back" Width="40" Click="OnSecondaryBack" ToolTipService.ToolTip="Back" AutomationProperties.Name="Go back" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" x:Name="SecondaryForwardButton" Icon="Forward" Label="Forward" Width="40" Click="OnSecondaryForward" ToolTipService.ToolTip="Forward" AutomationProperties.Name="Go forward" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" x:Name="SecondaryUpButton" Icon="Up" Label="Up" Width="40" Click="OnSecondaryUp" ToolTipService.ToolTip="Up" AutomationProperties.Name="Go up" />
                         </StackPanel>
                         <Grid Grid.Column="1" Background="{ThemeResource SfBgSecondaryBrush}" CornerRadius="4" Padding="8,4">
                             <ScrollViewer x:Name="SecondaryBreadcrumbScroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -471,22 +477,23 @@
                                 KeyDown="OnSecondaryPathKeyDown"
                                 LostFocus="OnSecondaryPathLostFocus" />
                         </Grid>
-                        <AppBarButton Grid.Column="2" Icon="Edit" Label="Edit path" Width="40" Click="OnEditSecondaryPath" ToolTipService.ToolTip="Edit path" />
+                        <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Grid.Column="2" Icon="Edit" Label="Edit path" Width="40" Click="OnEditSecondaryPath" ToolTipService.ToolTip="Edit path" />
                         <StackPanel Grid.Column="3" Orientation="Horizontal">
-                            <AppBarButton Icon="Folder" Label="New folder" Width="40" Click="OnSecondaryNewFolder" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
-                            <AppBarButton Icon="Document" Label="New file" Width="40" Click="OnSecondaryNewFile" ToolTipService.ToolTip="New File (Ctrl+N)" />
-                            <AppBarButton Icon="Edit" Label="Rename" Width="40" Click="OnSecondaryRename" ToolTipService.ToolTip="Rename (F2)" />
-                            <AppBarButton Icon="Delete" Label="Delete" Width="40" Click="OnSecondaryDelete" ToolTipService.ToolTip="Trash (Delete)" />
-                            <AppBarButton Icon="Tag" Label="Tags" Width="40" ToolTipService.ToolTip="Tags">
-                                <AppBarButton.Flyout>
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Folder" Label="New folder" Width="40" Click="OnSecondaryNewFolder" ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Document" Label="New file" Width="40" Click="OnSecondaryNewFile" ToolTipService.ToolTip="New File (Ctrl+N)" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Edit" Label="Rename" Width="40" Click="OnSecondaryRename" ToolTipService.ToolTip="Rename (F2)" />
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Delete" Label="Delete" Width="40" Click="OnSecondaryDelete" ToolTipService.ToolTip="Trash (Delete)" />
+                            <Button Style="{StaticResource SfIconButtonStyle}" ToolTipService.ToolTip="Tags" AutomationProperties.Name="Tags">
+                                <Button.Flyout>
                                     <MenuFlyout>
                                         <MenuFlyoutItem Text="Set color label" Click="OnSetColorLabelClicked" />
                                     </MenuFlyout>
-                                </AppBarButton.Flyout>
-                            </AppBarButton>
-                            <AppBarButton Icon="Setting" Label="Settings" Width="40" Click="OnSettingsClicked" ToolTipService.ToolTip="Settings" />
-                            <AppBarButton Icon="More" Label="More" Width="40" ToolTipService.ToolTip="More">
-                                <AppBarButton.Flyout>
+                                </Button.Flyout>
+                                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8EC;" FontSize="16" />
+                            </Button>
+                            <AppBarButton Style="{StaticResource SfCompactAppBarStyle}" Icon="Setting" Label="Settings" Click="OnSettingsClicked" ToolTipService.ToolTip="Settings" />
+                            <Button Style="{StaticResource SfIconButtonStyle}" ToolTipService.ToolTip="More" AutomationProperties.Name="More">
+                                <Button.Flyout>
                                     <MenuFlyout>
                                         <MenuFlyoutItem Text="View archive contents" Click="OnViewArchiveClicked" />
                                         <MenuFlyoutItem Text="Extract archive" Click="OnExtractArchiveClicked" />
@@ -497,8 +504,9 @@
                                         <MenuFlyoutSeparator />
                                         <MenuFlyoutItem Text="Open terminal here" Click="OnOpenTerminalClicked" />
                                     </MenuFlyout>
-                                </AppBarButton.Flyout>
-                            </AppBarButton>
+                                </Button.Flyout>
+                                <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE712;" FontSize="16" />
+                            </Button>
                         </StackPanel>
                     </Grid>
                     <Grid x:Name="SecondaryColumnHeader" Grid.Row="2" Padding="12,4,12,4" Background="{ThemeResource SfBgSecondaryBrush}" BorderBrush="{ThemeResource SfBorderBrush}" BorderThickness="0,1,0,1">
@@ -511,13 +519,13 @@
                             <ColumnDefinition Width="6" />
                             <ColumnDefinition x:Name="SecondaryTypeCol" Width="100" />
                         </Grid.ColumnDefinitions>
-                        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
+                        <Button Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by name" Click="OnSortName" Content="Name" />
                         <Border Grid.Column="1" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="name" />
-                        <Button Grid.Column="2" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
+                        <Button Grid.Column="2" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by size" Click="OnSortSize" Content="Size" />
                         <Border Grid.Column="3" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="size" />
-                        <Button Grid.Column="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
+                        <Button Grid.Column="4" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by modified date" Click="OnSortDate" Content="Modified" />
                         <Border Grid.Column="5" Background="{ThemeResource SfBorderBrush}" PointerPressed="OnColumnThumbPressed" PointerMoved="OnColumnThumbMoved" PointerReleased="OnColumnThumbReleased" Tag="date" />
-                        <Button Grid.Column="6" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
+                        <Button Grid.Column="6" Style="{StaticResource SfColumnHeaderButtonStyle}" AutomationProperties.Name="Sort by type" Click="OnSortType" Content="Type" />
                     </Grid>
                     <Grid Grid.Row="3">
                         <ListView

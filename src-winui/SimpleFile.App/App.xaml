@@ -8,23 +8,30 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
             <FontFamily x:Key="SfIconFont">Segoe MDL2 Assets</FontFamily>
-            <!-- Root keys keep StaticResource lookups in dialogs working. -->
-            <Color x:Key="SfBgPrimary">#202020</Color>
-            <Color x:Key="SfBgSecondary">#2C2C2C</Color>
-            <Color x:Key="SfBgHover">#3A3A3A</Color>
-            <Color x:Key="SfBgSelected">#3D3D3D</Color>
-            <Color x:Key="SfTextPrimary">#FFFFFF</Color>
-            <Color x:Key="SfTextMuted">#C5C5C5</Color>
-            <Color x:Key="SfAccent">#60CDFF</Color>
-            <Color x:Key="SfBorder">#3F3F3F</Color>
-            <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#202020" />
-            <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#2C2C2C" />
-            <SolidColorBrush x:Key="SfBgHoverBrush" Color="#3A3A3A" />
-            <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#3D3D3D" />
-            <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="SfTextMutedBrush" Color="#C5C5C5" />
-            <SolidColorBrush x:Key="SfAccentBrush" Color="#60CDFF" />
-            <SolidColorBrush x:Key="SfBorderBrush" Color="#3F3F3F" />
+            <Color x:Key="SfBgPrimary">#1B1D24</Color>
+            <Color x:Key="SfBgSecondary">#23262F</Color>
+            <Color x:Key="SfBgHover">#2F3542</Color>
+            <Color x:Key="SfBgSelected">#264F78</Color>
+            <Color x:Key="SfTextPrimary">#F3F6FC</Color>
+            <Color x:Key="SfTextMuted">#A8B3C7</Color>
+            <Color x:Key="SfAccent">#4CC2FF</Color>
+            <Color x:Key="SfBorder">#3A4150</Color>
+            <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#1B1D24" />
+            <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#23262F" />
+            <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2F3542" />
+            <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#264F78" />
+            <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F3F6FC" />
+            <SolidColorBrush x:Key="SfTextMutedBrush" Color="#A8B3C7" />
+            <SolidColorBrush x:Key="SfAccentBrush" Color="#4CC2FF" />
+            <SolidColorBrush x:Key="SfBorderBrush" Color="#3A4150" />
+            <SolidColorBrush x:Key="SfFolderBrush" Color="#F8D147" />
+            <SolidColorBrush x:Key="SfFileBrush" Color="#9CDCFE" />
+            <Style x:Key="SfCompactAppBarStyle" TargetType="AppBarButton">
+                <Setter Property="IsCompact" Value="True" />
+                <Setter Property="Width" Value="40" />
+                <Setter Property="Height" Value="40" />
+                <Setter Property="AllowFocusOnInteraction" Value="True" />
+            </Style>
             <Style x:Key="SfIconButtonStyle" TargetType="Button">
                 <Setter Property="Padding" Value="6" />
                 <Setter Property="MinWidth" Value="32" />
@@ -58,34 +65,40 @@
             </Style>
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Default">
-                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#202020" />
-                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#2C2C2C" />
-                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#3A3A3A" />
-                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#3D3D3D" />
-                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#C5C5C5" />
-                    <SolidColorBrush x:Key="SfAccentBrush" Color="#60CDFF" />
-                    <SolidColorBrush x:Key="SfBorderBrush" Color="#3F3F3F" />
+                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#1B1D24" />
+                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#23262F" />
+                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2F3542" />
+                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#264F78" />
+                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F3F6FC" />
+                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#A8B3C7" />
+                    <SolidColorBrush x:Key="SfAccentBrush" Color="#4CC2FF" />
+                    <SolidColorBrush x:Key="SfBorderBrush" Color="#3A4150" />
+                    <SolidColorBrush x:Key="SfFolderBrush" Color="#F8D147" />
+                    <SolidColorBrush x:Key="SfFileBrush" Color="#9CDCFE" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
-                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#202020" />
-                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#2C2C2C" />
-                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#3A3A3A" />
-                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#3D3D3D" />
-                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#C5C5C5" />
-                    <SolidColorBrush x:Key="SfAccentBrush" Color="#60CDFF" />
-                    <SolidColorBrush x:Key="SfBorderBrush" Color="#3F3F3F" />
+                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#1B1D24" />
+                    <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#23262F" />
+                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#2F3542" />
+                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#264F78" />
+                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#F3F6FC" />
+                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#A8B3C7" />
+                    <SolidColorBrush x:Key="SfAccentBrush" Color="#4CC2FF" />
+                    <SolidColorBrush x:Key="SfBorderBrush" Color="#3A4150" />
+                    <SolidColorBrush x:Key="SfFolderBrush" Color="#F8D147" />
+                    <SolidColorBrush x:Key="SfFileBrush" Color="#9CDCFE" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Light">
-                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#F3F3F3" />
+                    <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#F4F7FB" />
                     <SolidColorBrush x:Key="SfBgSecondaryBrush" Color="#FFFFFF" />
-                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#EAEAEA" />
-                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#E5E5E5" />
-                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#1A1A1A" />
-                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#5D5D5D" />
-                    <SolidColorBrush x:Key="SfAccentBrush" Color="#003E92" />
-                    <SolidColorBrush x:Key="SfBorderBrush" Color="#E5E5E5" />
+                    <SolidColorBrush x:Key="SfBgHoverBrush" Color="#E8EEF7" />
+                    <SolidColorBrush x:Key="SfBgSelectedBrush" Color="#CDE4F7" />
+                    <SolidColorBrush x:Key="SfTextPrimaryBrush" Color="#1B2430" />
+                    <SolidColorBrush x:Key="SfTextMutedBrush" Color="#5B677A" />
+                    <SolidColorBrush x:Key="SfAccentBrush" Color="#0078D4" />
+                    <SolidColorBrush x:Key="SfBorderBrush" Color="#D5DDE8" />
+                    <SolidColorBrush x:Key="SfFolderBrush" Color="#E6B422" />
+                    <SolidColorBrush x:Key="SfFileBrush" Color="#0078D4" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="SfBgPrimaryBrush" Color="#000000" />

@@ -6,7 +6,7 @@ $msi = Get-ChildItem -Path $bundleDir -Filter "SimpleFile_*_x64-winui.msi" -File
     Sort-Object LastWriteTime -Descending |
     Select-Object -First 1
 
-$expectedTitle = "SimpleFile - File Explorer"
+$expectedTitle = "SimpleFile"
 $timeoutSeconds = 25
 
 if (-not $msi) {

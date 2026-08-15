@@ -55,7 +55,7 @@ public sealed partial class FileRowView : UserControl
             return;
         }
 
-        IconText.Text = Row.Icon;
+        IconImage.Source = ShellIconLoader.ForEntry(Row.Path, Row.IsDir);
         NameText.Text = Row.Name;
         ToolTipService.SetToolTip(NameText, Row.Name);
         SizeText.Text = Row.SizeText;
