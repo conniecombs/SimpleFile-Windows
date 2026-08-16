@@ -118,7 +118,7 @@ public sealed partial class MainWindow
     {
         var visible = _workspace?.Settings.PreviewVisible != false;
         PreviewPane.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        PreviewColumn.Width = visible ? new GridLength(320) : new GridLength(0);
+        PreviewColumn.Width = visible ? new GridLength(296) : new GridLength(0);
         ToolTipService.SetToolTip(PreviewToggleButton, visible ? "Hide preview pane" : "Show preview pane");
     }
 

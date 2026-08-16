@@ -143,7 +143,7 @@ public sealed partial class FileRowView : UserControl
     {
         var cell = new Grid
         {
-            ColumnSpacing = 8,
+            ColumnSpacing = 9,
         };
         cell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         cell.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -151,8 +151,8 @@ public sealed partial class FileRowView : UserControl
 
         _tagPip = new Ellipse
         {
-            Width = 6,
-            Height = 6,
+            Width = 7,
+            Height = 7,
             VerticalAlignment = VerticalAlignment.Center,
             Visibility = Visibility.Collapsed,
         };
@@ -161,8 +161,8 @@ public sealed partial class FileRowView : UserControl
 
         _iconImage = new Image
         {
-            Width = 16,
-            Height = 16,
+            Width = 18,
+            Height = 18,
             VerticalAlignment = VerticalAlignment.Center,
         };
         Grid.SetColumn(_iconImage, 1);
@@ -171,6 +171,8 @@ public sealed partial class FileRowView : UserControl
         _nameText = new TextBlock
         {
             VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 13,
+            Foreground = Brush("SfTextPrimaryBrush"),
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextWrapping = TextWrapping.NoWrap,
         };
@@ -186,6 +188,7 @@ public sealed partial class FileRowView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             FontSize = 12,
             Foreground = Brush("SfTextMutedBrush"),
+            Opacity = 0.9,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextWrapping = TextWrapping.NoWrap,
         };

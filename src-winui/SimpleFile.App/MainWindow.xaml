@@ -6,7 +6,10 @@
     xmlns:core="using:SimpleFile.Core"
     xmlns:ipc="using:SimpleFile.Ipc"
     Title="SimpleFile">
-    <Grid x:Name="RootGrid" Background="Transparent" PreviewKeyDown="OnRootPreviewKeyDown">
+    <Grid
+        x:Name="RootGrid"
+        Background="{ThemeResource SfBgPrimaryBrush}"
+        PreviewKeyDown="OnRootPreviewKeyDown">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F5" Invoked="OnRefreshAccelerator" />
             <KeyboardAccelerator Key="F6" Invoked="OnDualPaneAccelerator" />
@@ -76,9 +79,9 @@
             </Grid>
         </Grid>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="1" Background="{ThemeResource SfBgPrimaryBrush}">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="SidebarColumn" Width="252" MinWidth="180" MaxWidth="600" />
+                <ColumnDefinition x:Name="SidebarColumn" Width="232" MinWidth="180" MaxWidth="520" />
                 <ColumnDefinition x:Name="SidebarDividerColumn" Width="5" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -94,7 +97,7 @@
                 </Grid.RowDefinitions>
                 <Border
                     x:Name="SidebarTargetSwitch"
-                    Margin="12,10,12,0"
+                    Margin="10,8,10,0"
                     Padding="2"
                     Background="{ThemeResource SfBgTertiaryBrush}"
                     BorderBrush="{ThemeResource SfBorderBrush}"
@@ -124,7 +127,7 @@
                     </Grid>
                 </Border>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-                    <StackPanel Padding="8,4,8,12" Spacing="8">
+                    <StackPanel Padding="10,8,10,14" Spacing="10">
                         <StackPanel Spacing="2">
                             <Grid Margin="4,0,0,4">
                                 <TextBlock Style="{StaticResource SfSidebarHeaderStyle}" Text="Quick access" />
@@ -508,6 +511,7 @@
 
                 <InfoBar
                     x:Name="MessageBar"
+                    Margin="10,8,10,0"
                     IsClosable="True"
                     IsOpen="False"
                     Severity="Informational" />
@@ -515,7 +519,7 @@
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition x:Name="PreviewColumn" Width="320" />
+                        <ColumnDefinition x:Name="PreviewColumn" Width="296" />
                     </Grid.ColumnDefinitions>
 
                     <Grid x:Name="PanesGrid" Grid.Column="0">
@@ -537,12 +541,12 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <Grid Padding="8,4,8,0">
+                            <Grid Padding="10,6,10,0">
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                                     <StackPanel x:Name="PrimaryTabHost" Orientation="Horizontal" Spacing="2" />
                                 </ScrollViewer>
                             </Grid>
-                            <Grid Grid.Row="1" Padding="8,4,8,6" ColumnSpacing="6">
+                            <Grid Grid.Row="1" Padding="10,6,10,8" ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
@@ -579,8 +583,8 @@
                                 <Grid
                                     x:Name="PrimaryPathBar"
                                     Grid.Column="1"
-                                    MinHeight="32"
-                                    Padding="4,2"
+                                    MinHeight="34"
+                                    Padding="6,2"
                                     Background="{ThemeResource SfBgTertiaryBrush}"
                                     BorderBrush="{ThemeResource SfBorderBrush}"
                                     BorderThickness="1"
@@ -610,10 +614,10 @@
                                 </Button>
                                 <Grid
                                     Grid.Column="3"
-                                    Width="220">
+                                    Width="196">
                                     <TextBox
                                         x:Name="SearchBox"
-                                        Padding="30,5,28,5"
+                                        Padding="30,4,28,4"
                                         VerticalAlignment="Center"
                                         AutomationProperties.Name="Search current folder"
                                         CornerRadius="4"
@@ -654,50 +658,29 @@
                                             Glyph="&#xE711;" />
                                     </Button>
                                 </Grid>
-                                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="0">
+                                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2">
                                     <TextBox
                                         x:Name="QuickFilterBox"
-                                        Width="120"
-                                        Margin="4,0,4,0"
+                                        Width="96"
+                                        Margin="4,0,6,0"
                                         VerticalAlignment="Center"
                                         AutomationProperties.Name="Quick filter"
-                                        CornerRadius="4"
+                                        Style="{StaticResource SfTextBoxStyle}"
                                         PlaceholderText="Filter"
                                         TextChanged="OnQuickFilterChanged" />
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="New folder"
                                         Click="OnPrimaryNewFolder"
                                         ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)">
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8F4;" />
                                     </Button>
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="New file"
                                         Click="OnPrimaryNewFile"
                                         ToolTipService.ToolTip="New File (Ctrl+N)">
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A5;" />
-                                    </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        Click="OnPrimaryRename"
-                                        ToolTipService.ToolTip="Rename (F2)">
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8AC;" />
-                                    </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        Click="OnPrimaryDelete"
-                                        ToolTipService.ToolTip="Trash (Delete)">
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE74D;" />
-                                    </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        AutomationProperties.Name="Tags"
-                                        ToolTipService.ToolTip="Tags">
-                                        <Button.Flyout>
-                                            <MenuFlyout>
-                                                <MenuFlyoutItem Click="OnSetColorLabelClicked" Text="Set color label" />
-                                            </MenuFlyout>
-                                        </Button.Flyout>
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8EC;" />
                                     </Button>
                                     <Button
                                         x:Name="DualPaneButton"
@@ -720,6 +703,10 @@
                                         ToolTipService.ToolTip="More">
                                         <Button.Flyout>
                                             <MenuFlyout>
+                                                <MenuFlyoutItem Text="Rename" Click="OnPrimaryRename" />
+                                                <MenuFlyoutItem Text="Move to trash" Click="OnPrimaryDelete" />
+                                                <MenuFlyoutItem Text="Set color label" Click="OnSetColorLabelClicked" />
+                                                <MenuFlyoutSeparator />
                                                 <MenuFlyoutItem Text="View archive contents" Click="OnViewArchiveClicked" />
                                                 <MenuFlyoutItem Text="Extract archive" Click="OnExtractArchiveClicked" />
                                                 <MenuFlyoutItem Text="Create archive" Click="OnCreateArchiveClicked" />
@@ -737,14 +724,14 @@
                             <Grid
                                 x:Name="PrimaryColumnHeader"
                                 Grid.Row="2"
-                                Padding="8,0"
+                                Padding="10,0"
                                 Background="Transparent"
                                 BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1" />
                             <Grid Grid.Row="3">
                                 <ListView
                                     x:Name="PrimaryFileList"
-                                    Padding="0,2,0,4"
+                                    Padding="2,4,2,6"
                                     AllowDrop="True"
                                     AutomationProperties.Name="Left pane files"
                                     DoubleTapped="OnPrimaryFileDoubleTapped"
@@ -808,14 +795,14 @@
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <Grid
-                                Padding="8,6,8,0"
+                                Padding="10,6,10,0"
                                 BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1">
                                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                                     <StackPanel x:Name="SecondaryTabHost" Orientation="Horizontal" Spacing="4" />
                                 </ScrollViewer>
                             </Grid>
-                            <Grid Grid.Row="1" Padding="8,6" ColumnSpacing="8">
+                            <Grid Grid.Row="1" Padding="10,6,10,8" ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
@@ -850,8 +837,8 @@
                                 </StackPanel>
                                 <Grid
                                     Grid.Column="1"
-                                    MinHeight="32"
-                                    Padding="4,2"
+                                    MinHeight="34"
+                                    Padding="6,2"
                                     Background="{ThemeResource SfBgTertiaryBrush}"
                                     BorderBrush="{ThemeResource SfBorderBrush}"
                                     BorderThickness="1"
@@ -882,52 +869,44 @@
                                 <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="New folder"
                                         Click="OnSecondaryNewFolder"
                                         ToolTipService.ToolTip="New Folder (Ctrl+Shift+N)">
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8F4;" />
                                     </Button>
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="New file"
                                         Click="OnSecondaryNewFile"
                                         ToolTipService.ToolTip="New File (Ctrl+N)">
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A5;" />
                                     </Button>
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
-                                        Click="OnSecondaryRename"
-                                        ToolTipService.ToolTip="Rename (F2)">
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8AC;" />
-                                    </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        Click="OnSecondaryDelete"
-                                        ToolTipService.ToolTip="Trash (Delete)">
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE74D;" />
-                                    </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        AutomationProperties.Name="Tags"
-                                        ToolTipService.ToolTip="Tags">
+                                        AutomationProperties.Name="More"
+                                        ToolTipService.ToolTip="More">
                                         <Button.Flyout>
                                             <MenuFlyout>
+                                                <MenuFlyoutItem Text="Rename" Click="OnSecondaryRename" />
+                                                <MenuFlyoutItem Text="Move to trash" Click="OnSecondaryDelete" />
                                                 <MenuFlyoutItem Click="OnSetColorLabelClicked" Text="Set color label" />
                                             </MenuFlyout>
                                         </Button.Flyout>
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8EC;" />
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
                                     </Button>
                                 </StackPanel>
                             </Grid>
                             <Grid
                                 x:Name="SecondaryColumnHeader"
                                 Grid.Row="2"
-                                Padding="8,0"
+                                Padding="10,0"
                                 Background="Transparent"
                                 BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1" />
                             <Grid Grid.Row="3">
                                 <ListView
                                     x:Name="SecondaryFileList"
-                                    Padding="0,2,0,4"
+                                    Padding="2,4,2,6"
                                     AllowDrop="True"
                                     AutomationProperties.Name="Right pane files"
                                     DoubleTapped="OnSecondaryFileDoubleTapped"
@@ -967,7 +946,7 @@
                     <Border
                         x:Name="PreviewPane"
                         Grid.Column="1"
-                        Padding="16"
+                        Padding="14"
                         Background="{ThemeResource SfBgSecondaryBrush}"
                         BorderBrush="{ThemeResource SfBorderBrush}"
                         BorderThickness="1,0,0,0">
@@ -976,17 +955,22 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
-                            <StackPanel Spacing="10">
-                                <Grid>
+                            <StackPanel Spacing="8">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock
                                         x:Name="PreviewTitle"
                                         FontSize="16"
                                         FontWeight="SemiBold"
                                         Foreground="{ThemeResource SfTextPrimaryBrush}"
-                                        Text="Preview" />
+                                        Text="Preview"
+                                        TextTrimming="CharacterEllipsis" />
                                     <Button
+                                        Grid.Column="1"
                                         Style="{StaticResource SfSidebarIconButtonStyle}"
-                                        HorizontalAlignment="Right"
                                         AutomationProperties.Name="Hide preview pane"
                                         Click="OnTogglePreview"
                                         ToolTipService.ToolTip="Hide preview pane">
@@ -997,30 +981,56 @@
                                     x:Name="PreviewSubtitle"
                                     FontSize="12"
                                     Foreground="{ThemeResource SfTextMutedBrush}"
-                                    Text="Select a file" />
-                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    Text="Select a file"
+                                    TextTrimming="CharacterEllipsis"
+                                    TextWrapping="NoWrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
                                     <Button
                                         x:Name="PreviewOpenButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Open preview selection"
                                         Click="OnPreviewOpenClick"
-                                        Content="Open"
-                                        IsEnabled="False" />
+                                        IsEnabled="False"
+                                        ToolTipService.ToolTip="Open">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8E5;" />
+                                    </Button>
                                     <Button
                                         x:Name="PreviewOpenWithButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Open with"
                                         Click="OnPreviewOpenWithClick"
-                                        Content="Open With"
-                                        IsEnabled="False" />
+                                        IsEnabled="False"
+                                        ToolTipService.ToolTip="Open with">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE838;" />
+                                    </Button>
                                     <Button
                                         x:Name="PreviewRevealButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Reveal in folder"
                                         Click="OnPreviewRevealClick"
-                                        Content="Reveal"
-                                        IsEnabled="False" />
+                                        IsEnabled="False"
+                                        ToolTipService.ToolTip="Reveal in folder">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8DA;" />
+                                    </Button>
+                                    <Button
+                                        x:Name="PreviewCompareButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Compare selected files"
+                                        Click="OnPreviewCompareClick"
+                                        IsEnabled="False"
+                                        ToolTipService.ToolTip="Compare selected files">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8AB;" />
+                                    </Button>
+                                    <Button
+                                        x:Name="PreviewChecksumButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Compute checksums"
+                                        Click="OnPreviewChecksumClick"
+                                        IsEnabled="False"
+                                        ToolTipService.ToolTip="Checksums">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE9D9;" />
+                                    </Button>
                                 </StackPanel>
-                                <Button
-                                    x:Name="PreviewCompareButton"
-                                    HorizontalAlignment="Left"
-                                    Click="OnPreviewCompareClick"
-                                    Content="Compare Selected"
-                                    IsEnabled="False" />
                             </StackPanel>
 
                             <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
@@ -1051,13 +1061,7 @@
                                         FontWeight="SemiBold"
                                         Foreground="{ThemeResource SfTextPrimaryBrush}"
                                         Text="Metadata" />
-                                    <StackPanel x:Name="PreviewMetadataRows" Spacing="4" />
-                                    <Button
-                                        x:Name="PreviewChecksumButton"
-                                        HorizontalAlignment="Left"
-                                        Click="OnPreviewChecksumClick"
-                                        Content="Checksums"
-                                        IsEnabled="False" />
+                                    <StackPanel x:Name="PreviewMetadataRows" Spacing="5" />
                                     <TextBlock
                                         x:Name="PreviewChecksumText"
                                         FontFamily="Consolas"

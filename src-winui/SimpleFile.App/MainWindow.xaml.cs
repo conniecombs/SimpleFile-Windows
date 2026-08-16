@@ -441,9 +441,9 @@ public sealed partial class MainWindow : Window
             var tabId = new PaneTab(paneId, tab.Id);
             var select = new Button
             {
-                Style = ChromeStyle("SfGhostButtonStyle"),
+                Style = ChromeStyle("SfTabItemStyle"),
                 Tag = tabId,
-                Padding = new Thickness(6, 2, 4, 2),
+                Padding = new Thickness(8, 3, 6, 3),
                 HorizontalAlignment = HorizontalAlignment.Left,
                 Content = new StackPanel
                 {
@@ -480,9 +480,9 @@ public sealed partial class MainWindow : Window
             var chrome = new Border
             {
                 Tag = tabId,
-                Background = isActive ? Brush("SfBgTertiaryBrush") : Brush("SfTransparentBrush"),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(2, 0, 2, 0),
+                Background = isActive ? Brush("SfBgSelectedBrush") : Brush("SfTransparentBrush"),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(2, 1, 2, 1),
                 Child = new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -1521,13 +1521,35 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        PreviewMetadataRows.Children.Add(new TextBlock
+        var row = new Grid
         {
-            Text = $"{label}: {value}",
+            ColumnSpacing = 10,
+            Margin = new Thickness(0, 0, 0, 1),
+        };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(82) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var labelText = new TextBlock
+        {
+            Text = label,
+            FontSize = 11,
+            Foreground = Brush("SfTextMutedBrush"),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+        var valueText = new TextBlock
+        {
+            Text = value,
             FontSize = 12,
-            Opacity = 0.86,
+            Foreground = Brush("SfTextPrimaryBrush"),
+            Opacity = 0.88,
             TextWrapping = TextWrapping.Wrap,
-        });
+        };
+
+        Grid.SetColumn(valueText, 1);
+        row.Children.Add(labelText);
+        row.Children.Add(valueText);
+        PreviewMetadataRows.Children.Add(row);
     }
 
     private async void OnPreviewOpenClick(object sender, RoutedEventArgs e)
@@ -1861,7 +1883,7 @@ public sealed partial class MainWindow : Window
             var button = new Button
             {
                 Style = ChromeStyle("SfColumnHeaderButtonStyle"),
-                Padding = column.Id == "name" ? new Thickness(24, 6, 8, 6) : new Thickness(8, 6, 8, 6),
+                Padding = column.Id == "name" ? new Thickness(38, 5, 8, 5) : new Thickness(10, 5, 8, 5),
                 Content = HeaderLabel(column),
                 Tag = column.Sort,
             };
