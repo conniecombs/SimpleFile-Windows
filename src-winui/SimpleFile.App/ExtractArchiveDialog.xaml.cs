@@ -32,6 +32,8 @@ public sealed partial class ExtractArchiveDialog : ContentDialog
     }
 
     public string SelectedExtractMode { get; private set; } = "here";
+
+    public Func<string?, Task<string?>>? BrowseFolderAsync { get; set; }
     
     public void SetBaseDirectory(string dir)
     {
@@ -63,7 +65,7 @@ public sealed partial class ExtractArchiveDialog : ContentDialog
             WarningBar.IsOpen = false;
         }
 
-        RadioSubfolder.Content = $"Extract to {System.IO.Path.GetFileNameWithoutExtension(_archiveData.Path)}/";
+        RadioSubfolder.Content = $"Extract to {ArchivePaths.ExtractFolderName(_archiveData.Path)}/";
         UpdateDestinationPreview();
     }
 
@@ -89,14 +91,40 @@ public sealed partial class ExtractArchiveDialog : ContentDialog
         }
         else if (SelectedExtractMode == "subfolder" && _archiveData != null)
         {
-            Destination = System.IO.Path.Combine(_baseDirectory, System.IO.Path.GetFileNameWithoutExtension(_archiveData.Path));
+            Destination = System.IO.Path.Combine(_baseDirectory, ArchivePaths.ExtractFolderName(_archiveData.Path));
         }
         // Custom is handled by browse button
     }
 
-    private void OnBrowseClicked(object sender, RoutedEventArgs e)
+    private async void OnBrowseClicked(object sender, RoutedEventArgs e)
     {
-        // Placeholder for folder picker since it needs HWND from Window
+        if (BrowseFolderAsync is null)
+        {
+            return;
+        }
+
+        BrowseButton.IsEnabled = false;
+        try
+        {
+            var picked = await BrowseFolderAsync(string.IsNullOrWhiteSpace(Destination) ? _baseDirectory : Destination);
+            if (!string.IsNullOrWhiteSpace(picked))
+            {
+                Destination = picked;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            WarningBar.Severity = InfoBarSeverity.Error;
+            WarningBar.Message = exception.Message;
+            WarningBar.IsOpen = true;
+        }
+        finally
+        {
+            BrowseButton.IsEnabled = SelectedExtractMode == "custom";
+        }
     }
 
     private string FormatSize(long bytes)

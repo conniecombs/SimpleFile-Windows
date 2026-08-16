@@ -2,32 +2,71 @@ namespace SimpleFile.Core;
 
 public static class ArchivePaths
 {
+    private static readonly string[] KnownArchiveExtensions =
+    [
+        ".tar.gz",
+        ".tgz",
+        ".zip",
+        ".tar",
+        ".gz",
+        ".rar",
+    ];
+
     public static bool IsArchiveFile(string? path)
     {
         var name = PathRules.Basename(path ?? "").ToLowerInvariant();
-        return name.EndsWith(".tar.gz", StringComparison.Ordinal)
-            || name.EndsWith(".tgz", StringComparison.Ordinal)
-            || name.EndsWith(".zip", StringComparison.Ordinal)
-            || name.EndsWith(".tar", StringComparison.Ordinal)
-            || name.EndsWith(".gz", StringComparison.Ordinal)
-            || name.EndsWith(".rar", StringComparison.Ordinal);
+        return KnownArchiveExtensions.Any(extension => name.EndsWith(extension, StringComparison.Ordinal));
     }
 
     public static string ExtractFolderName(string? archiveName)
     {
-        var trimmed = (archiveName ?? "").Trim();
-        var lower = trimmed.ToLowerInvariant();
-        if (lower.EndsWith(".tar.gz", StringComparison.Ordinal))
+        var name = PathRules.Basename((archiveName ?? "").Trim());
+        var withoutArchiveExtension = RemoveKnownArchiveExtension(name);
+        if (!string.Equals(name, withoutArchiveExtension, StringComparison.Ordinal))
         {
-            return trimmed[..^7];
+            return withoutArchiveExtension;
         }
 
-        if (lower.EndsWith(".tgz", StringComparison.Ordinal))
+        var dot = name.LastIndexOf('.');
+        return dot > 0 ? name[..dot] : name;
+    }
+
+    public static string WithArchiveExtension(string? archiveNameOrStem, string? format)
+    {
+        var name = PathRules.Basename((archiveNameOrStem ?? "").Trim());
+        var stem = RemoveKnownArchiveExtension(name);
+        if (string.IsNullOrWhiteSpace(stem))
         {
-            return trimmed[..^4];
+            stem = "Archive";
         }
 
-        var dot = trimmed.LastIndexOf('.');
-        return dot > 0 ? trimmed[..dot] : trimmed;
+        return $"{stem}{ExtensionForFormat(format)}";
+    }
+
+    public static string ExtensionForFormat(string? format)
+    {
+        var normalized = (format ?? "").Trim().TrimStart('.').ToLowerInvariant();
+        return normalized switch
+        {
+            "tar.gz" => ".tar.gz",
+            "tgz" => ".tgz",
+            "tar" => ".tar",
+            "gz" => ".gz",
+            "rar" => ".rar",
+            _ => ".zip",
+        };
+    }
+
+    private static string RemoveKnownArchiveExtension(string name)
+    {
+        foreach (var extension in KnownArchiveExtensions)
+        {
+            if (name.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            {
+                return name[..^extension.Length];
+            }
+        }
+
+        return name;
     }
 }

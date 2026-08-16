@@ -35,9 +35,11 @@ public sealed partial class MainWindow
         e.AcceptedOperation = DataPackageOperation.None;
     }
 
-    private async void OnPrimaryFileDrop(object sender, DragEventArgs e) => await HandleFileDropAsync(e, PaneId.Primary);
+    private async void OnPrimaryFileDrop(object sender, DragEventArgs e) =>
+        await RunUiActionAsync("Drop files", () => HandleFileDropAsync(e, PaneId.Primary));
 
-    private async void OnSecondaryFileDrop(object sender, DragEventArgs e) => await HandleFileDropAsync(e, PaneId.Secondary);
+    private async void OnSecondaryFileDrop(object sender, DragEventArgs e) =>
+        await RunUiActionAsync("Drop files", () => HandleFileDropAsync(e, PaneId.Secondary));
 
     private void HandleFileDragOver(DragEventArgs e, PaneId pane)
     {
@@ -133,7 +135,9 @@ public sealed partial class MainWindow
 
     private async Task TransferWithConflictAsync(string[] sources, string destination, bool move)
     {
-        if (_workspace?.FileOps is null || sources.Length == 0)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null || sources.Length == 0)
         {
             return;
         }
@@ -144,35 +148,58 @@ public sealed partial class MainWindow
             return;
         }
 
+        using var transferCts = new CancellationTokenSource();
+        _transferCts = transferCts;
         try
         {
             var progress = new Progress<ProgressUpdate>(OnTransferProgress);
             if (move)
             {
-                var results = await _workspace.FileOps.MoveAsync(
+                var results = await fileOps.MoveAsync(
                     sources,
                     destination,
                     action,
                     progress,
-                    operationId => StartTransferProgress(operationId, "Moving..."));
-                _workspace.Undo.PushMove(results, _workspace.FileOps);
+                    operationId => StartTransferProgress(operationId, "Moving..."),
+                    transferCts.Token);
+                if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+                {
+                    workspace.Undo.PushMove(results, fileOps);
+                }
             }
             else
             {
-                var results = await _workspace.FileOps.CopyAsync(
+                var results = await fileOps.CopyAsync(
                     sources,
                     destination,
                     action,
                     progress,
-                    operationId => StartTransferProgress(operationId, "Copying..."));
-                _workspace.Undo.PushCopy(results, _workspace.FileOps);
+                    operationId => StartTransferProgress(operationId, "Copying..."),
+                    transferCts.Token);
+                if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+                {
+                    workspace.Undo.PushCopy(results, fileOps);
+                }
             }
 
-            await _workspace.RefreshAsync();
+            if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+            {
+                await workspace.RefreshAsync(transferCts.Token);
+            }
         }
-        catch (IpcException exception)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
         {
             ShowMessage(move ? "Move" : "Copy", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            if (ReferenceEquals(_transferCts, transferCts))
+            {
+                _transferCts = null;
+            }
         }
     }
 
@@ -242,8 +269,9 @@ public sealed partial class MainWindow
 
     private async Task PromptPackIntoFolderAsync()
     {
+        var workspace = _workspace;
         var paths = SelectedPaths;
-        if (_workspace is null || paths is null || paths.Length == 0)
+        if (workspace is null || paths is null || paths.Length == 0)
         {
             return;
         }
@@ -262,53 +290,84 @@ public sealed partial class MainWindow
         {
             return;
         }
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
+        }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.PackIntoFolderAsync(paths, input.Text.Trim());
+            await workspace.PackIntoFolderAsync(paths, input.Text.Trim(), utilityCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Pack into folder", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async Task UnpackSelectedFolderAsync()
     {
-        if (_workspace is null || ActiveSelectedRow is not { IsDir: true } row)
+        var workspace = _workspace;
+        if (workspace is null || ActiveSelectedRow is not { IsDir: true } row)
         {
             return;
         }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.UnpackFolderAsync(row.Path);
+            await workspace.UnpackFolderAsync(row.Path, utilityCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Unpack folder", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async Task ExtractSelectedArchiveAsync(string mode)
     {
-        if (_workspace?.FileOps is null || ActiveSelectedRow is not { } row || !ArchivePaths.IsArchiveFile(row.Path))
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null || ActiveSelectedRow is not { } row || !ArchivePaths.IsArchiveFile(row.Path))
         {
             return;
         }
 
+        var archiveCts = BeginArchiveOperation();
         try
         {
-            var info = await _workspace.FileOps.ListArchiveAsync(row.Path);
-            var destination = _workspace.Active.Path;
+            var info = await fileOps.ListArchiveAsync(row.Path, archiveCts.Token);
+            if (!ReferenceEquals(_workspace, workspace) || archiveCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            var destination = workspace.Active.Path;
             if (mode == "ctx-extract-folder")
             {
-                destination = PathRules.JoinPath(_workspace.Active.Path, ArchivePaths.ExtractFolderName(row.Name));
+                destination = PathRules.JoinPath(workspace.Active.Path, ArchivePaths.ExtractFolderName(row.Name));
             }
             else if (mode == "ctx-extract-to")
             {
-                var picked = await PickFolderAsync(_workspace.Active.Path);
-                if (picked is null)
+                var picked = await PickFolderAsync(workspace.Active.Path);
+                if (picked is null
+                    || !ReferenceEquals(_workspace, workspace)
+                    || archiveCts.IsCancellationRequested)
                 {
                     return;
                 }
@@ -316,12 +375,22 @@ public sealed partial class MainWindow
                 destination = picked;
             }
 
-            await _workspace.FileOps.ExtractArchiveAsync(info.Path, destination);
-            await _workspace.RefreshAsync();
+            await fileOps.ExtractArchiveAsync(info.Path, destination, archiveCts.Token);
+            if (ReferenceEquals(_workspace, workspace) && !archiveCts.IsCancellationRequested)
+            {
+                await workspace.RefreshAsync(archiveCts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Extract archive", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishArchiveOperation(archiveCts);
         }
     }
 
@@ -342,8 +411,10 @@ public sealed partial class MainWindow
 
     private async Task PromptAdvancedRenameAsync()
     {
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
         var selected = ActiveSelectedRows;
-        if (_workspace?.FileOps is null || selected.Count == 0)
+        if (workspace is null || fileOps is null || selected.Count == 0)
         {
             return;
         }
@@ -365,6 +436,10 @@ public sealed partial class MainWindow
         {
             return;
         }
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
+        }
 
         var number = (int)start.Value;
         var useNumber = number > 0;
@@ -381,54 +456,89 @@ public sealed partial class MainWindow
             return new RenameRequest { Path = row.Path, NewName = next + ext };
         }).ToArray();
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.FileOps.BatchRenameAsync(requests);
-            await _workspace.RefreshAsync();
+            await fileOps.BatchRenameAsync(requests, utilityCts.Token);
+            if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+            {
+                await workspace.RefreshAsync(utilityCts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Advanced rename", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async Task UndoLastAsync()
     {
-        if (_workspace is null || !_workspace.Undo.CanUndo)
+        var workspace = _workspace;
+        if (workspace is null || !workspace.Undo.CanUndo)
         {
             StatusText.Text = "Nothing to undo";
             return;
         }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.Undo.UndoAsync();
-            await _workspace.RefreshAsync();
-            StatusText.Text = "Undone";
+            await workspace.Undo.UndoAsync(utilityCts.Token);
+            if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+            {
+                await workspace.RefreshAsync(utilityCts.Token);
+                StatusText.Text = "Undone";
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Undo", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async Task RedoLastAsync()
     {
-        if (_workspace is null || !_workspace.Undo.CanRedo)
+        var workspace = _workspace;
+        if (workspace is null || !workspace.Undo.CanRedo)
         {
             StatusText.Text = "Nothing to redo";
             return;
         }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.Undo.RedoAsync();
-            await _workspace.RefreshAsync();
-            StatusText.Text = "Redone";
+            await workspace.Undo.RedoAsync(utilityCts.Token);
+            if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+            {
+                await workspace.RefreshAsync(utilityCts.Token);
+                StatusText.Text = "Redone";
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Redo", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 

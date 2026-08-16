@@ -24,30 +24,41 @@ public sealed partial class MainWindow : Window
 
     private BackendSession? _backend;
     private ExplorerWorkspace? _workspace;
+    private int _backendReconnectToken;
     private bool _quickAccessCollapsed;
     private bool _myPcCollapsed;
     private bool _editingPrimaryPath;
     private bool _editingSecondaryPath;
     private bool _reconnectDialogOpen;
+    private CancellationTokenSource? _networkReconnectCts;
     private bool _dividerDragging;
     private double _primaryPercent = 50;
     private IDisposable? _fileChangeSubscription;
     private string? _watchTargetPath;
     private string? _watchedPath;
+    private readonly SemaphoreSlim _watchGate = new(1, 1);
+    private int _watchRequestToken;
     private string? _currentOperationId;
+    private CancellationTokenSource? _transferCts;
+    private CancellationTokenSource? _archiveCts;
+    private CancellationTokenSource? _utilityCts;
     private string? _activeSearchId;
     private string? _searchRoot;
+    private CancellationTokenSource? _searchCts;
     private int _searchCounter;
     private bool _searchMode;
     private PaneId _searchPane = PaneId.Primary;
     private readonly List<SearchResult> _activeSearchResults = [];
     private int _previewToken;
     private string? _previewPath;
+    private CancellationTokenSource? _previewCts;
     private bool _applyingWorkspace;
     private int _folderRefreshToken;
+    private CancellationTokenSource? _folderRefreshCts;
     private string? _primaryColumnHeaderKey;
     private string? _secondaryColumnHeaderKey;
     private string? _columnEnrichmentSignature;
+    private CancellationTokenSource? _columnEnrichmentCts;
     private int _columnEnrichmentToken;
 
     public ObservableCollection<FileRow> PrimaryFiles { get; } = [];
@@ -100,13 +111,17 @@ public sealed partial class MainWindow : Window
         try
         {
             StatusText.Text = "Starting simplefile-service…";
-            _backend = new BackendSession();
-            await _backend.StartAsync();
-            var fileOps = new FileOperationService(_backend.Client!);
+            var backend = new BackendSession();
+            backend.Disconnected += OnBackendDisconnected;
+            _backend = backend;
+            await backend.StartAsync();
+            var client = backend.Client
+                ?? throw new InvalidOperationException("IPC service started without an active client.");
+            var fileOps = new FileOperationService(client);
             _workspace = new ExplorerWorkspace(_backend, fileOps);
             ColumnLayoutHost.Attach(_workspace.Columns);
             _workspace.Changed += OnWorkspaceChanged;
-            _fileChangeSubscription = _backend.Client!.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
+            _fileChangeSubscription = client.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
             await _workspace.InitializeAsync();
             ApplyTheme(_workspace.Settings.Theme);
             SyncSidebarCollapseStateFromSettings();
@@ -116,6 +131,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            await CleanupSessionAsync(saveWorkspace: false, unwatchDirectory: true);
             ShowMessage(
                 "Could not start or reach the IPC service.",
                 exception.Message
@@ -127,6 +143,76 @@ public sealed partial class MainWindow : Window
                     + Environment.NewLine
                     + "or set SIMPLEFILE_SERVICE_PATH to simplefile-service.exe.",
                 InfoBarSeverity.Error);
+        }
+    }
+
+    private void OnBackendDisconnected(object? sender, Exception? error)
+    {
+        if (sender is not BackendSession backend)
+        {
+            return;
+        }
+
+        var token = Interlocked.Increment(ref _backendReconnectToken);
+        DispatcherQueue.TryEnqueue(() => _ = ReconnectBackendAsync(backend, error, token));
+    }
+
+    private async Task ReconnectBackendAsync(BackendSession backend, Exception? error, int token)
+    {
+        if (!ReferenceEquals(_backend, backend) || _workspace is null || token != _backendReconnectToken)
+        {
+            return;
+        }
+
+        _fileChangeSubscription?.Dispose();
+        _fileChangeSubscription = null;
+        _watchTargetPath = null;
+        _watchedPath = null;
+        Interlocked.Increment(ref _watchRequestToken);
+        CancelNetworkReconnectPrompt();
+        CancelUtilityOperation();
+        CancelArchiveOperation();
+        _transferCts?.Cancel();
+        _transferCts = null;
+        _currentOperationId = null;
+        FileProgressPanel.Visibility = Visibility.Collapsed;
+        ClearSearchState();
+        SyncFromWorkspace();
+        ShowMessage(
+            "IPC service disconnected",
+            error is null
+                ? "The background service disconnected. Reconnecting..."
+                : $"The background service disconnected: {error.Message}{Environment.NewLine}Reconnecting...",
+            InfoBarSeverity.Warning);
+
+        try
+        {
+            await backend.ReconnectAsync();
+            if (!ReferenceEquals(_backend, backend) || _workspace is null || token != _backendReconnectToken)
+            {
+                return;
+            }
+
+            if (backend.Client is not null)
+            {
+                _workspace.FileOps?.ReplaceIpc(backend.Client);
+                _fileChangeSubscription = backend.Client.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
+            }
+
+            QueueWatchActiveDirectory();
+            await _workspace.RefreshDrivesAsync();
+            await _workspace.RefreshAsync();
+            ShowMessage("IPC service reconnected", "The background service is running again.", InfoBarSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            if (ReferenceEquals(_backend, backend) && token == _backendReconnectToken)
+            {
+                ShowMessage("IPC service disconnected", exception.Message, InfoBarSeverity.Error);
+            }
         }
     }
 
@@ -252,7 +338,10 @@ public sealed partial class MainWindow : Window
         }
         else if (_workspace.FileOpenUnsupported)
         {
-            ShowMessage("Open file", _workspace.StatusMessage ?? "Opening files is not ported yet.", InfoBarSeverity.Informational);
+            ShowMessage(
+                "Open file",
+                _workspace.StatusMessage ?? "No file operation service is available to open this file.",
+                InfoBarSeverity.Informational);
         }
         else
         {
@@ -264,7 +353,10 @@ public sealed partial class MainWindow : Window
 
         if (_workspace.PendingReconnect is { } drive && !_reconnectDialogOpen)
         {
-            _ = PromptNetworkReconnectAsync(drive.Name, drive.StatusDetail, drive.RemotePath, drive.Path);
+            var workspace = _workspace;
+            _ = RunUiActionAsync(
+                "Network drive",
+                () => PromptNetworkReconnectAsync(workspace, drive.Name, drive.StatusDetail, drive.RemotePath, drive.Path));
         }
 
         QueuePreviewFromSelection();
@@ -704,7 +796,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null)
         {
-            await _workspace.ToggleDualPaneAsync();
+            await RunUiActionAsync("Dual pane", () => _workspace.ToggleDualPaneAsync());
         }
     }
 
@@ -716,27 +808,31 @@ public sealed partial class MainWindow : Window
 
     private void OnSecondaryPanePressed(object sender, PointerRoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Secondary);
 
-    private async void OnPrimaryBack(object sender, RoutedEventArgs e) => await GoHistory(PaneId.Primary, -1);
+    private async void OnPrimaryBack(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Primary, -1));
 
-    private async void OnPrimaryForward(object sender, RoutedEventArgs e) => await GoHistory(PaneId.Primary, 1);
+    private async void OnPrimaryForward(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Primary, 1));
 
     private async void OnPrimaryUp(object sender, RoutedEventArgs e)
     {
         if (_workspace is not null)
         {
-            await _workspace.GoUpAsync(PaneId.Primary);
+            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync(PaneId.Primary));
         }
     }
 
-    private async void OnSecondaryBack(object sender, RoutedEventArgs e) => await GoHistory(PaneId.Secondary, -1);
+    private async void OnSecondaryBack(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Secondary, -1));
 
-    private async void OnSecondaryForward(object sender, RoutedEventArgs e) => await GoHistory(PaneId.Secondary, 1);
+    private async void OnSecondaryForward(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Secondary, 1));
 
     private async void OnSecondaryUp(object sender, RoutedEventArgs e)
     {
         if (_workspace is not null)
         {
-            await _workspace.GoUpAsync(PaneId.Secondary);
+            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync(PaneId.Secondary));
         }
     }
 
@@ -761,7 +857,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null)
         {
-            await _workspace.RefreshDrivesAsync();
+            await RunUiActionAsync("Refresh drives", () => _workspace.RefreshDrivesAsync());
         }
     }
 
@@ -816,14 +912,14 @@ public sealed partial class MainWindow : Window
 
         var delta = e.Key == VirtualKey.Right ? 1 : -1;
         var next = pane.Tabs[(index + delta + pane.Tabs.Count) % pane.Tabs.Count];
-        await _workspace.SwitchToTabAsync(next.Id, tab.Pane);
+        await RunUiActionAsync("Tab", () => _workspace.SwitchToTabAsync(next.Id, tab.Pane));
     }
 
     private async void OnQuickAccessClick(object sender, ItemClickEventArgs e)
     {
         if (_workspace is not null && e.ClickedItem is QuickAccessRow row)
         {
-            await _workspace.NavigateSpecialAsync(row.Command, _workspace.SidebarTarget);
+            await RunUiActionAsync("Quick access", () => _workspace.NavigateSpecialAsync(row.Command, _workspace.SidebarTarget));
         }
     }
 
@@ -831,7 +927,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && e.ClickedItem is DriveRow row)
         {
-            await _workspace.OpenPathAsync(row.Path, isDirectory: true, _workspace.SidebarTarget);
+            await RunUiActionAsync("Drive", () => _workspace.OpenPathAsync(row.Path, isDirectory: true, _workspace.SidebarTarget));
         }
     }
 
@@ -839,7 +935,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && sender is Button { Tag: PanePath target })
         {
-            await _workspace.NavigatePaneAsync(target.Pane, target.Path);
+            await RunUiActionAsync("Breadcrumb", () => _workspace.NavigatePaneAsync(target.Pane, target.Path));
         }
     }
 
@@ -895,10 +991,10 @@ public sealed partial class MainWindow : Window
     }
 
     private async void OnPrimaryPathKeyDown(object sender, KeyRoutedEventArgs e) =>
-        await HandlePathKey(e, PaneId.Primary);
+        await RunUiActionAsync("Navigation", () => HandlePathKey(e, PaneId.Primary));
 
     private async void OnSecondaryPathKeyDown(object sender, KeyRoutedEventArgs e) =>
-        await HandlePathKey(e, PaneId.Secondary);
+        await RunUiActionAsync("Navigation", () => HandlePathKey(e, PaneId.Secondary));
 
     private void OnPrimaryPathLostFocus(object sender, RoutedEventArgs e)
     {
@@ -1017,16 +1113,16 @@ public sealed partial class MainWindow : Window
     }
 
     private async void OnPrimaryFileDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) =>
-        await OpenSelectedFile(PrimaryFileList, PaneId.Primary);
+        await RunUiActionAsync("Open", () => OpenSelectedFile(PrimaryFileList, PaneId.Primary));
 
     private async void OnSecondaryFileDoubleTapped(object sender, DoubleTappedRoutedEventArgs e) =>
-        await OpenSelectedFile(SecondaryFileList, PaneId.Secondary);
+        await RunUiActionAsync("Open", () => OpenSelectedFile(SecondaryFileList, PaneId.Secondary));
 
     private async void OnPrimaryFileKeyDown(object sender, KeyRoutedEventArgs e) =>
-        await HandleFileKey(e, PrimaryFileList, PaneId.Primary);
+        await RunUiActionAsync("File list", () => HandleFileKey(e, PrimaryFileList, PaneId.Primary));
 
     private async void OnSecondaryFileKeyDown(object sender, KeyRoutedEventArgs e) =>
-        await HandleFileKey(e, SecondaryFileList, PaneId.Secondary);
+        await RunUiActionAsync("File list", () => HandleFileKey(e, SecondaryFileList, PaneId.Secondary));
 
     private async Task HandleFileKey(KeyRoutedEventArgs e, ListView list, PaneId pane)
     {
@@ -1152,12 +1248,17 @@ public sealed partial class MainWindow : Window
         }
 
         _previewPath = row.Path;
-        _ = LoadPreviewAsync(row);
+        _previewCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _previewCts = cts;
+        _ = LoadPreviewAsync(row, cts);
     }
 
     private void ClearPreview()
     {
         _previewPath = null;
+        _previewCts?.Cancel();
+        _previewCts = null;
         _ = Interlocked.Increment(ref _previewToken);
         PreviewTitle.Text = "Preview";
         PreviewSubtitle.Text = "Select a file";
@@ -1184,59 +1285,91 @@ public sealed partial class MainWindow : Window
         PreviewCompareButton.IsEnabled = selected.Count == 2 && selected.All(item => !item.IsDir);
     }
 
-    private async Task LoadPreviewAsync(FileRow row)
+    private bool IsPreviewCurrent(string path, int token)
     {
-        var token = Interlocked.Increment(ref _previewToken);
-        PreviewTitle.Text = row.Name;
-        PreviewSubtitle.Text = row.Path;
-        PreviewImage.Source = null;
-        PreviewImage.Visibility = Visibility.Collapsed;
-        PreviewTextBox.Text = "";
-        PreviewTextBox.Visibility = Visibility.Collapsed;
-        PreviewEmptyText.Text = row.IsDir ? "Folder selected." : "Loading preview...";
-        PreviewEmptyText.Visibility = Visibility.Visible;
-        PreviewMetadataRows.Children.Clear();
-        PreviewChecksumText.Text = "";
-        AddMetadataRow("Type", row.TypeText);
-        AddMetadataRow("Size", row.SizeText);
-        AddMetadataRow("Modified", row.ModifiedText);
-
-        if (row.IsDir || _workspace?.FileOps is null)
-        {
-            return;
-        }
-
-        FilePreview? preview = null;
-        try
-        {
-            preview = await _workspace.FileOps.ReadFilePreviewAsync(row.Path, 2_000_000);
-            if (token != _previewToken)
-            {
-                return;
-            }
-
-            AddMetadataRow("Preview type", preview.FileType);
-            AddMetadataRow("MIME", preview.MimeType);
-            AddMetadataRow("Preview size", EntryPresentation.FormatFileSize(preview.Size, isDirectory: false));
-            await RenderPreviewContentAsync(row.Path, preview);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            if (token != _previewToken)
-            {
-                return;
-            }
-
-            PreviewEmptyText.Text = exception.Message;
-        }
-
-        await LoadMetadataAsync(row.Path, preview?.FileType, token);
+        return token == _previewToken
+            && string.Equals(_previewPath, path, StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task RenderPreviewContentAsync(string path, FilePreview preview)
+    private bool IsPreviewCurrent(string path, int token, CancellationToken cancellationToken)
+    {
+        return !cancellationToken.IsCancellationRequested && IsPreviewCurrent(path, token);
+    }
+
+    private async Task LoadPreviewAsync(FileRow row, CancellationTokenSource cts)
+    {
+        var token = Interlocked.Increment(ref _previewToken);
+        var cancellationToken = cts.Token;
+        try
+        {
+            PreviewTitle.Text = row.Name;
+            PreviewSubtitle.Text = row.Path;
+            PreviewImage.Source = null;
+            PreviewImage.Visibility = Visibility.Collapsed;
+            PreviewTextBox.Text = "";
+            PreviewTextBox.Visibility = Visibility.Collapsed;
+            PreviewEmptyText.Text = row.IsDir ? "Folder selected." : "Loading preview...";
+            PreviewEmptyText.Visibility = Visibility.Visible;
+            PreviewMetadataRows.Children.Clear();
+            PreviewChecksumText.Text = "";
+            AddMetadataRow("Type", row.TypeText);
+            AddMetadataRow("Size", row.SizeText);
+            AddMetadataRow("Modified", row.ModifiedText);
+
+            if (row.IsDir || _workspace?.FileOps is null)
+            {
+                return;
+            }
+
+            FilePreview? preview = null;
+            try
+            {
+                preview = await _workspace.FileOps.ReadFilePreviewAsync(row.Path, 2_000_000, cancellationToken);
+                if (!IsPreviewCurrent(row.Path, token, cancellationToken))
+                {
+                    return;
+                }
+
+                AddMetadataRow("Preview type", preview.FileType);
+                AddMetadataRow("MIME", preview.MimeType);
+                AddMetadataRow("Preview size", EntryPresentation.FormatFileSize(preview.Size, isDirectory: false));
+                await RenderPreviewContentAsync(row.Path, preview, token, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                if (!IsPreviewCurrent(row.Path, token, cancellationToken))
+                {
+                    return;
+                }
+
+                PreviewEmptyText.Text = exception.Message;
+            }
+
+            await LoadMetadataAsync(row.Path, preview?.FileType, token, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_previewCts, cts))
+            {
+                _previewCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private async Task RenderPreviewContentAsync(string path, FilePreview preview, int token, CancellationToken cancellationToken)
     {
         if (preview.FileType == "text" && preview.Content is not null)
         {
+            if (!IsPreviewCurrent(path, token, cancellationToken))
+            {
+                return;
+            }
+
             PreviewTextBox.Text = preview.Content;
             PreviewTextBox.Visibility = Visibility.Visible;
             PreviewEmptyText.Visibility = Visibility.Collapsed;
@@ -1245,7 +1378,7 @@ public sealed partial class MainWindow : Window
 
         if (preview.FileType == "image")
         {
-            if (preview.Content is not null && await TrySetPreviewImageAsync(preview.Content))
+            if (preview.Content is not null && await TrySetPreviewImageAsync(preview.Content, path, token, cancellationToken))
             {
                 PreviewEmptyText.Visibility = Visibility.Collapsed;
                 return;
@@ -1253,8 +1386,8 @@ public sealed partial class MainWindow : Window
 
             try
             {
-                var thumbnail = await _workspace!.FileOps!.GenerateThumbnailAsync(path, 256);
-                if (await TrySetPreviewImageAsync(thumbnail))
+                var thumbnail = await _workspace!.FileOps!.GenerateThumbnailAsync(path, 256, cancellationToken);
+                if (await TrySetPreviewImageAsync(thumbnail, path, token, cancellationToken))
                 {
                     PreviewEmptyText.Text = "Thumbnail preview";
                     return;
@@ -1266,12 +1399,17 @@ public sealed partial class MainWindow : Window
             }
         }
 
+        if (!IsPreviewCurrent(path, token, cancellationToken))
+        {
+            return;
+        }
+
         PreviewEmptyText.Text = preview.Content is null
             ? "No inline preview is available for this file."
             : $"Preview content uses {preview.Encoding ?? "an unsupported"} encoding.";
     }
 
-    private async Task LoadMetadataAsync(string path, string? previewType, int token)
+    private async Task LoadMetadataAsync(string path, string? previewType, int token, CancellationToken cancellationToken)
     {
         if (_workspace?.FileOps is null)
         {
@@ -1280,8 +1418,8 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var metadata = await _workspace.FileOps.GetFileMetadataAsync(path);
-            if (token != _previewToken)
+            var metadata = await _workspace.FileOps.GetFileMetadataAsync(path, cancellationToken);
+            if (!IsPreviewCurrent(path, token, cancellationToken))
             {
                 return;
             }
@@ -1300,7 +1438,7 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            if (token == _previewToken)
+            if (IsPreviewCurrent(path, token, cancellationToken))
             {
                 AddMetadataRow("Metadata", exception.Message);
             }
@@ -1313,8 +1451,8 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var image = await _workspace.FileOps.GetImageMetadataAsync(path);
-            if (token != _previewToken)
+            var image = await _workspace.FileOps.GetImageMetadataAsync(path, cancellationToken);
+            if (!IsPreviewCurrent(path, token, cancellationToken))
             {
                 return;
             }
@@ -1328,10 +1466,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> TrySetPreviewImageAsync(string base64)
+    private async Task<bool> TrySetPreviewImageAsync(string base64, string path, int token, CancellationToken cancellationToken)
     {
         try
         {
+            if (!IsPreviewCurrent(path, token, cancellationToken))
+            {
+                return false;
+            }
+
             var bytes = Convert.FromBase64String(base64);
             var stream = new InMemoryRandomAccessStream();
             var writer = new DataWriter(stream.GetOutputStreamAt(0));
@@ -1343,6 +1486,11 @@ public sealed partial class MainWindow : Window
             stream.Seek(0);
             var bitmap = new BitmapImage();
             await bitmap.SetSourceAsync(stream);
+            if (!IsPreviewCurrent(path, token, cancellationToken))
+            {
+                return false;
+            }
+
             PreviewImage.Source = bitmap;
             PreviewImage.Visibility = Visibility.Visible;
             return true;
@@ -1384,41 +1532,65 @@ public sealed partial class MainWindow : Window
 
     private async void OnPreviewOpenClick(object sender, RoutedEventArgs e)
     {
-        if (_workspace is null || ActiveSelectedRow is not { } row)
+        var workspace = _workspace;
+        if (workspace is null || ActiveSelectedRow is not { } row)
         {
             return;
         }
 
+        var pane = workspace.ActivePane;
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.OpenPathAsync(row.Path, row.IsDir, _workspace.ActivePane);
+            await workspace.OpenPathAsync(row.Path, row.IsDir, pane, utilityCts.Token);
         }
-        catch (IpcException exception)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
         {
             ShowMessage("Open", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 
     private async void OnPreviewRevealClick(object sender, RoutedEventArgs e)
     {
-        if (_workspace?.FileOps is null || ActiveSelectedRow is not { } row)
+        var workspace = _workspace;
+        if (workspace is null || ActiveSelectedRow is not { } row)
         {
             return;
         }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.FileOps.RevealInFolderAsync(row.Path);
+            await workspace.RevealInFolderAsync(row.Path, utilityCts.Token);
         }
-        catch (IpcException exception)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
         {
             ShowMessage("Reveal in folder", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
-    private async void OnPreviewOpenWithClick(object sender, RoutedEventArgs e)
+    private async void OnPreviewOpenWithClick(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Open With", OpenSelectedWithAsync);
+
+    private async Task OpenSelectedWithAsync()
     {
-        if (_workspace?.FileOps is null || ActiveSelectedRow is not { IsDir: false } row)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null || ActiveSelectedRow is not { IsDir: false } row)
         {
             return;
         }
@@ -1442,47 +1614,91 @@ public sealed partial class MainWindow : Window
         {
             return;
         }
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
+        }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.FileOps.OpenFileWithAsync(row.Path, input.Text.Trim());
+            await fileOps.OpenFileWithAsync(row.Path, input.Text.Trim(), utilityCts.Token);
         }
-        catch (IpcException exception)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
         {
             ShowMessage("Open With", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 
     private async void OnPreviewChecksumClick(object sender, RoutedEventArgs e)
     {
-        if (_workspace?.FileOps is null || ActiveSelectedRow is not { IsDir: false } row)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null || ActiveSelectedRow is not { IsDir: false } row)
         {
             return;
         }
 
         PreviewChecksumButton.IsEnabled = false;
         PreviewChecksumText.Text = "Computing...";
+        var token = _previewToken;
+        var path = row.Path;
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            var checksums = await _workspace.FileOps.ComputeChecksumAsync(row.Path);
+            var checksums = await fileOps.ComputeChecksumAsync(path, utilityCts.Token);
+            if (!ReferenceEquals(_workspace, workspace)
+                || utilityCts.IsCancellationRequested
+                || !IsPreviewCurrent(path, token))
+            {
+                return;
+            }
+
             PreviewChecksumText.Text =
                 $"MD5    {checksums.Md5}{Environment.NewLine}" +
                 $"SHA1   {checksums.Sha1}{Environment.NewLine}" +
                 $"SHA256 {checksums.Sha256}";
         }
-        catch (IpcException exception)
+        catch (OperationCanceledException)
         {
-            PreviewChecksumText.Text = exception.Message;
+            if (IsPreviewCurrent(path, token))
+            {
+                PreviewChecksumText.Text = "";
+            }
+        }
+        catch (Exception exception)
+        {
+            if (IsPreviewCurrent(path, token))
+            {
+                PreviewChecksumText.Text = exception.Message;
+            }
         }
         finally
         {
-            PreviewChecksumButton.IsEnabled = ActiveSelectedRow is { IsDir: false };
+            if (IsPreviewCurrent(path, token))
+            {
+                PreviewChecksumButton.IsEnabled = ActiveSelectedRow is { IsDir: false };
+            }
+
+            FinishUtilityOperation(utilityCts);
         }
     }
 
-    private async void OnPreviewCompareClick(object sender, RoutedEventArgs e)
+    private async void OnPreviewCompareClick(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Compare files", CompareSelectedFilesAsync);
+
+    private async Task CompareSelectedFilesAsync()
     {
-        if (_workspace?.FileOps is null)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null)
         {
             return;
         }
@@ -1493,14 +1709,29 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        var pathA = selected[0].Path;
+        var pathB = selected[1].Path;
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            var comparison = await _workspace.FileOps.CompareFilesAsync(selected[0].Path, selected[1].Path);
+            var comparison = await fileOps.CompareFilesAsync(pathA, pathB, utilityCts.Token);
+            if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             await ShowComparisonAsync(comparison);
         }
-        catch (IpcException exception)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
         {
             ShowMessage("Compare files", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 
@@ -1558,7 +1789,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && sender is FrameworkElement { Tag: PaneTab tab })
         {
-            await _workspace.SwitchToTabAsync(tab.TabId, tab.Pane);
+            await RunUiActionAsync("Tab", () => _workspace.SwitchToTabAsync(tab.TabId, tab.Pane));
         }
     }
 
@@ -1572,7 +1803,7 @@ public sealed partial class MainWindow : Window
         if (_workspace is not null && sender is FrameworkElement { Tag: PaneTab tab })
         {
             e.Handled = true;
-            await _workspace.CloseTabAsync(tab.TabId, tab.Pane);
+            await RunUiActionAsync("Tab", () => _workspace.CloseTabAsync(tab.TabId, tab.Pane));
         }
     }
 
@@ -1580,7 +1811,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && sender is Button { Tag: PaneTab tab })
         {
-            await _workspace.CloseTabAsync(tab.TabId, tab.Pane);
+            await RunUiActionAsync("Tab", () => _workspace.CloseTabAsync(tab.TabId, tab.Pane));
         }
     }
 
@@ -1588,7 +1819,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && sender is Button { Tag: PaneId pane })
         {
-            await _workspace.OpenNewTabAsync(pane);
+            await RunUiActionAsync("Tab", () => _workspace.OpenNewTabAsync(pane));
         }
     }
 
@@ -1713,7 +1944,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.RefreshAsync();
+            await RunUiActionAsync("Refresh", () => _workspace.RefreshAsync());
         }
     }
 
@@ -1722,7 +1953,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null)
         {
-            await _workspace.ToggleDualPaneAsync();
+            await RunUiActionAsync("Dual pane", () => _workspace.ToggleDualPaneAsync());
         }
     }
 
@@ -1731,7 +1962,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.GoBackAsync();
+            await RunUiActionAsync("Navigation", () => _workspace.GoBackAsync());
         }
     }
 
@@ -1740,7 +1971,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.GoForwardAsync();
+            await RunUiActionAsync("Navigation", () => _workspace.GoForwardAsync());
         }
     }
 
@@ -1749,7 +1980,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.GoUpAsync();
+            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync());
         }
     }
 
@@ -1764,7 +1995,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null)
         {
-            await _workspace.FocusSecondaryAsync();
+            await RunUiActionAsync("Focus pane", () => _workspace.FocusSecondaryAsync());
         }
     }
 
@@ -1773,7 +2004,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.OpenNewTabAsync();
+            await RunUiActionAsync("Tab", () => _workspace.OpenNewTabAsync());
         }
     }
 
@@ -1788,7 +2019,7 @@ public sealed partial class MainWindow : Window
         var id = _workspace.Active.ActiveTabId;
         if (id is not null)
         {
-            await _workspace.CloseTabAsync(id, _workspace.ActivePane);
+            await RunUiActionAsync("Tab", () => _workspace.CloseTabAsync(id, _workspace.ActivePane));
         }
     }
 
@@ -1797,7 +2028,7 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.SwitchTabByAsync(1);
+            await RunUiActionAsync("Tab", () => _workspace.SwitchTabByAsync(1));
         }
     }
 
@@ -1806,20 +2037,28 @@ public sealed partial class MainWindow : Window
         e.Handled = true;
         if (_workspace is not null && !IsEditingPath)
         {
-            await _workspace.SwitchTabByAsync(-1);
+            await RunUiActionAsync("Tab", () => _workspace.SwitchTabByAsync(-1));
         }
     }
 
     private bool IsEditingPath => _editingPrimaryPath || _editingSecondaryPath;
 
-    private async Task PromptNetworkReconnectAsync(string name, string? detail, string? remote, string path)
+    private async Task PromptNetworkReconnectAsync(
+        ExplorerWorkspace workspace,
+        string name,
+        string? detail,
+        string? remote,
+        string path)
     {
-        if (_workspace is null || _reconnectDialogOpen)
+        if (!ReferenceEquals(_workspace, workspace) || _reconnectDialogOpen)
         {
             return;
         }
 
         _reconnectDialogOpen = true;
+        var reconnectCts = new CancellationTokenSource();
+        _networkReconnectCts?.Cancel();
+        _networkReconnectCts = reconnectCts;
         var dialog = new ContentDialog
         {
             Title = "Network drive unavailable",
@@ -1842,17 +2081,28 @@ public sealed partial class MainWindow : Window
         try
         {
             var result = await dialog.ShowAsync();
+            if (!ReferenceEquals(_workspace, workspace) || reconnectCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             if (result == ContentDialogResult.Primary)
             {
-                await _workspace.RetryPendingDriveAsync();
+                await workspace.RetryPendingDriveAsync(reconnectCts.Token);
             }
             else
             {
-                _workspace.CancelPendingReconnect();
+                workspace.CancelPendingReconnect();
             }
         }
         finally
         {
+            if (ReferenceEquals(_networkReconnectCts, reconnectCts))
+            {
+                _networkReconnectCts = null;
+            }
+
+            reconnectCts.Dispose();
             _reconnectDialogOpen = false;
         }
     }
@@ -1864,6 +2114,75 @@ public sealed partial class MainWindow : Window
         MessageBar.Severity = severity;
         MessageBar.IsOpen = true;
         StatusText.Text = message;
+    }
+
+    private async Task RunUiActionAsync(string title, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            ShowMessage(title, exception.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private CancellationTokenSource BeginArchiveOperation()
+    {
+        _archiveCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _archiveCts = cts;
+        return cts;
+    }
+
+    private void FinishArchiveOperation(CancellationTokenSource cts)
+    {
+        if (ReferenceEquals(_archiveCts, cts))
+        {
+            _archiveCts = null;
+        }
+
+        cts.Dispose();
+    }
+
+    private void CancelArchiveOperation()
+    {
+        _archiveCts?.Cancel();
+        _archiveCts = null;
+    }
+
+    private CancellationTokenSource BeginUtilityOperation()
+    {
+        _utilityCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _utilityCts = cts;
+        return cts;
+    }
+
+    private void FinishUtilityOperation(CancellationTokenSource cts)
+    {
+        if (ReferenceEquals(_utilityCts, cts))
+        {
+            _utilityCts = null;
+        }
+
+        cts.Dispose();
+    }
+
+    private void CancelUtilityOperation()
+    {
+        _utilityCts?.Cancel();
+        _utilityCts = null;
+    }
+
+    private void CancelNetworkReconnectPrompt()
+    {
+        _networkReconnectCts?.Cancel();
+        _networkReconnectCts = null;
     }
 
     private void QueueWatchActiveDirectory()
@@ -1881,7 +2200,8 @@ public sealed partial class MainWindow : Window
         }
 
         _watchTargetPath = path;
-        _ = WatchDirectoryAsync(path);
+        var token = Interlocked.Increment(ref _watchRequestToken);
+        _ = WatchDirectoryAsync(path, token);
     }
 
     private void QueueColumnEnrichment()
@@ -1917,8 +2237,11 @@ public sealed partial class MainWindow : Window
         }
 
         _columnEnrichmentSignature = signature;
+        _columnEnrichmentCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _columnEnrichmentCts = cts;
         var token = Interlocked.Increment(ref _columnEnrichmentToken);
-        _ = EnrichColumnsAsync(panes, needsGit, needsSizes, needsItems, token);
+        _ = EnrichColumnsAsync(panes, needsGit, needsSizes, needsItems, token, cts);
     }
 
     private string ColumnEnrichmentSignatureFor(PaneId pane)
@@ -1940,48 +2263,91 @@ public sealed partial class MainWindow : Window
         bool needsGit,
         bool needsSizes,
         bool needsItems,
-        int token)
+        int token,
+        CancellationTokenSource cts)
     {
-        var workspace = _workspace;
-        if (workspace is null)
+        try
         {
-            return;
-        }
-
-        foreach (var pane in panes)
-        {
-            if (token != _columnEnrichmentToken || workspace.Pane(pane).ListingInProgress)
+            var workspace = _workspace;
+            var cancellationToken = cts.Token;
+            if (workspace is null)
             {
                 return;
             }
 
-            if (needsGit)
+            foreach (var pane in panes)
             {
-                await workspace.ApplyGitStatusesAsync(pane).ConfigureAwait(false);
+                if (cancellationToken.IsCancellationRequested
+                    || token != _columnEnrichmentToken
+                    || workspace.Pane(pane).ListingInProgress)
+                {
+                    return;
+                }
+
+                if (needsGit)
+                {
+                    await workspace.ApplyGitStatusesAsync(pane, cancellationToken).ConfigureAwait(false);
+                }
+
+                if (cancellationToken.IsCancellationRequested || token != _columnEnrichmentToken)
+                {
+                    return;
+                }
+
+                if (needsSizes || needsItems)
+                {
+                    await workspace.FillFolderMetricsAsync(pane, needsSizes, needsItems, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_columnEnrichmentCts, cts))
+            {
+                _columnEnrichmentCts = null;
             }
 
-            if (needsSizes || needsItems)
-            {
-                await workspace.FillFolderMetricsAsync(pane, needsSizes, needsItems).ConfigureAwait(false);
-            }
+            cts.Dispose();
         }
     }
 
-    private async Task WatchDirectoryAsync(string path)
+    private async Task WatchDirectoryAsync(string path, int token)
     {
+        await _watchGate.WaitAsync();
         try
         {
-            await (_workspace?.FileOps?.WatchDirectoryAsync(path) ?? Task.CompletedTask);
-            _watchedPath = path;
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            if (string.Equals(path, _watchTargetPath, StringComparison.OrdinalIgnoreCase))
+            if (token != _watchRequestToken || _workspace?.FileOps is null)
             {
-                _watchTargetPath = null;
+                return;
             }
 
-            StatusText.Text = exception.Message;
+            await _workspace.FileOps.WatchDirectoryAsync(path);
+            if (token == _watchRequestToken
+                && string.Equals(path, _watchTargetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _watchedPath = path;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (token == _watchRequestToken)
+            {
+                _watchedPath = null;
+            }
+        }
+        catch (Exception exception)
+        {
+            if (token == _watchRequestToken
+                && string.Equals(path, _watchTargetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _watchTargetPath = null;
+                _watchedPath = null;
+                StatusText.Text = exception.Message;
+            }
+        }
+        finally
+        {
+            _watchGate.Release();
         }
     }
 
@@ -2021,60 +2387,127 @@ public sealed partial class MainWindow : Window
 
     private async void ScheduleInPlaceRefresh()
     {
+        _folderRefreshCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _folderRefreshCts = cts;
         var token = Interlocked.Increment(ref _folderRefreshToken);
         try
         {
-            await Task.Delay(350);
+            var cancellationToken = cts.Token;
+            await Task.Delay(350, cancellationToken);
             if (token != _folderRefreshToken || _workspace is null)
             {
                 return;
             }
 
-            await _workspace.RefreshAsync();
+            await _workspace.RefreshAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             StatusText.Text = exception.Message;
         }
+        finally
+        {
+            if (ReferenceEquals(_folderRefreshCts, cts))
+            {
+                _folderRefreshCts = null;
+            }
+
+            cts.Dispose();
+        }
     }
 
     private async void OnClosed(object sender, WindowEventArgs args)
     {
+        Interlocked.Increment(ref _watchRequestToken);
+        Interlocked.Increment(ref _backendReconnectToken);
+        Interlocked.Increment(ref _folderRefreshToken);
+        _folderRefreshCts?.Cancel();
+        _folderRefreshCts = null;
+        Interlocked.Increment(ref _previewToken);
+        _previewCts?.Cancel();
+        _previewCts = null;
+        CancelNetworkReconnectPrompt();
+        CancelUtilityOperation();
+        CancelArchiveOperation();
+        _transferCts?.Cancel();
+        _transferCts = null;
+        _currentOperationId = null;
+        _searchCts?.Cancel();
+        _searchCts = null;
+        Interlocked.Increment(ref _columnEnrichmentToken);
+        _columnEnrichmentCts?.Cancel();
+        _columnEnrichmentCts = null;
+        _watchTargetPath = null;
+        _watchedPath = null;
+
+        await CleanupSessionAsync(saveWorkspace: true, unwatchDirectory: true);
+    }
+
+    private async Task CleanupSessionAsync(bool saveWorkspace, bool unwatchDirectory)
+    {
+        _watchTargetPath = null;
+        _watchedPath = null;
+
         _fileChangeSubscription?.Dispose();
         _fileChangeSubscription = null;
 
-        if (_workspace?.FileOps is not null)
+        if (unwatchDirectory && await _watchGate.WaitAsync(TimeSpan.FromSeconds(2)))
         {
             try
             {
-                await _workspace.FileOps.UnwatchDirectoryAsync();
+                if (_workspace?.FileOps is not null)
+                {
+                    await _workspace.FileOps.UnwatchDirectoryAsync();
+                }
             }
             catch
             {
                 // Best-effort shutdown cleanup.
             }
+            finally
+            {
+                _watchGate.Release();
+            }
         }
 
         if (_workspace is not null)
         {
+            var workspace = _workspace;
             try
             {
-                await _workspace.SaveWorkspaceLayoutAsync();
-                await _workspace.SaveUiSettingsAsync();
+                if (saveWorkspace)
+                {
+                    await workspace.SaveWorkspaceLayoutAsync();
+                    await workspace.SaveUiSettingsAsync();
+                }
             }
             catch
             {
-                // Best-effort persistence on exit.
+                // Best-effort cleanup and persistence.
             }
 
-            _workspace.Changed -= OnWorkspaceChanged;
+            workspace.Changed -= OnWorkspaceChanged;
+            ColumnLayoutHost.Detach(workspace.Columns);
             _workspace = null;
         }
 
         if (_backend is not null)
         {
-            await _backend.DisposeAsync();
+            var backend = _backend;
             _backend = null;
+            backend.Disconnected -= OnBackendDisconnected;
+            try
+            {
+                await backend.DisposeAsync();
+            }
+            catch
+            {
+                // Best-effort service teardown.
+            }
         }
     }
 
@@ -2111,7 +2544,8 @@ public sealed partial class MainWindow : Window
 
     private async Task PromptAndCreateFolder(PaneId pane)
     {
-        if (_workspace is null) return;
+        var workspace = _workspace;
+        if (workspace is null) return;
 
         var dialog = new ContentDialog
         {
@@ -2126,21 +2560,35 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary && dialog.Content is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
         {
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var utilityCts = BeginUtilityOperation();
             try
             {
-                _workspace.ActivatePane(pane);
-                await _workspace.CreateFolderInCurrentPaneAsync(tb.Text.Trim());
+                workspace.ActivatePane(pane);
+                await workspace.CreateFolderInCurrentPaneAsync(tb.Text.Trim(), utilityCts.Token);
             }
-            catch (IpcException ex)
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
             {
                 ShowMessage("New Folder", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
             }
         }
     }
 
     private async Task PromptAndCreateFile(PaneId pane)
     {
-        if (_workspace is null) return;
+        var workspace = _workspace;
+        if (workspace is null) return;
 
         var dialog = new ContentDialog
         {
@@ -2155,21 +2603,35 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary && dialog.Content is TextBox tb && !string.IsNullOrWhiteSpace(tb.Text))
         {
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var utilityCts = BeginUtilityOperation();
             try
             {
-                _workspace.ActivatePane(pane);
-                await _workspace.CreateFileInCurrentPaneAsync(tb.Text.Trim());
+                workspace.ActivatePane(pane);
+                await workspace.CreateFileInCurrentPaneAsync(tb.Text.Trim(), utilityCts.Token);
             }
-            catch (IpcException ex)
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
             {
                 ShowMessage("New File", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
             }
         }
     }
 
     private async Task PromptAndRename()
     {
-        if (_workspace is null) return;
+        var workspace = _workspace;
+        if (workspace is null) return;
 
         var list = ActiveFileList;
         if (list.SelectedItem is not FileRow row) return;
@@ -2190,30 +2652,44 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(tb.Text) && tb.Text.Trim() != row.Name)
         {
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var utilityCts = BeginUtilityOperation();
             try
             {
-                await _workspace.RenameSelectedAsync(row.Path, tb.Text.Trim());
+                await workspace.RenameSelectedAsync(row.Path, tb.Text.Trim(), utilityCts.Token);
             }
-            catch (IpcException ex)
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
             {
                 ShowMessage("Rename", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
             }
         }
     }
 
     private async Task TrashSelected()
     {
-        if (_workspace is null) return;
+        var workspace = _workspace;
+        if (workspace is null) return;
         var paths = SelectedPaths;
         if (paths is null || paths.Length == 0) return;
 
-        if (_workspace.Settings.ConfirmDelete)
+        if (workspace.Settings.ConfirmDelete)
         {
             var dialog = new ContentDialog
             {
-                Title = _workspace.Settings.UseTrash ? "Move to Trash" : "Delete",
+                Title = workspace.Settings.UseTrash ? "Move to Trash" : "Delete",
                 Content = $"Delete {paths.Length} item(s)?",
-                PrimaryButtonText = _workspace.Settings.UseTrash ? "Trash" : "Delete",
+                PrimaryButtonText = workspace.Settings.UseTrash ? "Trash" : "Delete",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
                 XamlRoot = Content.XamlRoot,
@@ -2223,24 +2699,32 @@ public sealed partial class MainWindow : Window
                 return;
             }
         }
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
+        }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            if (_workspace.Settings.UseTrash)
+            if (workspace.Settings.UseTrash)
             {
-                await _workspace.TrashSelectedAsync(paths);
+                await workspace.TrashSelectedAsync(paths, utilityCts.Token);
             }
             else
             {
                 foreach (var path in paths)
                 {
-                    await _workspace.DeleteSelectedAsync(path);
+                    await workspace.DeleteSelectedAsync(path, utilityCts.Token);
                 }
             }
         }
-        catch (IpcException ex)
+        catch (OperationCanceledException)
         {
-            if (FileOperationService.IsTrashUnavailable(ex))
+        }
+        catch (Exception ex)
+        {
+            if (ex is IpcException ipcException && FileOperationService.IsTrashUnavailable(ipcException))
             {
                 ShowMessage("Trash unavailable", ex.Message, InfoBarSeverity.Warning);
                 return;
@@ -2248,11 +2732,16 @@ public sealed partial class MainWindow : Window
 
             ShowMessage("Trash", ex.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async Task DeleteSelected()
     {
-        if (_workspace is null) return;
+        var workspace = _workspace;
+        if (workspace is null) return;
         var path = SelectedPath;
         if (path is null) return;
 
@@ -2269,13 +2758,26 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var utilityCts = BeginUtilityOperation();
             try
             {
-                await _workspace.DeleteSelectedAsync(path);
+                await workspace.DeleteSelectedAsync(path, utilityCts.Token);
             }
-            catch (IpcException ex)
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
             {
                 ShowMessage("Delete", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
             }
         }
     }
@@ -2339,6 +2841,7 @@ public sealed partial class MainWindow : Window
     private async void OnFileProgressCancelRequested(object? sender, EventArgs e)
     {
         var operationId = _currentOperationId;
+        _transferCts?.Cancel();
         if (string.IsNullOrEmpty(operationId) || _workspace?.FileOps is null)
         {
             return;
@@ -2349,7 +2852,10 @@ public sealed partial class MainWindow : Window
         {
             await _workspace.FileOps.CancelOperationAsync(operationId);
         }
-        catch (IpcException ex)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
         {
             ShowMessage("Cancel operation", ex.Message, InfoBarSeverity.Error);
         }
@@ -2376,6 +2882,8 @@ public sealed partial class MainWindow : Window
         var pane = _workspace.ActivePane;
         var root = _workspace.Active.Path;
         var searchId = $"search_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Interlocked.Increment(ref _searchCounter)}";
+        var cts = new CancellationTokenSource();
+        _searchCts = cts;
         _activeSearchId = searchId;
         _searchMode = true;
         _searchPane = pane;
@@ -2418,7 +2926,8 @@ public sealed partial class MainWindow : Window
                     {
                         StatusText.Text = $"Search complete: {count} result(s)";
                     }
-                }));
+                }),
+                cts.Token);
 
             if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
             {
@@ -2428,7 +2937,14 @@ public sealed partial class MainWindow : Window
                 StatusText.Text = $"Search complete: {results.Length} result(s)";
             }
         }
-        catch (IpcException ex)
+        catch (OperationCanceledException)
+        {
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            {
+                StatusText.Text = "Search cancelled";
+            }
+        }
+        catch (Exception ex)
         {
             if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
             {
@@ -2437,11 +2953,13 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
-            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            if (ReferenceEquals(_searchCts, cts))
             {
-                _activeSearchId = null;
-                SearchCancelButton.IsEnabled = false;
+                _searchCts = null;
             }
+
+            cts.Dispose();
+            FinishSearchRun(searchId);
         }
     }
 
@@ -2464,8 +2982,10 @@ public sealed partial class MainWindow : Window
     private async Task CancelActiveSearchAsync()
     {
         var searchId = _activeSearchId;
+        _searchCts?.Cancel();
         if (string.IsNullOrEmpty(searchId) || _workspace?.FileOps is null)
         {
+            SearchCancelButton.IsEnabled = false;
             return;
         }
 
@@ -2474,7 +2994,10 @@ public sealed partial class MainWindow : Window
             await _workspace.FileOps.CancelSearchAsync(searchId);
             StatusText.Text = "Search cancelled";
         }
-        catch (IpcException ex)
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
         {
             ShowMessage("Cancel search", ex.Message, InfoBarSeverity.Error);
         }
@@ -2489,16 +3012,30 @@ public sealed partial class MainWindow : Window
     {
         _searchMode = false;
         _searchRoot = null;
+        _searchCts?.Cancel();
+        _searchCts = null;
         _activeSearchId = null;
         _activeSearchResults.Clear();
         SearchCancelButton.IsEnabled = false;
     }
 
-    private async void OnSearchClick(object sender, RoutedEventArgs e) => await StartSearchAsync();
+    private void FinishSearchRun(string searchId)
+    {
+        if (!string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _activeSearchId = null;
+        SearchCancelButton.IsEnabled = false;
+    }
+
+    private async void OnSearchClick(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Search", StartSearchAsync);
 
     private async void OnCancelSearchClick(object sender, RoutedEventArgs e)
     {
-        await CancelActiveSearchAsync();
+        await RunUiActionAsync("Cancel search", CancelActiveSearchAsync);
     }
 
     private async void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
@@ -2506,12 +3043,12 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Enter)
         {
             e.Handled = true;
-            await StartSearchAsync();
+            await RunUiActionAsync("Search", StartSearchAsync);
         }
         else if (e.Key == VirtualKey.Escape)
         {
             e.Handled = true;
-            await CancelActiveSearchAsync();
+            await RunUiActionAsync("Cancel search", CancelActiveSearchAsync);
             ClearSearchState();
             SyncFromWorkspace();
         }
@@ -2521,36 +3058,40 @@ public sealed partial class MainWindow : Window
     // Per-pane button Click handlers
     // ========================================================================
 
-    private async void OnPrimaryNewFolder(object sender, RoutedEventArgs e) => await PromptAndCreateFolder(PaneId.Primary);
+    private async void OnPrimaryNewFolder(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("New Folder", () => PromptAndCreateFolder(PaneId.Primary));
 
-    private async void OnPrimaryNewFile(object sender, RoutedEventArgs e) => await PromptAndCreateFile(PaneId.Primary);
+    private async void OnPrimaryNewFile(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("New File", () => PromptAndCreateFile(PaneId.Primary));
 
     private async void OnPrimaryRename(object sender, RoutedEventArgs e)
     {
         _workspace?.ActivatePane(PaneId.Primary);
-        await PromptAndRename();
+        await RunUiActionAsync("Rename", PromptAndRename);
     }
 
     private async void OnPrimaryDelete(object sender, RoutedEventArgs e)
     {
         _workspace?.ActivatePane(PaneId.Primary);
-        await TrashSelected();
+        await RunUiActionAsync("Trash", TrashSelected);
     }
 
-    private async void OnSecondaryNewFolder(object sender, RoutedEventArgs e) => await PromptAndCreateFolder(PaneId.Secondary);
+    private async void OnSecondaryNewFolder(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("New Folder", () => PromptAndCreateFolder(PaneId.Secondary));
 
-    private async void OnSecondaryNewFile(object sender, RoutedEventArgs e) => await PromptAndCreateFile(PaneId.Secondary);
+    private async void OnSecondaryNewFile(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("New File", () => PromptAndCreateFile(PaneId.Secondary));
 
     private async void OnSecondaryRename(object sender, RoutedEventArgs e)
     {
         _workspace?.ActivatePane(PaneId.Secondary);
-        await PromptAndRename();
+        await RunUiActionAsync("Rename", PromptAndRename);
     }
 
     private async void OnSecondaryDelete(object sender, RoutedEventArgs e)
     {
         _workspace?.ActivatePane(PaneId.Secondary);
-        await TrashSelected();
+        await RunUiActionAsync("Trash", TrashSelected);
     }
 
     // ========================================================================
@@ -2560,31 +3101,31 @@ public sealed partial class MainWindow : Window
     private async void OnNewFolderAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await PromptAndCreateFolder(_workspace?.ActivePane ?? PaneId.Primary);
+        await RunUiActionAsync("New Folder", () => PromptAndCreateFolder(_workspace?.ActivePane ?? PaneId.Primary));
     }
 
     private async void OnNewFileAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await PromptAndCreateFile(_workspace?.ActivePane ?? PaneId.Primary);
+        await RunUiActionAsync("New File", () => PromptAndCreateFile(_workspace?.ActivePane ?? PaneId.Primary));
     }
 
     private async void OnRenameAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await PromptAndRename();
+        await RunUiActionAsync("Rename", PromptAndRename);
     }
 
     private async void OnDeleteAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await DeleteSelected();
+        await RunUiActionAsync("Delete", DeleteSelected);
     }
 
     private async void OnTrashAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await TrashSelected();
+        await RunUiActionAsync("Trash", TrashSelected);
     }
 
     private void OnCopyAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
@@ -2602,11 +3143,10 @@ public sealed partial class MainWindow : Window
     private async void OnPasteAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await PasteFromClipboard();
+        await RunUiActionAsync("Paste", PasteFromClipboard);
     }
 
     private FileRow[] GetSelectedEntries() => ActiveSelectedRows.ToArray();
-    private void ShowError(string message) => ShowMessage("Error", message, Microsoft.UI.Xaml.Controls.InfoBarSeverity.Error);
     private void RefreshView() => SyncFromWorkspace();
 
     private static bool IsCancellationMessage(string? message)
@@ -2619,35 +3159,79 @@ public sealed partial class MainWindow : Window
         return message.Contains("cancel", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void OnOpenTerminalAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    private async void OnOpenTerminalAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        OnOpenTerminalClicked(sender, new RoutedEventArgs());
+        await RunUiActionAsync("Terminal", OpenTerminalInActivePathAsync);
     }
 
-    private void OnSettingsAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    private async void OnSettingsAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
         args.Handled = true;
-        OnSettingsClicked(sender, new RoutedEventArgs());
+        await RunUiActionAsync("Settings", ShowSettingsAsync);
     }
 
-    private async void OnSettingsClicked(object sender, RoutedEventArgs e)
+    private async void OnSettingsClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Settings", ShowSettingsAsync);
+
+    private async Task ShowSettingsAsync()
     {
-        if (_workspace?.FileOps == null) return;
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null) return;
         var dialog = new SettingsDialog
         {
             XamlRoot = Content.XamlRoot,
             OwnerHwnd = WinRT.Interop.WindowNative.GetWindowHandle(this),
         };
-        await dialog.LoadSettingsAsync(_workspace.FileOps);
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
+
+        var utilityCts = BeginUtilityOperation();
+        try
         {
-            await dialog.SaveSettingsAsync(_workspace.FileOps);
-            dialog.ApplyTo(_workspace.Settings);
-            _workspace.ApplyUiSettings(_workspace.Settings);
-            ApplyTheme(_workspace.Settings.Theme);
-            await _workspace.SaveUiSettingsAsync();
+            try
+            {
+                await dialog.LoadSettingsAsync(fileOps, utilityCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception exception)
+            {
+                ShowMessage("Settings", exception.Message, InfoBarSeverity.Error);
+                return;
+            }
+
+            if (!ReferenceEquals(_workspace, workspace)
+                || utilityCts.IsCancellationRequested
+                || await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                dialog.ApplyTo(workspace.Settings);
+                workspace.ApplyUiSettings(workspace.Settings);
+                ApplyTheme(workspace.Settings.Theme);
+                await workspace.SaveUiSettingsAsync(utilityCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception exception)
+            {
+                ShowMessage("Settings", $"Settings were applied but could not be saved: {exception.Message}", InfoBarSeverity.Warning);
+            }
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 
@@ -2668,20 +3252,55 @@ public sealed partial class MainWindow : Window
                 await ShowExtractDialogAsync(info);
             }
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("View archive", ex.Message, InfoBarSeverity.Error);
+        }
     }
 
     private async Task ShowExtractDialogAsync(SimpleFile.Ipc.ArchiveInfo info)
     {
-        if (_workspace?.FileOps == null) return;
-        var dialog = new ExtractArchiveDialog { XamlRoot = Content.XamlRoot };
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null) return;
+        var dialog = new ExtractArchiveDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            BrowseFolderAsync = PickFolderAsync,
+        };
         dialog.ArchiveData = info;
-        dialog.SetBaseDirectory(_workspace.Active.Path);
+        dialog.SetBaseDirectory(workspace.Active.Path);
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            await _workspace.FileOps.ExtractArchiveAsync(info.Path, dialog.Destination);
-            await _workspace.RefreshAsync();
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var archiveCts = BeginArchiveOperation();
+            try
+            {
+                await fileOps.ExtractArchiveAsync(info.Path, dialog.Destination, archiveCts.Token);
+                if (ReferenceEquals(_workspace, workspace) && !archiveCts.IsCancellationRequested)
+                {
+                    await workspace.RefreshAsync(archiveCts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Extract archive", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishArchiveOperation(archiveCts);
+            }
         }
     }
 
@@ -2695,85 +3314,156 @@ public sealed partial class MainWindow : Window
             var info = await _workspace.FileOps.ListArchiveAsync(selected[0].Path);
             await ShowExtractDialogAsync(info);
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("Extract archive", ex.Message, InfoBarSeverity.Error);
+        }
     }
 
-    private async void OnCreateArchiveClicked(object sender, RoutedEventArgs e)
+    private async void OnCreateArchiveClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Create archive", CreateArchiveAsync);
+
+    private async Task CreateArchiveAsync()
     {
-        if (_workspace?.FileOps == null) return;
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null) return;
         var selected = GetSelectedEntries();
         if (selected.Length == 0) return;
         var dialog = new CreateArchiveDialog { XamlRoot = Content.XamlRoot };
         dialog.SelectedPaths = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Path));
         dialog.SelectedNames = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Name));
-        dialog.TargetDirectory = _workspace.Active.Path;
+        dialog.TargetDirectory = workspace.Active.Path;
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.Primary)
         {
-            await _workspace.FileOps.CreateArchiveAsync(
-                dialog.SelectedPaths,
-                System.IO.Path.Combine(dialog.TargetDirectory, dialog.ArchiveName),
-                dialog.ArchiveFormat);
-            await _workspace.RefreshAsync();
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var archiveCts = BeginArchiveOperation();
+            try
+            {
+                await fileOps.CreateArchiveAsync(
+                    dialog.SelectedPaths,
+                    System.IO.Path.Combine(dialog.TargetDirectory, dialog.ArchiveName),
+                    dialog.ArchiveFormat,
+                    archiveCts.Token);
+                if (ReferenceEquals(_workspace, workspace) && !archiveCts.IsCancellationRequested)
+                {
+                    await workspace.RefreshAsync(archiveCts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                ShowMessage("Create archive", ex.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishArchiveOperation(archiveCts);
+            }
         }
     }
 
-    private async void OnDuplicateCheckerClicked(object sender, RoutedEventArgs e)
+    private async void OnDuplicateCheckerClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Duplicate checker", ShowDuplicateCheckerAsync);
+
+    private async Task ShowDuplicateCheckerAsync()
     {
-        if (_workspace?.FileOps == null) return;
-        var path = _workspace.Active.Path;
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null) return;
+        var path = workspace.Active.Path;
         if (string.IsNullOrWhiteSpace(path)) return;
 
         var dialog = new DuplicateCheckerDialog { XamlRoot = Content.XamlRoot, Directory = path };
         dialog.ShowConfiguration();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (!ReferenceEquals(_workspace, workspace)) return;
 
+        var utilityCts = BeginUtilityOperation();
+        using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(utilityCts.Token);
+        var scanToken = scanCts.Token;
         var progress = new Progress<Ipc.ProgressUpdate>(update =>
         {
-            DispatcherQueue.TryEnqueue(() => dialog.UpdateProgress(update));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (ReferenceEquals(_workspace, workspace) && !scanToken.IsCancellationRequested)
+                {
+                    dialog.UpdateProgress(update);
+                }
+            });
         });
 
-        dialog.ScanCancelled += (_, _) =>
+        dialog.ScanCancelled += async (_, _) =>
         {
-            _ = _workspace.FileOps.CancelDuplicateCheckAsync();
+            scanCts.Cancel();
+            await RunUiActionAsync(
+                "Duplicate checker",
+                () => fileOps.CancelDuplicateCheckAsync());
         };
         dialog.PreviewRequested += (_, filePath) =>
         {
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
             QueuePreview(ToFileRow(new FileEntry
             {
                 Name = System.IO.Path.GetFileName(filePath),
                 Path = filePath,
             }));
         };
-        dialog.OpenRequested += (_, filePath) =>
+        dialog.OpenRequested += async (_, filePath) =>
         {
-            _ = _workspace.FileOps.OpenFileAsync(filePath);
+            await RunUiActionAsync(
+                "Open",
+                () => ReferenceEquals(_workspace, workspace)
+                    ? fileOps.OpenFileAsync(filePath)
+                    : Task.CompletedTask);
         };
-        dialog.RevealRequested += (_, filePath) =>
+        dialog.RevealRequested += async (_, filePath) =>
         {
-            _ = _workspace.FileOps.RevealInFolderAsync(filePath);
+            await RunUiActionAsync(
+                "Reveal in folder",
+                () => ReferenceEquals(_workspace, workspace)
+                    ? fileOps.RevealInFolderAsync(filePath)
+                    : Task.CompletedTask);
         };
 
         try
         {
             dialog.ShowScanning();
             var scanUi = dialog.ShowAsync();
-            var result = await _workspace.FileOps.DuplicateCheckAsync(
-                path, dialog.MinSizeBytes, null, progress);
-            if (dialog.ScanWasCancelled)
+            var result = await fileOps.DuplicateCheckAsync(
+                path, dialog.MinSizeBytes, null, progress, scanCts.Token);
+            if (dialog.ScanWasCancelled
+                || !ReferenceEquals(_workspace, workspace)
+                || scanCts.IsCancellationRequested)
             {
                 return;
             }
 
             dialog.ShowResults(result);
             await scanUi;
-            if (dialog.DeleteRequested)
+            if (dialog.DeleteRequested && ReferenceEquals(_workspace, workspace))
             {
                 var trash = dialog.PathsToDelete;
                 if (trash.Length > 0)
                 {
-                    await _workspace.FileOps.TrashAsync(trash);
-                    await _workspace.RefreshAsync();
+                    await fileOps.TrashAsync(trash, scanCts.Token);
+                    if (ReferenceEquals(_workspace, workspace) && !scanCts.IsCancellationRequested)
+                    {
+                        await workspace.RefreshAsync(scanCts.Token);
+                    }
                 }
             }
         }
@@ -2786,37 +3476,61 @@ public sealed partial class MainWindow : Window
             dialog.Hide();
             if (!IsCancellationMessage(ex.Message))
             {
-                ShowError(ex.Message);
+                ShowMessage("Duplicate checker", ex.Message, InfoBarSeverity.Error);
             }
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 
-    private async void OnDiskCleanupClicked(object sender, RoutedEventArgs e)
+    private async void OnDiskCleanupClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Disk cleanup", ShowDiskCleanupAsync);
+
+    private async Task ShowDiskCleanupAsync()
     {
-        if (_workspace?.FileOps == null) return;
-        var path = _workspace.Active.Path;
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null) return;
+        var path = workspace.Active.Path;
         if (string.IsNullOrWhiteSpace(path)) return;
 
         var dialog = new DiskCleanupDialog { XamlRoot = Content.XamlRoot, Directory = path };
         dialog.ShowConfiguration();
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (!ReferenceEquals(_workspace, workspace)) return;
 
+        var utilityCts = BeginUtilityOperation();
+        using var scanCts = CancellationTokenSource.CreateLinkedTokenSource(utilityCts.Token);
+        var scanToken = scanCts.Token;
         var progress = new Progress<Ipc.ProgressUpdate>(update =>
         {
-            DispatcherQueue.TryEnqueue(() => dialog.UpdateProgress(update));
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (ReferenceEquals(_workspace, workspace) && !scanToken.IsCancellationRequested)
+                {
+                    dialog.UpdateProgress(update);
+                }
+            });
         });
 
-        dialog.ScanCancelled += (_, _) =>
+        dialog.ScanCancelled += async (_, _) =>
         {
-            _ = _workspace.FileOps.CancelDiskCleanupAsync();
+            scanCts.Cancel();
+            await RunUiActionAsync(
+                "Disk cleanup",
+                () => fileOps.CancelDiskCleanupAsync());
         };
 
         try
         {
             dialog.ShowScanning();
             var scanUi = dialog.ShowAsync();
-            var result = await _workspace.FileOps.DiskCleanupAsync(path, dialog.ThresholdBytes, progress);
-            if (dialog.ScanWasCancelled)
+            var result = await fileOps.DiskCleanupAsync(path, dialog.ThresholdBytes, progress, scanCts.Token);
+            if (dialog.ScanWasCancelled
+                || !ReferenceEquals(_workspace, workspace)
+                || scanCts.IsCancellationRequested)
             {
                 return;
             }
@@ -2833,34 +3547,83 @@ public sealed partial class MainWindow : Window
             dialog.Hide();
             if (!IsCancellationMessage(ex.Message))
             {
-                ShowError(ex.Message);
+                ShowMessage("Disk cleanup", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
+    }
+
+    private async void OnSetColorLabelClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Color label", SetColorLabelAsync);
+
+    private async Task SetColorLabelAsync()
+    {
+        var workspace = _workspace;
+        if (workspace == null) return;
+        var selected = GetSelectedEntries();
+        if (selected.Length == 0) return;
+        var dialog = new TagPickerDialog { XamlRoot = Content.XamlRoot };
+        dialog.SetTags(System.Linq.Enumerable.ToArray(workspace.AllTags));
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.Primary)
+        {
+            if (!ReferenceEquals(_workspace, workspace))
+            {
+                return;
+            }
+
+            var paths = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Path));
+            var utilityCts = BeginUtilityOperation();
+            try
+            {
+                if (dialog.SelectedTagId.HasValue)
+                {
+                    await workspace.SetColorLabelAsync(paths, dialog.SelectedTagId.Value, utilityCts.Token);
+                }
+                else
+                {
+                    await workspace.RemoveColorLabelAsync(paths, utilityCts.Token);
+                }
+
+                if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+                {
+                    RefreshView();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception exception)
+            {
+                ShowMessage("Color label", exception.Message, InfoBarSeverity.Error);
+            }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
             }
         }
     }
 
-    private async void OnSetColorLabelClicked(object sender, RoutedEventArgs e)
-    {
-        if (_workspace == null) return;
-        var selected = GetSelectedEntries();
-        if (selected.Length == 0) return;
-        var dialog = new TagPickerDialog { XamlRoot = Content.XamlRoot };
-        dialog.SetTags(System.Linq.Enumerable.ToArray(_workspace.AllTags));
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.Primary)
-        {
-            var paths = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(selected, e => e.Path));
-            if (dialog.SelectedTagId.HasValue)
-                await _workspace.SetColorLabelAsync(paths, dialog.SelectedTagId.Value);
-            else
-                await _workspace.RemoveColorLabelAsync(paths);
-            RefreshView();
-        }
-    }
+    private async void OnOpenTerminalClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Terminal", OpenTerminalInActivePathAsync);
 
-    private async void OnOpenTerminalClicked(object sender, RoutedEventArgs e)
+    private async Task OpenTerminalInActivePathAsync()
     {
         if (_workspace?.FileOps == null) return;
-        await _workspace.FileOps.OpenTerminalAsync(_workspace.Active.Path);
+        try
+        {
+            await _workspace.FileOps.OpenTerminalAsync(_workspace.Active.Path);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            ShowMessage("Terminal", exception.Message, InfoBarSeverity.Error);
+        }
     }
 
     private void RefreshSmartFolders()
@@ -2876,25 +3639,28 @@ public sealed partial class MainWindow : Window
         await CancelActiveSearchAsync();
 
         var pane = _workspace.ActivePane;
-        var root = folder.SearchOptions.SearchPath;
-        if (string.IsNullOrEmpty(root)) root = _workspace.Active.Path;
+        var template = folder.SearchOptions;
+        var root = template?.SearchPath;
+        if (string.IsNullOrWhiteSpace(root)) root = _workspace.Active.Path;
 
         var searchId = $"search_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Interlocked.Increment(ref _searchCounter)}";
-        folder.SearchOptions.SearchId = searchId;
+        var options = SearchOptionsFactory.ForRun(template, searchId, root);
+        var cts = new CancellationTokenSource();
+        _searchCts = cts;
 
         _activeSearchId = searchId;
         _searchMode = true;
         _searchPane = pane;
-        _searchRoot = root;
+        _searchRoot = options.SearchPath;
         _activeSearchResults.Clear();
         SearchCancelButton.IsEnabled = true;
         ApplySearchRows();
-        StatusText.Text = $"Searching Smart Folder...";
+        StatusText.Text = "Searching smart folder...";
 
         try
         {
             var results = await _workspace.FileOps!.SearchAsync(
-                folder.SearchOptions,
+                options,
                 batch => DispatcherQueue.TryEnqueue(() =>
                 {
                     if (!string.Equals(_activeSearchId, searchId, StringComparison.Ordinal)) return;
@@ -2906,7 +3672,8 @@ public sealed partial class MainWindow : Window
                 {
                     if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
                         StatusText.Text = $"Search complete: {count} result(s)";
-                }));
+                }),
+                cts.Token);
 
             if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
             {
@@ -2916,10 +3683,29 @@ public sealed partial class MainWindow : Window
                 StatusText.Text = $"Search complete: {results.Length} result(s)";
             }
         }
+        catch (OperationCanceledException)
+        {
+            if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
+            {
+                StatusText.Text = "Search cancelled";
+            }
+        }
         catch (Exception ex)
         {
             if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
-                StatusText.Text = ex.Message;
+            {
+                ShowMessage("Smart folder", ex.Message, InfoBarSeverity.Error);
+            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_searchCts, cts))
+            {
+                _searchCts = null;
+            }
+
+            cts.Dispose();
+            FinishSearchRun(searchId);
         }
     }
 
@@ -2936,14 +3722,14 @@ public sealed partial class MainWindow : Window
             root = _workspace.HomePath;
         }
 
-        await _workspace.LoadTreeChildrenAsync(root);
+        await RunUiActionAsync("Folder tree", () => _workspace.LoadTreeChildrenAsync(root));
     }
 
     private async void OnFolderTreeClick(object sender, ItemClickEventArgs e)
     {
         if (_workspace is not null && e.ClickedItem is FolderTreeItem item)
         {
-            await _workspace.NavigateToAsync(item.Path);
+            await RunUiActionAsync("Folder tree", () => _workspace.NavigateToAsync(item.Path));
         }
     }
 
@@ -2955,7 +3741,7 @@ public sealed partial class MainWindow : Window
         }
 
         _workspace.ToggleTreeExpanded(path);
-        await _workspace.LoadTreeChildrenAsync(path);
+        await RunUiActionAsync("Folder tree", () => _workspace.LoadTreeChildrenAsync(path));
     }
 
     private void OnAddBookmark(object sender, RoutedEventArgs e)
@@ -2978,7 +3764,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && e.ClickedItem is BookmarkItem item)
         {
-            await _workspace.NavigateToAsync(item.Path);
+            await RunUiActionAsync("Bookmark", () => _workspace.NavigateToAsync(item.Path));
         }
     }
 
@@ -2986,18 +3772,26 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && e.ClickedItem is string path)
         {
-            await _workspace.NavigateToAsync(path);
+            await RunUiActionAsync("Recent", () => _workspace.NavigateToAsync(path));
         }
     }
 
     private async void OnSaveSmartFolder(object sender, RoutedEventArgs e)
     {
-        if (_workspace is null)
+        var workspace = _workspace;
+        if (workspace is null)
         {
             return;
         }
 
-        var nameBox = new TextBox { PlaceholderText = "Smart folder name", Text = SearchBox.Text.Trim() };
+        var query = SearchBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            ShowMessage("Smart folder", "Run a search before saving it as a smart folder.", InfoBarSeverity.Informational);
+            return;
+        }
+
+        var nameBox = new TextBox { PlaceholderText = "Smart folder name", Text = query };
         var dialog = new ContentDialog
         {
             Title = "Save Smart Folder",
@@ -3013,26 +3807,61 @@ public sealed partial class MainWindow : Window
 
         var options = new SearchOptions
         {
-            Query = SearchBox.Text.Trim(),
-            SearchPath = _workspace.Active.Path,
-            IncludeHidden = _workspace.Settings.ShowHidden,
+            Query = query,
+            SearchPath = _searchMode && !string.IsNullOrWhiteSpace(_searchRoot) ? _searchRoot : workspace.Active.Path,
+            IncludeHidden = workspace.Settings.ShowHidden,
             SearchId = $"smart_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}",
         };
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
+        }
+
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.SaveCurrentSearchAsSmartFolderAsync(nameBox.Text.Trim(), options);
-            RefreshSmartFolders();
+            await workspace.SaveCurrentSearchAsSmartFolderAsync(nameBox.Text.Trim(), options, utilityCts.Token);
+            if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+            {
+                RefreshSmartFolders();
+            }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("Smart folder", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async void OnDeleteSmartFolderClicked(object sender, RoutedEventArgs e)
     {
-        if (_workspace == null || sender is not FrameworkElement fe || fe.Tag is not string folderId) return;
-        await _workspace.DeleteSmartFolderAsync(folderId);
-        RefreshSmartFolders();
+        var workspace = _workspace;
+        if (workspace == null || sender is not FrameworkElement fe || fe.Tag is not string folderId) return;
+        var utilityCts = BeginUtilityOperation();
+        try
+        {
+            await workspace.DeleteSmartFolderAsync(folderId, utilityCts.Token);
+            if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+            {
+                RefreshSmartFolders();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            ShowMessage("Smart folder", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 }

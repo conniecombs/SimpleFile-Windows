@@ -64,6 +64,7 @@
                         <TextBox x:Name="CustomPathBox" Header="Custom Path" />
                         <Button Grid.Column="1" Content="Browse..." VerticalAlignment="Bottom" Click="OnBrowseCustomPath" />
                     </Grid>
+                    <TextBlock x:Name="CustomPathStatusText" Foreground="{StaticResource SfTextMutedBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
                     <ToggleSwitch x:Name="OpenInNewTabSwitch" Header="Open folders in new tab" />
                 </StackPanel>
                 
@@ -89,13 +90,15 @@
                     <TextBlock x:Name="CurrentVersionText" Text="Current Version: " />
                     <Button x:Name="CheckUpdatesButton" Content="Check for Updates" Click="OnCheckUpdatesClicked" />
                     <Button x:Name="InstallUpdateButton" Content="Download &#38; Install" Visibility="Collapsed" Click="OnInstallUpdateClicked" />
+                    <TextBlock x:Name="UpdateStatusText" Foreground="{StaticResource SfTextMutedBrush}" TextWrapping="Wrap" />
                 </StackPanel>
                 
                 <StackPanel x:Name="AboutPanel" Spacing="16" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <TextBlock Text="📁" FontSize="64" HorizontalAlignment="Center" />
                     <TextBlock Text="SimpleFile" FontSize="24" FontWeight="Bold" HorizontalAlignment="Center" />
                     <TextBlock x:Name="AboutVersionText" Text="Version info" HorizontalAlignment="Center" Foreground="{StaticResource SfTextMutedBrush}" />
-                    <HyperlinkButton Content="View on GitHub" NavigateUri="https://github.com/conniecombs/SimpleFile-Windows" HorizontalAlignment="Center" />
+                    <HyperlinkButton Content="View on GitHub" Click="OnGitHubClicked" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="AboutStatusText" Foreground="{StaticResource SfTextMutedBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
                 </StackPanel>
                 
             </Grid>

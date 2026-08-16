@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <Description>WinUI host helpers; file-manager workflows are not ported yet</Description>
+    <Description>WinUI file-manager domain helpers for SimpleFile</Description>
     <RootNamespace>SimpleFile.Core</RootNamespace>
   </PropertyGroup>
   <ItemGroup>

@@ -56,7 +56,7 @@ public class ExplorerWorkspaceTests
     }
 
     [Fact]
-    public async Task OpenFolder_Navigates_OpenFile_IsUnsupported()
+    public async Task OpenFolder_Navigates_OpenFile_ReportsMissingFileService()
     {
         var backend = FakeExplorerBackend.Typical();
         var workspace = new ExplorerWorkspace(backend);
@@ -71,7 +71,7 @@ public class ExplorerWorkspaceTests
         await workspace.OpenEntryAsync(file);
         Assert.Equal(@"C:\Users\test", workspace.CurrentPath);
         Assert.True(workspace.FileOpenUnsupported);
-        Assert.Contains("not ported yet", workspace.StatusMessage, StringComparison.Ordinal);
+        Assert.Contains("No file operation service", workspace.StatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -173,6 +173,167 @@ public class ExplorerWorkspaceTests
         Assert.Equal(
             "modified",
             workspace.VisibleEntries.Single(entry => entry.Name == "notes.txt").GitStatus);
+    }
+
+    [Fact]
+    public async Task FillFolderMetrics_StaleNavigationDoesNotUpdateOldEntries()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        var sizeRequestStarted = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sizeResponse = new TaskCompletionSource<ulong>(TaskCreationOptions.RunContinuationsAsynchronously);
+        settingsIpc.CalculateFolderSizeHandler = (path, ct) =>
+        {
+            sizeRequestStarted.TrySetResult(path);
+            return sizeResponse.Task.WaitAsync(ct);
+        };
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+        var oldFolder = workspace.VisibleEntries.Single(entry => entry.Name == "Desktop");
+        var changedEvents = 0;
+        workspace.Changed += (_, _) => changedEvents += 1;
+
+        var metrics = workspace.FillFolderMetricsAsync(PaneId.Primary, includeSizes: true, includeItemCounts: false);
+        Assert.Equal(@"C:\Users\test\Desktop", await sizeRequestStarted.Task);
+        await workspace.NavigateToAsync(@"C:\Users\test\Desktop");
+        var changedAfterNavigation = changedEvents;
+
+        sizeResponse.SetResult(1234);
+        await metrics;
+
+        Assert.Equal(@"C:\Users\test\Desktop", workspace.CurrentPath);
+        Assert.Equal(0UL, oldFolder.Size);
+        Assert.Equal(changedAfterNavigation, changedEvents);
+    }
+
+    [Fact]
+    public async Task CreateFolder_CancellationAfterMutationSkipsRefresh()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        using var cts = new CancellationTokenSource();
+        var createTokenWasUsable = false;
+        settingsIpc.CreateDirectoryHandler = (path, name, ct) =>
+        {
+            Assert.Equal(@"C:\Users\test", path);
+            Assert.Equal("New Folder", name);
+            createTokenWasUsable = !ct.IsCancellationRequested;
+            cts.Cancel();
+            return Task.FromResult(@"C:\Users\test\New Folder");
+        };
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+        var listCallsAfterInitialize = backend.ListDirectoryCalls;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => workspace.CreateFolderInCurrentPaneAsync("New Folder", cts.Token));
+
+        Assert.True(createTokenWasUsable);
+        Assert.Equal(listCallsAfterInitialize, backend.ListDirectoryCalls);
+    }
+
+    [Fact]
+    public async Task PackIntoFolder_CancellationAfterCreateSkipsMoveAndRefresh()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        using var cts = new CancellationTokenSource();
+        settingsIpc.CreateDirectoryHandler = (_, _, _) =>
+        {
+            cts.Cancel();
+            return Task.FromResult(@"C:\Users\test\Packed");
+        };
+        settingsIpc.MoveWithProgressHandler = (_, _, _, _, _) =>
+            throw new InvalidOperationException("move should not run after cancellation");
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+        var listCallsAfterInitialize = backend.ListDirectoryCalls;
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => workspace.PackIntoFolderAsync([@"C:\Users\test\notes.txt"], "Packed", cts.Token));
+
+        Assert.Equal(0, settingsIpc.MoveWithProgressCalls);
+        Assert.Equal(listCallsAfterInitialize, backend.ListDirectoryCalls);
+    }
+
+    [Fact]
+    public async Task Initialize_CancellationFromSmartFolderLoadPropagates()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc
+        {
+            LoadSmartFoldersHandler = ct => Task.FromCanceled<SmartFolder[]>(ct),
+        };
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => workspace.InitializeAsync(cts.Token));
+    }
+
+    [Fact]
+    public async Task RefreshDrives_CancellationAfterListSkipsDriveMutation()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var workspace = new ExplorerWorkspace(backend);
+        await workspace.InitializeAsync();
+        var originalDrive = workspace.Drives.Single();
+
+        using var cts = new CancellationTokenSource();
+        backend.ListDrivesHandler = _ =>
+        {
+            cts.Cancel();
+            return Task.FromResult<IReadOnlyList<DriveInfo>>(
+            [
+                new DriveInfo
+                {
+                    Name = "Stale replacement",
+                    Path = @"Z:\",
+                    DriveType = "Network",
+                    DriveStatus = "available",
+                },
+            ]);
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => workspace.RefreshDrivesAsync(cancellationToken: cts.Token));
+
+        Assert.Same(originalDrive, workspace.Drives.Single());
+    }
+
+    [Fact]
+    public async Task NavigateNetworkFailure_CanceledBeforeRecoverySkipsDriveRefreshAndError()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        backend.Drives.Add(new DriveInfo
+        {
+            Name = "Team Share",
+            Path = @"Z:\",
+            DriveType = "Network",
+            DriveStatus = "offline",
+            StatusDetail = "Network path unavailable",
+        });
+        var workspace = new ExplorerWorkspace(backend);
+        await workspace.InitializeAsync();
+
+        using var cts = new CancellationTokenSource();
+        var driveCallsAfterInitialize = backend.ListDrivesCalls;
+        backend.ListDirectoryHandler = (path, _) =>
+        {
+            if (string.Equals(path, @"Z:\Projects", StringComparison.OrdinalIgnoreCase))
+            {
+                cts.Cancel();
+                throw new IpcException(Protocol.ErrApplication, "Path is not available");
+            }
+
+            return null;
+        };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => workspace.NavigateToAsync(@"Z:\Projects", cancellationToken: cts.Token));
+
+        Assert.Equal(driveCallsAfterInitialize, backend.ListDrivesCalls);
+        Assert.Null(workspace.ErrorMessage);
     }
 
     [Fact]
@@ -403,6 +564,10 @@ internal sealed class FakeExplorerBackend : IExplorerBackend
     public Dictionary<string, Task<DirectoryListing>> Pending { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool EmitChunks { get; set; }
     public bool ThrowTooLargeAfterChunks { get; set; }
+    public int ListDirectoryCalls { get; private set; }
+    public int ListDrivesCalls { get; private set; }
+    public Func<CancellationToken, Task<IReadOnlyList<DriveInfo>>>? ListDrivesHandler { get; set; }
+    public Func<string, CancellationToken, Task<DirectoryListing>?>? ListDirectoryHandler { get; set; }
 
     public static FakeExplorerBackend Typical()
     {
@@ -453,7 +618,9 @@ internal sealed class FakeExplorerBackend : IExplorerBackend
 
     public Task<IReadOnlyList<DriveInfo>> ListDrivesAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<IReadOnlyList<DriveInfo>>(Drives);
+        ListDrivesCalls += 1;
+        return ListDrivesHandler?.Invoke(cancellationToken)
+            ?? Task.FromResult<IReadOnlyList<DriveInfo>>(Drives);
     }
 
     public async Task<DirectoryListing> ListDirectoryAsync(
@@ -461,6 +628,14 @@ internal sealed class FakeExplorerBackend : IExplorerBackend
         Action<DirectoryListingChunk>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        ListDirectoryCalls += 1;
+        var handled = ListDirectoryHandler?.Invoke(path, cancellationToken);
+        if (handled is not null)
+        {
+            return await handled.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         if (Pending.TryGetValue(path, out var pending))
         {
             return await pending.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -498,8 +673,16 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     public Dictionary<string, string> Settings { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, FileEntry> EntryInfo { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, FileEntry[]> GitFileStatuses { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, ulong> FolderSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, ulong> FolderItemCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
     public List<string> OpenedFiles { get; } = [];
+    public Func<string, CancellationToken, Task<ulong>>? CalculateFolderSizeHandler { get; set; }
+    public Func<string, CancellationToken, Task<ulong>>? CountFolderItemsHandler { get; set; }
+    public Func<string, string, CancellationToken, Task<string>>? CreateDirectoryHandler { get; set; }
+    public Func<string[], string, string?, string, CancellationToken, Task<TransferResult[]>>? MoveWithProgressHandler { get; set; }
+    public Func<CancellationToken, Task<SmartFolder[]>>? LoadSmartFoldersHandler { get; set; }
     public int GitStatusCalls { get; private set; }
+    public int MoveWithProgressCalls { get; private set; }
     public bool IsConnected => true;
 
 #pragma warning disable CS0067
@@ -546,7 +729,11 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     public Task SetTagsForPathAsync(string path, long[] tags, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<Dictionary<string, Tag>> GetAllFileTagsAsync(CancellationToken ct = default) => throw new NotImplementedException();
     public Task<string[]> GetFilesWithTagAsync(long id, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task<SmartFolder[]> LoadSmartFoldersAsync(CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<SmartFolder[]> LoadSmartFoldersAsync(CancellationToken ct = default)
+    {
+        return LoadSmartFoldersHandler?.Invoke(ct)
+            ?? throw new NotImplementedException();
+    }
     public Task<SmartFolder[]> SaveSmartFolderAsync(SmartFolder folder, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<SmartFolder[]> DeleteSmartFolderAsync(string id, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<AppAboutInfo> GetAppAboutInfoAsync(CancellationToken ct = default) => throw new NotImplementedException();
@@ -568,7 +755,11 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     public Task SelectDirectoryAsync(string? defaultPath = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task ShowMainWindowAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task ShutdownAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default)
+    {
+        return CreateDirectoryHandler?.Invoke(path, name, ct)
+            ?? throw new NotImplementedException();
+    }
     public Task<string> CreateFileAsync(string path, string name, CancellationToken ct = default) => throw new NotImplementedException();
     public Task DeleteEntryAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
     public Task MoveToTrashAsync(string[] paths, CancellationToken ct = default) => throw new NotImplementedException();
@@ -608,10 +799,25 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     public Task<ImageMetadata> GetImageMetadataAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<FileMetadata> GetFileMetadataAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<TreeNode[]> ListSubdirectoriesAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<ulong> CalculateFolderSizeAsync(string path, CancellationToken ct = default)
+    {
+        return CalculateFolderSizeHandler?.Invoke(path, ct)
+            ?? Task.FromResult(FolderSizes.TryGetValue(path, out var size) ? size : 0UL);
+    }
+
+    public Task<ulong> CountFolderItemsAsync(string path, CancellationToken ct = default)
+    {
+        return CountFolderItemsHandler?.Invoke(path, ct)
+            ?? Task.FromResult(FolderItemCounts.TryGetValue(path, out var count) ? count : 0UL);
+    }
+
     public Task<TransferResult[]> CopyWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task<TransferResult[]> MoveWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<TransferResult[]> MoveWithProgressAsync(string[] sources, string destination, string? operationId, string conflictAction, CancellationToken ct = default)
+    {
+        MoveWithProgressCalls += 1;
+        return MoveWithProgressHandler?.Invoke(sources, destination, operationId, conflictAction, ct)
+            ?? throw new NotImplementedException();
+    }
     public Task CancelOperationAsync(string operationId, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<SearchResult[]> SearchFilesAsync(SearchOptions options, Action<SearchResult[]>? onBatch = null, Action<int>? onComplete = null, CancellationToken ct = default) => throw new NotImplementedException();
     public Task CancelSearchAsync(string searchId, CancellationToken ct = default) => throw new NotImplementedException();

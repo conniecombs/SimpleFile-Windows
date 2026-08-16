@@ -85,7 +85,16 @@ public sealed class UndoStack
         }
 
         var entry = _undo.Pop();
-        await entry.Undo(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await entry.Undo(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _undo.Push(entry);
+            throw;
+        }
+
         _redo.Push(entry);
     }
 
@@ -97,7 +106,16 @@ public sealed class UndoStack
         }
 
         var entry = _redo.Pop();
-        await entry.Redo(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await entry.Redo(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _redo.Push(entry);
+            throw;
+        }
+
         _undo.Push(entry);
     }
 }

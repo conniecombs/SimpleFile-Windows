@@ -473,7 +473,21 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
             throw;
         }
 
-        var raw = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        string raw;
+        try
+        {
+            raw = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (_pending.TryRemove(id, out var pending))
+            {
+                pending.TrySetCanceled(cancellationToken);
+            }
+
+            throw;
+        }
+
         return DeserializeResult<TResult>(method, raw);
     }
 

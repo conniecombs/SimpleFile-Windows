@@ -4,10 +4,16 @@ namespace SimpleFile.Core;
 
 public sealed class FileOperationService
 {
-    private readonly ISimpleFileIpc _ipc;
+    private ISimpleFileIpc _ipc;
 
     public FileOperationService(ISimpleFileIpc ipc)
     {
+        _ipc = ipc;
+    }
+
+    public void ReplaceIpc(ISimpleFileIpc ipc)
+    {
+        ArgumentNullException.ThrowIfNull(ipc);
         _ipc = ipc;
     }
 
@@ -61,12 +67,13 @@ public sealed class FileOperationService
         Action<string>? operationStarted = null,
         CancellationToken ct = default)
     {
+        var ipc = _ipc;
         var operationId = GenerateOperationId();
         operationStarted?.Invoke(operationId);
         IDisposable? subscription = null;
         if (progress != null)
         {
-            subscription = _ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
+            subscription = ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
             {
                 if (update.OperationId == operationId)
                     progress.Report(update);
@@ -74,7 +81,7 @@ public sealed class FileOperationService
         }
         try
         {
-            return await _ipc.CopyWithProgressAsync(
+            return await ipc.CopyWithProgressAsync(
                 sources, destination, operationId, conflictAction, ct).ConfigureAwait(false);
         }
         finally
@@ -92,12 +99,13 @@ public sealed class FileOperationService
         Action<string>? operationStarted = null,
         CancellationToken ct = default)
     {
+        var ipc = _ipc;
         var operationId = GenerateOperationId();
         operationStarted?.Invoke(operationId);
         IDisposable? subscription = null;
         if (progress != null)
         {
-            subscription = _ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
+            subscription = ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
             {
                 if (update.OperationId == operationId)
                     progress.Report(update);
@@ -105,7 +113,7 @@ public sealed class FileOperationService
         }
         try
         {
-            return await _ipc.MoveWithProgressAsync(
+            return await ipc.MoveWithProgressAsync(
                 sources, destination, operationId, conflictAction, ct).ConfigureAwait(false);
         }
         finally
@@ -290,11 +298,12 @@ public sealed class FileOperationService
         IProgress<ProgressUpdate>? progress = null,
         CancellationToken ct = default)
     {
+        var ipc = _ipc;
         var operationId = GenerateOperationId();
         IDisposable? subscription = null;
         if (progress != null)
         {
-            subscription = _ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
+            subscription = ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
             {
                 if (update.OperationId == operationId && update.OperationType == "cleanup")
                     progress.Report(update);
@@ -302,7 +311,7 @@ public sealed class FileOperationService
         }
         try
         {
-            return await _ipc.DiskCleanupAsync(directory, sizeThreshold, operationId, ct).ConfigureAwait(false);
+            return await ipc.DiskCleanupAsync(directory, sizeThreshold, operationId, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -317,11 +326,12 @@ public sealed class FileOperationService
         IProgress<ProgressUpdate>? progress = null,
         CancellationToken ct = default)
     {
+        var ipc = _ipc;
         var operationId = GenerateOperationId();
         IDisposable? subscription = null;
         if (progress != null)
         {
-            subscription = _ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
+            subscription = ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
             {
                 if (update.OperationId == operationId && update.OperationType == "duplicate-check")
                     progress.Report(update);
@@ -329,7 +339,7 @@ public sealed class FileOperationService
         }
         try
         {
-            return await _ipc.DuplicateCheckAsync(directory, minSize, partialHashBytes, operationId, ct).ConfigureAwait(false);
+            return await ipc.DuplicateCheckAsync(directory, minSize, partialHashBytes, operationId, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -349,20 +359,21 @@ public sealed class FileOperationService
 
     public Task<AppAboutInfo> GetAppAboutInfoAsync(CancellationToken ct = default) => _ipc.GetAppAboutInfoAsync(ct);
     public Task<UpdateInfo?> CheckForUpdateAsync(CancellationToken ct = default) => _ipc.CheckForUpdateAsync(ct);
-    
+
     public async Task InstallUpdateAsync(IProgress<long[]>? progress = null, CancellationToken ct = default)
     {
+        var ipc = _ipc;
         IDisposable? subscription = null;
         if (progress != null)
         {
-            subscription = _ipc.On<long[]>(Protocol.UpdateChunkEvent, update =>
+            subscription = ipc.On<long[]>(Protocol.UpdateChunkEvent, update =>
             {
                 progress.Report(update);
             });
         }
         try
         {
-            await _ipc.InstallUpdateAsync(ct).ConfigureAwait(false);
+            await ipc.InstallUpdateAsync(ct).ConfigureAwait(false);
         }
         finally
         {

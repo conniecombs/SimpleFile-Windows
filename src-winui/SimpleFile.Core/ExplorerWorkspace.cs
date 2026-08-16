@@ -131,8 +131,8 @@ public sealed class ExplorerWorkspace
         HomePath = await _backend.GetHomeDirAsync(cancellationToken).ConfigureAwait(false);
         await RefreshDrivesAsync(quiet: true, cancellationToken).ConfigureAwait(false);
 
-        await LoadSmartFoldersAsync().ConfigureAwait(false);
-        await LoadTagsAsync().ConfigureAwait(false);
+        await LoadSmartFoldersAsync(cancellationToken).ConfigureAwait(false);
+        await LoadTagsAsync(cancellationToken).ConfigureAwait(false);
         await LoadUiSettingsAsync(cancellationToken).ConfigureAwait(false);
 
         var startMode = UiSettings.NormalizeStartLocation(Settings.StartLocation);
@@ -199,6 +199,7 @@ public sealed class ExplorerWorkspace
         try
         {
             var drives = await _backend.ListDrivesAsync(cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
                 if (drives.Count > 0)
@@ -226,7 +227,7 @@ public sealed class ExplorerWorkspace
                 }
             }
         }
-        catch (Exception exception)
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             lock (_gate)
             {
@@ -366,6 +367,7 @@ public sealed class ExplorerWorkspace
                 return;
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             var refreshNetworkStatus = false;
             lock (_gate)
             {
@@ -378,7 +380,7 @@ public sealed class ExplorerWorkspace
 
             if (refreshNetworkStatus)
             {
-                await RefreshDrivesAsync(quiet: true, CancellationToken.None).ConfigureAwait(false);
+                await RefreshDrivesAsync(quiet: true, cancellationToken).ConfigureAwait(false);
             }
         }
         finally
@@ -645,7 +647,7 @@ public sealed class ExplorerWorkspace
             {
                 FileOpenUnsupported = true;
                 Pane(target).SelectedPath = path;
-                StatusMessage = "Opening files in an external app is not ported yet.";
+                StatusMessage = "No file operation service is available to open this file.";
             }
 
             RaiseChanged();
@@ -668,8 +670,10 @@ public sealed class ExplorerWorkspace
 
         await RefreshDrivesAsync(quiet: true, cancellationToken).ConfigureAwait(false);
 
-        await LoadSmartFoldersAsync().ConfigureAwait(false);
-        await LoadTagsAsync().ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await LoadSmartFoldersAsync(cancellationToken).ConfigureAwait(false);
+        await LoadTagsAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var updated = DrivePresentation.FindDriveForPath(pending.Path, _drives);
         if (updated is not null && DrivePresentation.IsAvailable(updated))
         {
@@ -937,32 +941,34 @@ public sealed class ExplorerWorkspace
 
     // --- Smart Folders ---
 
-    private async Task LoadSmartFoldersAsync()
+    private async Task LoadSmartFoldersAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var ops = RequireFileOps();
-            var folders = await ops.LoadSmartFoldersAsync().ConfigureAwait(false);
+            var folders = await ops.LoadSmartFoldersAsync(cancellationToken).ConfigureAwait(false);
             SmartFolders = [.. folders];
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             SmartFolders = [];
         }
     }
 
-    public async Task SaveSmartFolderAsync(SmartFolder folder)
+    public async Task SaveSmartFolderAsync(SmartFolder folder, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
-        var updated = await ops.SaveSmartFolderAsync(folder).ConfigureAwait(false);
+        var updated = await ops.SaveSmartFolderAsync(folder, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         SmartFolders = [.. updated];
         RaiseChanged();
     }
 
-    public async Task DeleteSmartFolderAsync(string id)
+    public async Task DeleteSmartFolderAsync(string id, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
-        var updated = await ops.DeleteSmartFolderAsync(id).ConfigureAwait(false);
+        var updated = await ops.DeleteSmartFolderAsync(id, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         SmartFolders = [.. updated];
         RaiseChanged();
     }
@@ -979,49 +985,53 @@ public sealed class ExplorerWorkspace
         new() { Name = "Purple", Color = "#a855f7" },
     ];
 
-    private async Task LoadTagsAsync()
+    private async Task LoadTagsAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var ops = RequireFileOps();
-            var tags = await ops.GetAllTagsAsync().ConfigureAwait(false);
+            var tags = await ops.GetAllTagsAsync(cancellationToken).ConfigureAwait(false);
             if (tags.Length == 0)
             {
                 foreach (var dt in DefaultTags)
                 {
-                    await ops.CreateTagAsync(dt.Name, dt.Color).ConfigureAwait(false);
+                    await ops.CreateTagAsync(dt.Name, dt.Color, cancellationToken).ConfigureAwait(false);
                 }
-                tags = await ops.GetAllTagsAsync().ConfigureAwait(false);
+                tags = await ops.GetAllTagsAsync(cancellationToken).ConfigureAwait(false);
             }
             AllTags = [.. tags];
-            FileTags = await ops.GetAllFileTagsAsync().ConfigureAwait(false);
+            FileTags = await ops.GetAllFileTagsAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (Exception exception) when (exception is not OperationCanceledException)
         {
             AllTags = [];
             FileTags = new();
         }
     }
 
-    public async Task SetColorLabelAsync(string[] paths, long tagId)
+    public async Task SetColorLabelAsync(string[] paths, long tagId, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
         foreach (var path in paths)
         {
-            await ops.SetTagsForPathAsync(path, [tagId]).ConfigureAwait(false);
+            await ops.SetTagsForPathAsync(path, [tagId], cancellationToken).ConfigureAwait(false);
         }
-        FileTags = await ops.GetAllFileTagsAsync().ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        FileTags = await ops.GetAllFileTagsAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         RaiseChanged();
     }
 
-    public async Task RemoveColorLabelAsync(string[] paths)
+    public async Task RemoveColorLabelAsync(string[] paths, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
         foreach (var path in paths)
         {
-            await ops.SetTagsForPathAsync(path, []).ConfigureAwait(false);
+            await ops.SetTagsForPathAsync(path, [], cancellationToken).ConfigureAwait(false);
         }
-        FileTags = await ops.GetAllFileTagsAsync().ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        FileTags = await ops.GetAllFileTagsAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         RaiseChanged();
     }
 
@@ -1044,52 +1054,57 @@ public sealed class ExplorerWorkspace
         => FileOps ?? throw new InvalidOperationException(
             "FileOperationService is required for file operations.");
 
-    public async Task<string> CreateFolderInCurrentPaneAsync(string name)
+    public async Task<string> CreateFolderInCurrentPaneAsync(string name, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
         var path = ActivePane == PaneId.Primary ? Primary.Path : Secondary.Path;
-        var result = await ops.CreateFolderAsync(path, name).ConfigureAwait(false);
-        await RefreshAsync().ConfigureAwait(false);
+        var result = await ops.CreateFolderAsync(path, name, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
-    public async Task<string> CreateFileInCurrentPaneAsync(string name)
+    public async Task<string> CreateFileInCurrentPaneAsync(string name, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
         var path = ActivePane == PaneId.Primary ? Primary.Path : Secondary.Path;
-        var result = await ops.CreateFileAsync(path, name).ConfigureAwait(false);
-        await RefreshAsync().ConfigureAwait(false);
+        var result = await ops.CreateFileAsync(path, name, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
-    public async Task TrashSelectedAsync(string[] selectedPaths)
+    public async Task TrashSelectedAsync(string[] selectedPaths, CancellationToken cancellationToken = default)
     {
-        await RequireFileOps().TrashAsync(selectedPaths).ConfigureAwait(false);
-        await RefreshAsync().ConfigureAwait(false);
+        await RequireFileOps().TrashAsync(selectedPaths, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task DeleteSelectedAsync(string path)
+    public async Task DeleteSelectedAsync(string path, CancellationToken cancellationToken = default)
     {
-        await RequireFileOps().DeleteAsync(path).ConfigureAwait(false);
-        await RefreshAsync().ConfigureAwait(false);
+        await RequireFileOps().DeleteAsync(path, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<string> RenameSelectedAsync(string path, string newName)
+    public async Task<string> RenameSelectedAsync(string path, string newName, CancellationToken cancellationToken = default)
     {
         var ops = RequireFileOps();
-        var result = await ops.RenameAsync(path, newName).ConfigureAwait(false);
-        await RefreshAsync().ConfigureAwait(false);
+        var result = await ops.RenameAsync(path, newName, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        await RefreshAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
 
-    public async Task OpenFileAsync(string path)
+    public async Task OpenFileAsync(string path, CancellationToken cancellationToken = default)
     {
-        await RequireFileOps().OpenFileAsync(path).ConfigureAwait(false);
+        await RequireFileOps().OpenFileAsync(path, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task RevealInFolderAsync(string path)
+    public async Task RevealInFolderAsync(string path, CancellationToken cancellationToken = default)
     {
-        await RequireFileOps().RevealInFolderAsync(path).ConfigureAwait(false);
+        await RequireFileOps().RevealInFolderAsync(path, cancellationToken).ConfigureAwait(false);
     }
 
     public void AddBookmark(string path)
@@ -1131,7 +1146,10 @@ public sealed class ExplorerWorkspace
         return Normalize(pane) == PaneId.Secondary ? _secondaryFilterQuery : _primaryFilterQuery;
     }
 
-    public async Task SaveCurrentSearchAsSmartFolderAsync(string name, SearchOptions options)
+    public async Task SaveCurrentSearchAsSmartFolderAsync(
+        string name,
+        SearchOptions options,
+        CancellationToken cancellationToken = default)
     {
         var folder = new SmartFolder
         {
@@ -1140,7 +1158,7 @@ public sealed class ExplorerWorkspace
             Icon = "search",
             SearchOptions = options,
         };
-        await SaveSmartFolderAsync(folder).ConfigureAwait(false);
+        await SaveSmartFolderAsync(folder, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task LoadTreeChildrenAsync(string path, CancellationToken cancellationToken = default)
@@ -1251,11 +1269,14 @@ public sealed class ExplorerWorkspace
         var navigationToken = state.NavigationToken;
         var folders = state.Entries.Where(item => item.IsDir).Take(32).ToList();
         var changed = false;
+        bool IsCurrent() =>
+            !cancellationToken.IsCancellationRequested
+            && navigationToken == state.NavigationToken
+            && PathRules.PathsEqual(state.Path, path);
+
         foreach (var entry in folders)
         {
-            if (cancellationToken.IsCancellationRequested
-                || navigationToken != state.NavigationToken
-                || !PathRules.PathsEqual(state.Path, path))
+            if (!IsCurrent())
             {
                 return;
             }
@@ -1264,13 +1285,25 @@ public sealed class ExplorerWorkspace
             {
                 if (includeSizes)
                 {
-                    entry.Size = await FileOps.CalculateFolderSizeAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                    var size = await FileOps.CalculateFolderSizeAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                    if (!IsCurrent())
+                    {
+                        return;
+                    }
+
+                    entry.Size = size;
                     changed = true;
                 }
 
                 if (includeItemCounts)
                 {
-                    entry.ItemCount = await FileOps.CountFolderItemsAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                    var itemCount = await FileOps.CountFolderItemsAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                    if (!IsCurrent())
+                    {
+                        return;
+                    }
+
+                    entry.ItemCount = itemCount;
                     changed = true;
                 }
             }
@@ -1280,7 +1313,7 @@ public sealed class ExplorerWorkspace
             }
         }
 
-        if (changed)
+        if (changed && IsCurrent())
         {
             RaiseChanged();
         }
@@ -1531,17 +1564,21 @@ public sealed class ExplorerWorkspace
         if (move)
         {
             var results = await FileOps.MoveAsync(sources, destination, conflictAction, ct: cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             Undo.PushMove(results, FileOps);
         }
         else
         {
             var results = await FileOps.CopyAsync(sources, destination, conflictAction, ct: cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
             Undo.PushCopy(results, FileOps);
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         await RefreshAsync(cancellationToken).ConfigureAwait(false);
         if (DualPaneEnabled)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await NavigatePaneAsync(OtherPane().Id, destination, HistoryMode.None, activate: false, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -1555,7 +1592,9 @@ public sealed class ExplorerWorkspace
         }
 
         var created = await FileOps.CreateFolderAsync(Active.Path, folderName, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         await FileOps.MoveAsync(sources, created, "keep-both", ct: cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         await RefreshAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -1567,6 +1606,7 @@ public sealed class ExplorerWorkspace
         }
 
         var listing = await _backend.ListDirectoryAsync(folderPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         var parent = PathRules.GetParentPath(folderPath);
         if (parent is null)
         {
@@ -1577,9 +1617,11 @@ public sealed class ExplorerWorkspace
         if (children.Length > 0)
         {
             await FileOps.MoveAsync(children, parent, "keep-both", ct: cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
         }
 
         await FileOps.DeleteAsync(folderPath, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
         await RefreshAsync(cancellationToken).ConfigureAwait(false);
     }
 

@@ -257,4 +257,12 @@ public static class ColumnLayoutHost
     {
         Shared = layout;
     }
+
+    public static void Detach(ColumnLayout layout)
+    {
+        if (ReferenceEquals(Shared, layout))
+        {
+            Shared = new ColumnLayout();
+        }
+    }
 }

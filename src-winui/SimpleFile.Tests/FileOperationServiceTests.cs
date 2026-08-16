@@ -33,6 +33,8 @@ public class FileOperationServiceTests
         public Func<string, CancellationToken, Task<ArchiveInfo>>? ListArchiveHandler { get; set; }
         public Func<string, string, CancellationToken, Task>? ExtractArchiveHandler { get; set; }
         public Func<string[], string, string, CancellationToken, Task>? CreateArchiveHandler { get; set; }
+        public Func<string, ulong?, string?, CancellationToken, Task<CleanupResult>>? DiskCleanupHandler { get; set; }
+        public Func<string, ulong?, ulong?, string?, CancellationToken, Task<DuplicateCheckResult>>? DuplicateCheckHandler { get; set; }
         private readonly Dictionary<string, List<object>> _handlers = new();
 
         public Task<string> CreateDirectoryAsync(string path, string name, CancellationToken ct = default)
@@ -95,6 +97,12 @@ public class FileOperationServiceTests
 
         public Task CreateArchiveAsync(string[] paths, string archivePath, string format, CancellationToken ct = default)
             => CreateArchiveHandler?.Invoke(paths, archivePath, format, ct) ?? throw new NotImplementedException();
+
+        public Task<CleanupResult> DiskCleanupAsync(string path, ulong? minSize, string? opId, CancellationToken ct = default)
+            => DiskCleanupHandler?.Invoke(path, minSize, opId, ct) ?? throw new NotImplementedException();
+
+        public Task<DuplicateCheckResult> DuplicateCheckAsync(string path, ulong? minSize, ulong? hashBytes, string? opId, CancellationToken ct = default)
+            => DuplicateCheckHandler?.Invoke(path, minSize, hashBytes, opId, ct) ?? throw new NotImplementedException();
 
         public int SubscriptionCount(string eventName)
             => _handlers.TryGetValue(eventName, out var handlers) ? handlers.Count : 0;
@@ -171,9 +179,7 @@ public class FileOperationServiceTests
         public Task<RarInstallPlan> PrepareRarInstallAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task DiscardRarInstallAsync(string confirmationToken, CancellationToken ct = default) => throw new NotImplementedException();
         public Task<string> InstallRarAsync(string confirmationToken, CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<CleanupResult> DiskCleanupAsync(string path, ulong? minSize, string? opId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task CancelDiskCleanupAsync(CancellationToken ct = default) => throw new NotImplementedException();
-        public Task<DuplicateCheckResult> DuplicateCheckAsync(string path, ulong? minSize, ulong? hashBytes, string? opId, CancellationToken ct = default) => throw new NotImplementedException();
         public Task CancelDuplicateCheckAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Tag[]> GetAllTagsAsync(CancellationToken ct = default) => throw new NotImplementedException();
         public Task<Tag> CreateTagAsync(string name, string color, CancellationToken ct = default) => throw new NotImplementedException();
@@ -242,6 +248,27 @@ public class FileOperationServiceTests
         var result = await service.CreateFileAsync(@"C:\test", "newfile.txt");
 
         Assert.Equal(@"C:\test\newfile.txt", result);
+    }
+
+    [Fact]
+    public async Task ReplaceIpc_UsesNewClientForFutureCalls()
+    {
+        var first = new StubIpc
+        {
+            CreateDirectoryHandler = (path, name, ct) => Task.FromResult($@"{path}\old-{name}"),
+        };
+        var second = new StubIpc
+        {
+            CreateDirectoryHandler = (path, name, ct) => Task.FromResult($@"{path}\new-{name}"),
+        };
+        var service = new FileOperationService(first);
+
+        var before = await service.CreateFolderAsync(@"C:\test", "folder");
+        service.ReplaceIpc(second);
+        var after = await service.CreateFolderAsync(@"C:\test", "folder");
+
+        Assert.Equal(@"C:\test\old-folder", before);
+        Assert.Equal(@"C:\test\new-folder", after);
     }
 
     [Fact]
@@ -355,6 +382,78 @@ public class FileOperationServiceTests
     }
 
     [Fact]
+    public async Task CopyAsync_KeepsOriginalClientWhenIpcIsReplaced()
+    {
+        var first = new StubIpc();
+        var second = new StubIpc();
+        var started = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finish = new TaskCompletionSource<TransferResult[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        first.CopyWithProgressHandler = (sources, dest, opId, conflictAction, ct) =>
+        {
+            started.SetResult(opId!);
+            return finish.Task;
+        };
+        second.CopyWithProgressHandler = (sources, dest, opId, conflictAction, ct) =>
+            throw new InvalidOperationException("In-flight copy switched IPC clients.");
+        var service = new FileOperationService(first);
+
+        var copy = service.CopyAsync(
+            ["a"],
+            "b",
+            "error",
+            new InlineProgress<ProgressUpdate>(_ => { }));
+        var operationId = await started.Task;
+        Assert.Equal(1, first.SubscriptionCount(Protocol.OperationProgressEvent));
+
+        service.ReplaceIpc(second);
+        finish.SetResult([]);
+        await copy;
+
+        Assert.Matches(@"^op_\d+_\d+$", operationId);
+        Assert.Equal(0, first.SubscriptionCount(Protocol.OperationProgressEvent));
+        Assert.Equal(0, second.SubscriptionCount(Protocol.OperationProgressEvent));
+    }
+
+    [Fact]
+    public async Task CopyAsync_CancellationDisposesProgressSubscription()
+    {
+        var seen = new List<ProgressUpdate>();
+        using var cts = new CancellationTokenSource();
+        var stub = new StubIpc();
+        stub.CopyWithProgressHandler = (sources, dest, opId, conflictAction, ct) =>
+        {
+            stub.Emit(
+                Protocol.OperationProgressEvent,
+                new ProgressUpdate
+                {
+                    OperationId = opId!,
+                    OperationType = "copy",
+                    Current = 1,
+                    Total = 3,
+                    Status = "running",
+                });
+            cts.Cancel();
+            return Task.FromCanceled<TransferResult[]>(ct);
+        };
+        var service = new FileOperationService(stub);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.CopyAsync(
+                ["a"],
+                "b",
+                "error",
+                new InlineProgress<ProgressUpdate>(seen.Add),
+                ct: cts.Token));
+
+        Assert.Single(seen);
+        Assert.Equal(0, stub.SubscriptionCount(Protocol.OperationProgressEvent));
+        stub.Emit(
+            Protocol.OperationProgressEvent,
+            new ProgressUpdate { OperationId = seen[0].OperationId, OperationType = "copy" });
+        Assert.Single(seen);
+    }
+
+    [Fact]
     public async Task CancelOperationAsync_CallsNamedIpcCancel()
     {
         string? cancelled = null;
@@ -397,6 +496,83 @@ public class FileOperationServiceTests
         Assert.Single(results);
         Assert.Single(batches);
         Assert.Equal([1], completes);
+    }
+
+    [Fact]
+    public async Task DiskCleanupAsync_CancellationDisposesProgressSubscription()
+    {
+        var seen = new List<ProgressUpdate>();
+        using var cts = new CancellationTokenSource();
+        var stub = new StubIpc();
+        stub.DiskCleanupHandler = (path, minSize, opId, ct) =>
+        {
+            stub.Emit(
+                Protocol.OperationProgressEvent,
+                new ProgressUpdate
+                {
+                    OperationId = opId!,
+                    OperationType = "cleanup",
+                    Current = 1,
+                    Total = 10,
+                    Status = "running",
+                });
+            cts.Cancel();
+            return Task.FromCanceled<CleanupResult>(ct);
+        };
+        var service = new FileOperationService(stub);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.DiskCleanupAsync(
+                @"C:\test",
+                1024,
+                new InlineProgress<ProgressUpdate>(seen.Add),
+                cts.Token));
+
+        Assert.Single(seen);
+        Assert.Equal(0, stub.SubscriptionCount(Protocol.OperationProgressEvent));
+        stub.Emit(
+            Protocol.OperationProgressEvent,
+            new ProgressUpdate { OperationId = seen[0].OperationId, OperationType = "cleanup" });
+        Assert.Single(seen);
+    }
+
+    [Fact]
+    public async Task DuplicateCheckAsync_CancellationDisposesProgressSubscription()
+    {
+        var seen = new List<ProgressUpdate>();
+        using var cts = new CancellationTokenSource();
+        var stub = new StubIpc();
+        stub.DuplicateCheckHandler = (path, minSize, hashBytes, opId, ct) =>
+        {
+            stub.Emit(
+                Protocol.OperationProgressEvent,
+                new ProgressUpdate
+                {
+                    OperationId = opId!,
+                    OperationType = "duplicate-check",
+                    Current = 1,
+                    Total = 10,
+                    Status = "running",
+                });
+            cts.Cancel();
+            return Task.FromCanceled<DuplicateCheckResult>(ct);
+        };
+        var service = new FileOperationService(stub);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.DuplicateCheckAsync(
+                @"C:\test",
+                1024,
+                null,
+                new InlineProgress<ProgressUpdate>(seen.Add),
+                cts.Token));
+
+        Assert.Single(seen);
+        Assert.Equal(0, stub.SubscriptionCount(Protocol.OperationProgressEvent));
+        stub.Emit(
+            Protocol.OperationProgressEvent,
+            new ProgressUpdate { OperationId = seen[0].OperationId, OperationType = "duplicate-check" });
+        Assert.Single(seen);
     }
 
     [Fact]

@@ -7,7 +7,7 @@ WinUI 3 feature slices so far:
 1. Drives, sidebar root, directory listing, breadcrumbs / path entry, primary-pane navigation, open folder in-app.
 2. Dual-pane navigation and **pane-local tabs** (this update).
 
-Svelte/Tauri remains the shipping UI. This document compares the live Svelte paths (`frontend/src/lib/app/core.ts`, `fileNavigationPrimary.ts`, `ContentShell.svelte`, `SidebarShell.svelte`, `coreFileManager.ts`) to `src-winui`.
+This document originally compared the Svelte paths (`frontend/src/lib/app/core.ts`, `fileNavigationPrimary.ts`, `ContentShell.svelte`, `SidebarShell.svelte`, `coreFileManager.ts`) to `src-winui`.
 
 Sources of truth for this slice:
 
@@ -75,16 +75,14 @@ Sources of truth for this slice:
 
 ## Gaps (remaining)
 
-These are intentional. They stay on Svelte until a later PR.
+These are intentional backlog items for later WinUI polishing.
 
 | Gap | Svelte today | Why WinUI does not match |
 | --- | --- | --- |
-| Archive-as-folder | `isArchiveFile` then `navigateTo` | Archive VFS still Tauri-only |
 | Thumbnails | Lazy thumbs | Out of slice |
 | Grid / photo folder view | `isGridView`, `applyContextualFolderView` | List only |
 | Rubber-band marquee | `fileNavigationSelection.ts` | Core helper only; no visible drag-selection surface |
 | Theme toggle / light theme | `data-theme` | Settings theme + ThemeDictionaries |
-| Preview pane, search, transfers, tags, context menus | Rest of the app | Out of slice |
 | UNC breadcrumb first segment | Svelte accumulates `server` not `\\server` | **Matched on purpose** (same quirk) |
 | Breadcrumb path after drive | `C:\` + `\Users` → `C:\\Users` | **Matched on purpose** (Win32 still opens the folder) |
 | Modified-date exact `Intl` string | `DateTimeFormat` locale options | `DateTimeOffset.ToString("g")` — same instant, locale format may differ slightly |
@@ -93,9 +91,7 @@ These are intentional. They stay on Svelte until a later PR.
 
 ## Blocked on later IPC methods
 
-Do not invent client-side substitutes for these until the service implements them:
-
-- archive listing path
+No navigation gaps are currently blocked on later IPC methods.
 
 ## How to verify
 

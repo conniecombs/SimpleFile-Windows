@@ -175,7 +175,43 @@ public class DesktopPolishTests
         Assert.True(ArchivePaths.IsArchiveFile("bundle.rar"));
         Assert.False(ArchivePaths.IsArchiveFile("notes.txt"));
         Assert.Equal("pack", ArchivePaths.ExtractFolderName("pack.tar.gz"));
+        Assert.Equal("pack", ArchivePaths.ExtractFolderName(@"C:\downloads\pack.tar.gz"));
+        Assert.Equal("backup", ArchivePaths.ExtractFolderName("backup.tgz"));
+        Assert.Equal("report.v1", ArchivePaths.ExtractFolderName("report.v1.txt"));
         Assert.Equal("bundle", ArchivePaths.ExtractFolderName("bundle.zip"));
+        Assert.Equal("report.v1.tar.gz", ArchivePaths.WithArchiveExtension("report.v1.zip", "tar.gz"));
+        Assert.Equal("report.v1.rar", ArchivePaths.WithArchiveExtension("report.v1", "rar"));
+        Assert.Equal("Archive.zip", ArchivePaths.WithArchiveExtension("", "zip"));
+    }
+
+    [Fact]
+    public void SearchOptionsFactory_CreatesRunCopyWithoutMutatingTemplate()
+    {
+        var template = new SearchOptions
+        {
+            Query = "invoice",
+            SearchPath = "",
+            CaseSensitive = true,
+            IncludeHidden = true,
+            FileTypes = ["pdf", "docx"],
+            MaxResults = 200,
+            MaxDepth = 4,
+            SearchId = "saved-template",
+            ContentSearch = true,
+            MinSize = 1024,
+            MaxSize = 4096,
+            DateAfter = "2026-01-01",
+            DateBefore = "2026-12-31",
+        };
+
+        var run = SearchOptionsFactory.ForRun(template, "run-42", @"C:\Work");
+
+        Assert.Equal(@"C:\Work", run.SearchPath);
+        Assert.Equal("run-42", run.SearchId);
+        Assert.Equal("saved-template", template.SearchId);
+        Assert.Equal("", template.SearchPath);
+        Assert.NotSame(template.FileTypes, run.FileTypes);
+        Assert.Equal(template.FileTypes, run.FileTypes);
     }
 
     [Fact]
@@ -209,6 +245,43 @@ public class DesktopPolishTests
         await stack.RedoAsync();
         Assert.Equal(["undo", "redo"], log);
         Assert.Equal("Copy 1 item(s)", stack.History.Single());
+    }
+
+    [Fact]
+    public async Task UndoStack_UndoCancellationKeepsEntry()
+    {
+        var stack = new UndoStack();
+        stack.Push(new UndoEntry
+        {
+            Description = "Copy 1 item(s)",
+            Undo = _ => throw new OperationCanceledException(),
+            Redo = _ => Task.CompletedTask,
+        });
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => stack.UndoAsync());
+
+        Assert.True(stack.CanUndo);
+        Assert.False(stack.CanRedo);
+        Assert.Equal("Copy 1 item(s)", stack.NextUndoDescription);
+    }
+
+    [Fact]
+    public async Task UndoStack_RedoFailureKeepsEntry()
+    {
+        var stack = new UndoStack();
+        stack.Push(new UndoEntry
+        {
+            Description = "Move 1 item(s)",
+            Undo = _ => Task.CompletedTask,
+            Redo = _ => throw new InvalidOperationException("redo failed"),
+        });
+
+        await stack.UndoAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => stack.RedoAsync());
+
+        Assert.False(stack.CanUndo);
+        Assert.True(stack.CanRedo);
+        Assert.Equal("Move 1 item(s)", stack.NextRedoDescription);
     }
 
     [Fact]

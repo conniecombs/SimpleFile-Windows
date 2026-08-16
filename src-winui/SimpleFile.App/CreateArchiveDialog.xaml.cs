@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.UI.Xaml.Controls;
+using SimpleFile.Core;
 using SimpleFile.Ipc;
 
 namespace SimpleFile.App;
@@ -50,12 +51,7 @@ public sealed partial class CreateArchiveDialog : ContentDialog
             if (!_isInitialized && _selectedNames.Length > 0)
             {
                 string baseName = _selectedNames.Length == 1 ? _selectedNames[0] : "Archive";
-                // Strip existing extension if any
-                int dotIndex = baseName.LastIndexOf('.');
-                if (dotIndex > 0)
-                    baseName = baseName.Substring(0, dotIndex);
-                
-                NameInput.Text = $"{baseName}.{ArchiveFormat}";
+                NameInput.Text = ArchivePaths.WithArchiveExtension(ArchivePaths.ExtractFolderName(baseName), ArchiveFormat);
                 _isInitialized = true;
             }
         }
@@ -73,16 +69,6 @@ public sealed partial class CreateArchiveDialog : ContentDialog
     {
         if (!_isInitialized) return;
         
-        string currentName = NameInput.Text;
-        string newFormat = ArchiveFormat;
-        
-        // Remove old extension
-        int dotIndex = currentName.IndexOf('.');
-        if (dotIndex > 0)
-        {
-            currentName = currentName.Substring(0, dotIndex);
-        }
-        
-        NameInput.Text = $"{currentName}.{newFormat}";
+        NameInput.Text = ArchivePaths.WithArchiveExtension(NameInput.Text, ArchiveFormat);
     }
 }

@@ -66,31 +66,31 @@ public sealed partial class MainWindow
     private async void OnUndoAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await UndoLastAsync();
+        await RunUiActionAsync("Undo", UndoLastAsync);
     }
 
     private async void OnRedoAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await RedoLastAsync();
+        await RunUiActionAsync("Redo", RedoLastAsync);
     }
 
     private async void OnKeyboardHelpAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await ShowKeyboardHelpAsync();
+        await RunUiActionAsync("Keyboard shortcuts", ShowKeyboardHelpAsync);
     }
 
     private async void OnCopyToOtherPaneAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await CopyOrMoveToOtherPaneAsync(move: false);
+        await RunUiActionAsync("Copy to other pane", () => CopyOrMoveToOtherPaneAsync(move: false));
     }
 
     private async void OnMoveToOtherPaneAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        await CopyOrMoveToOtherPaneAsync(move: true);
+        await RunUiActionAsync("Move to other pane", () => CopyOrMoveToOtherPaneAsync(move: true));
     }
 
     private void OnQuickFilterChanged(object sender, TextChangedEventArgs e)
@@ -210,7 +210,7 @@ public sealed partial class MainWindow
             if (CommandPaletteList.SelectedItem is AppCommand command)
             {
                 CloseCommandPalette();
-                await RunAppCommandAsync(command.Id);
+                await RunUiActionAsync("Command palette", () => RunAppCommandAsync(command.Id));
             }
         }
     }
@@ -220,7 +220,7 @@ public sealed partial class MainWindow
         if (e.ClickedItem is AppCommand command)
         {
             CloseCommandPalette();
-            await RunAppCommandAsync(command.Id);
+            await RunUiActionAsync("Command palette", () => RunAppCommandAsync(command.Id));
         }
     }
 
@@ -288,10 +288,10 @@ public sealed partial class MainWindow
                 await PromptAndCreateFile(_workspace.ActivePane);
                 break;
             case "create-archive":
-                OnCreateArchiveClicked(this, new RoutedEventArgs());
+                await CreateArchiveAsync();
                 break;
             case "terminal":
-                OnOpenTerminalClicked(this, new RoutedEventArgs());
+                await OpenTerminalInActivePathAsync();
                 break;
             case "preview":
                 OnTogglePreview(this, new RoutedEventArgs());
@@ -309,19 +309,19 @@ public sealed partial class MainWindow
                 await ShowPropertiesAsync();
                 break;
             case "color-label":
-                OnSetColorLabelClicked(this, new RoutedEventArgs());
+                await SetColorLabelAsync();
                 break;
             case "folder-metrics":
                 await ShowFolderMetricsAsync();
                 break;
             case "disk-cleanup":
-                OnDiskCleanupClicked(this, new RoutedEventArgs());
+                await ShowDiskCleanupAsync();
                 break;
             case "duplicate-checker":
-                OnDuplicateCheckerClicked(this, new RoutedEventArgs());
+                await ShowDuplicateCheckerAsync();
                 break;
             case "settings":
-                OnSettingsClicked(this, new RoutedEventArgs());
+                await ShowSettingsAsync();
                 break;
             case "keyboard-help":
                 await ShowKeyboardHelpAsync();
@@ -463,7 +463,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        await RunContextCommandAsync(id);
+        await RunUiActionAsync("Context menu", () => RunContextCommandAsync(id));
     }
 
     private async Task RunContextCommandAsync(string id)
@@ -474,31 +474,31 @@ public sealed partial class MainWindow
                 await OpenSelectedFile(ActiveFileList, _workspace?.ActivePane ?? PaneId.Primary);
                 break;
             case "ctx-open-with":
-                OnPreviewOpenWithClick(this, new RoutedEventArgs());
+                await OpenSelectedWithAsync();
                 break;
             case "ctx-preview":
                 await ShowQuickLookAsync();
                 break;
             case "ctx-compare":
-                OnPreviewCompareClick(this, new RoutedEventArgs());
+                await CompareSelectedFilesAsync();
                 break;
             case "ctx-terminal":
-                OnOpenTerminalClicked(this, new RoutedEventArgs());
+                await OpenTerminalInActivePathAsync();
                 break;
             case "ctx-powershell-admin":
                 await OpenPowershellAdminAsync();
                 break;
             case "ctx-color-label":
-                OnSetColorLabelClicked(this, new RoutedEventArgs());
+                await SetColorLabelAsync();
                 break;
             case "ctx-folder-metrics":
                 await ShowFolderMetricsAsync();
                 break;
             case "ctx-cleanup":
-                OnDiskCleanupClicked(this, new RoutedEventArgs());
+                await ShowDiskCleanupAsync();
                 break;
             case "ctx-duplicates":
-                OnDuplicateCheckerClicked(this, new RoutedEventArgs());
+                await ShowDuplicateCheckerAsync();
                 break;
             case "ctx-rename":
                 await PromptAndRename();
@@ -528,7 +528,7 @@ public sealed partial class MainWindow
                 await UnpackSelectedFolderAsync();
                 break;
             case "ctx-compress":
-                OnCreateArchiveClicked(this, new RoutedEventArgs());
+                await CreateArchiveAsync();
                 break;
             case "ctx-extract":
             case "ctx-extract-folder":
@@ -615,14 +615,14 @@ public sealed partial class MainWindow
         if (e.Key == VirtualKey.Back)
         {
             e.Handled = true;
-            await _workspace.GoUpAsync();
+            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync());
             return;
         }
 
         if (e.Key == VirtualKey.Space)
         {
             e.Handled = true;
-            await ShowQuickLookAsync();
+            await RunUiActionAsync("Quick Look", ShowQuickLookAsync);
         }
     }
 
@@ -661,15 +661,23 @@ public sealed partial class MainWindow
             return;
         }
 
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
         var body = new StackPanel { Spacing = 8, Width = 480 };
         body.Children.Add(new TextBlock { Text = row.Name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         body.Children.Add(new TextBlock { Text = row.Path, TextWrapping = TextWrapping.Wrap, Opacity = 0.8 });
         body.Children.Add(new TextBlock { Text = $"{row.TypeText}  {row.SizeText}  {row.ModifiedText}" });
-        if (_workspace?.FileOps is not null && !row.IsDir)
+        if (fileOps is not null && !row.IsDir)
         {
+            var utilityCts = BeginUtilityOperation();
             try
             {
-                var preview = await _workspace.FileOps.ReadFilePreviewAsync(row.Path, 80_000);
+                var preview = await fileOps.ReadFilePreviewAsync(row.Path, 80_000, utilityCts.Token);
+                if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+                {
+                    return;
+                }
+
                 if (preview.FileType == "text" && preview.Content is not null)
                 {
                     body.Children.Add(new TextBox
@@ -687,10 +695,23 @@ public sealed partial class MainWindow
                     body.Children.Add(new TextBlock { Text = preview.Content is null ? "No inline preview." : preview.FileType });
                 }
             }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
                 body.Children.Add(new TextBlock { Text = exception.Message });
             }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
+            }
+        }
+
+        if (workspace is not null && !ReferenceEquals(_workspace, workspace))
+        {
+            return;
         }
 
         var dialog = new ContentDialog
@@ -705,7 +726,9 @@ public sealed partial class MainWindow
 
     private async Task ShowPropertiesAsync()
     {
-        if (_workspace?.FileOps is null || ActiveSelectedRow is not { } row)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null || ActiveSelectedRow is not { } row)
         {
             return;
         }
@@ -718,9 +741,15 @@ public sealed partial class MainWindow
             $"Size: {row.SizeText}",
             $"Modified: {row.ModifiedText}",
         };
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            var info = await _workspace.FileOps.GetEntryInfoAsync(row.Path);
+            var info = await fileOps.GetEntryInfoAsync(row.Path, utilityCts.Token);
+            if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             lines.Add($"Directory: {info.IsDir}");
             if (!string.IsNullOrEmpty(info.Permissions))
             {
@@ -732,9 +761,22 @@ public sealed partial class MainWindow
                 lines.Add($"Link: {info.SymlinkTarget}");
             }
         }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             lines.Add(exception.Message);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
+
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
         }
 
         var dialog = new ContentDialog
@@ -749,17 +791,26 @@ public sealed partial class MainWindow
 
     private async Task ShowFolderMetricsAsync()
     {
-        if (_workspace?.FileOps is null)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null)
         {
             return;
         }
 
         var folder = ActiveSelectedRows.FirstOrDefault(row => row.IsDir);
-        var path = folder?.Path ?? _workspace.Active.Path;
+        var path = folder?.Path ?? workspace.Active.Path;
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            var size = await _workspace.FileOps.CalculateFolderSizeAsync(path);
-            var count = await _workspace.FileOps.CountFolderItemsAsync(path);
+            StatusText.Text = $"Calculating metrics for {path}...";
+            var size = await fileOps.CalculateFolderSizeAsync(path, utilityCts.Token);
+            var count = await fileOps.CountFolderItemsAsync(path, utilityCts.Token);
+            if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+            {
+                return;
+            }
+
             var dialog = new ContentDialog
             {
                 Title = "Folder metrics",
@@ -769,9 +820,16 @@ public sealed partial class MainWindow
             };
             await dialog.ShowAsync();
         }
+        catch (OperationCanceledException)
+        {
+        }
         catch (Exception exception)
         {
             ShowMessage("Folder metrics", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 
@@ -793,44 +851,73 @@ public sealed partial class MainWindow
 
     private async Task RunGitAsync(bool pull)
     {
-        if (_workspace?.FileOps is null)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null)
         {
             return;
         }
 
+        var path = workspace.Active.Path;
+        var utilityCts = BeginUtilityOperation();
         try
         {
             if (pull)
             {
-                await _workspace.FileOps.GitPullAsync(_workspace.Active.Path);
-                ShowMessage("Git", "Pull completed.", InfoBarSeverity.Success);
+                StatusText.Text = $"Pulling Git changes in {path}...";
+                await fileOps.GitPullAsync(path, utilityCts.Token);
+                if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+                {
+                    ShowMessage("Git", "Pull completed.", InfoBarSeverity.Success);
+                }
             }
             else
             {
-                await _workspace.FileOps.GitPushAsync(_workspace.Active.Path);
-                ShowMessage("Git", "Push completed.", InfoBarSeverity.Success);
+                StatusText.Text = $"Pushing Git changes from {path}...";
+                await fileOps.GitPushAsync(path, utilityCts.Token);
+                if (ReferenceEquals(_workspace, workspace) && !utilityCts.IsCancellationRequested)
+                {
+                    ShowMessage("Git", "Push completed.", InfoBarSeverity.Success);
+                }
             }
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage(pull ? "Git pull" : "Git push", exception.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
+        }
     }
 
     private async Task OpenPowershellAdminAsync()
     {
-        if (_workspace?.FileOps is null)
+        var workspace = _workspace;
+        var fileOps = workspace?.FileOps;
+        if (workspace is null || fileOps is null)
         {
             return;
         }
 
+        var utilityCts = BeginUtilityOperation();
         try
         {
-            await _workspace.FileOps.OpenPowershellAdminAsync(_workspace.Active.Path);
+            await fileOps.OpenPowershellAdminAsync(workspace.Active.Path, utilityCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
         }
         catch (Exception exception)
         {
             ShowMessage("PowerShell", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            FinishUtilityOperation(utilityCts);
         }
     }
 }

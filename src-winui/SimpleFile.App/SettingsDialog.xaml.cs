@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -11,6 +12,7 @@ namespace SimpleFile.App;
 
 public sealed partial class SettingsDialog : ContentDialog
 {
+    private const string RepositoryUrl = "https://github.com/conniecombs/SimpleFile-Windows";
     private FileOperationService? _fileOps;
 
     public SettingsDialog()
@@ -21,14 +23,9 @@ public sealed partial class SettingsDialog : ContentDialog
 
     private void OnCategorySelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        AppearancePanel.Visibility = Visibility.Collapsed;
-        NavigationPanel.Visibility = Visibility.Collapsed;
-        BehaviorPanel.Visibility = Visibility.Collapsed;
-        ToolsPanel.Visibility = Visibility.Collapsed;
-        UpdatesPanel.Visibility = Visibility.Collapsed;
-        AboutPanel.Visibility = Visibility.Collapsed;
+        HideCategoryPanels();
 
-        var selected = (ListViewItem)CategoryList.SelectedItem;
+        var selected = CategoryList.SelectedItem as ListViewItem;
         if (selected == null) return;
 
         switch (selected.Content.ToString())
@@ -45,13 +42,37 @@ public sealed partial class SettingsDialog : ContentDialog
     private void OnSearchTextChanged(object sender, TextChangedEventArgs e)
     {
         var query = SearchBox.Text.Trim();
+        ListViewItem? firstVisible = null;
         foreach (var item in CategoryList.Items.OfType<ListViewItem>())
         {
             var label = item.Content?.ToString() ?? "";
-            item.Visibility = query.Length == 0 || label.Contains(query, StringComparison.OrdinalIgnoreCase)
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            var visible = query.Length == 0 || label.Contains(query, StringComparison.OrdinalIgnoreCase);
+            item.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            if (visible && firstVisible is null)
+            {
+                firstVisible = item;
+            }
         }
+
+        if (CategoryList.SelectedItem is not ListViewItem selected
+            || selected.Visibility != Visibility.Visible)
+        {
+            CategoryList.SelectedItem = firstVisible;
+            if (firstVisible is null)
+            {
+                HideCategoryPanels();
+            }
+        }
+    }
+
+    private void HideCategoryPanels()
+    {
+        AppearancePanel.Visibility = Visibility.Collapsed;
+        NavigationPanel.Visibility = Visibility.Collapsed;
+        BehaviorPanel.Visibility = Visibility.Collapsed;
+        ToolsPanel.Visibility = Visibility.Collapsed;
+        UpdatesPanel.Visibility = Visibility.Collapsed;
+        AboutPanel.Visibility = Visibility.Collapsed;
     }
 
     public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "System";
@@ -74,73 +95,35 @@ public sealed partial class SettingsDialog : ContentDialog
         settings.ShowFolderSizes = ShowFolderSizesSwitch.IsOn;
     }
 
-    public async Task LoadSettingsAsync(FileOperationService fileOps)
+    public async Task LoadSettingsAsync(FileOperationService fileOps, CancellationToken cancellationToken = default)
     {
         _fileOps = fileOps;
+        var defaults = UiSettings.CreateDefault();
 
-        var theme = await fileOps.GetSettingAsync("theme").ConfigureAwait(true) ?? "System";
-        ThemeComboBox.SelectedIndex = theme.Equals("Light", StringComparison.OrdinalIgnoreCase)
-            ? 1
-            : theme.Equals("Dark", StringComparison.OrdinalIgnoreCase)
-                ? 2
-                : 0;
+        SelectTheme(await GetSettingOrDefaultAsync(fileOps, "theme", defaults.Theme, cancellationToken).ConfigureAwait(true));
 
-        SelectColumnPreset(await fileOps.GetSettingAsync("columnPreset").ConfigureAwait(true) ?? "default");
+        SelectColumnPreset(await GetSettingOrDefaultAsync(fileOps, "columnPreset", defaults.ColumnPreset, cancellationToken).ConfigureAwait(true) ?? defaults.ColumnPreset);
 
-        var showHidden = await fileOps.GetSettingAsync("showHidden").ConfigureAwait(true);
-        ShowHiddenSwitch.IsOn = showHidden == "true";
+        ShowHiddenSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "showHidden", defaults.ShowHidden, cancellationToken).ConfigureAwait(true);
 
-        var useTrash = await fileOps.GetSettingAsync("useTrash").ConfigureAwait(true);
-        UseTrashSwitch.IsOn = useTrash != "false";
+        UseTrashSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "useTrash", defaults.UseTrash, cancellationToken).ConfigureAwait(true);
 
-        var confirmDelete = await fileOps.GetSettingAsync("confirmDelete").ConfigureAwait(true);
-        ConfirmDeleteSwitch.IsOn = confirmDelete != "false";
+        ConfirmDeleteSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "confirmDelete", defaults.ConfirmDelete, cancellationToken).ConfigureAwait(true);
 
-        var startLoc = UiSettings.NormalizeStartLocation(await fileOps.GetSettingAsync("startLocation").ConfigureAwait(true));
+        var startLoc = UiSettings.NormalizeStartLocation(
+            await GetSettingOrDefaultAsync(fileOps, "startLocation", defaults.StartLocation, cancellationToken).ConfigureAwait(true));
         StartLocationComboBox.SelectedIndex = startLoc == "custom" ? 2 : (startLoc == "last" ? 1 : 0);
 
-        CustomPathBox.Text = await fileOps.GetSettingAsync("customPath").ConfigureAwait(true) ?? "";
+        CustomPathBox.Text = await GetSettingOrDefaultAsync(fileOps, "customPath", defaults.CustomPath, cancellationToken).ConfigureAwait(true) ?? "";
 
-        var openInNewTab = await fileOps.GetSettingAsync("openInNewTab").ConfigureAwait(true);
-        OpenInNewTabSwitch.IsOn = openInNewTab == "true";
+        OpenInNewTabSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "openInNewTab", defaults.OpenInNewTab, cancellationToken).ConfigureAwait(true);
 
-        var enableGit = await fileOps.GetSettingAsync("enableGitIntegration").ConfigureAwait(true);
-        EnableGitSwitch.IsOn = enableGit != "false";
-        var showSizes = await fileOps.GetSettingAsync("showFolderSizes").ConfigureAwait(true);
-        ShowFolderSizesSwitch.IsOn = showSizes == "true";
+        EnableGitSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "enableGitIntegration", defaults.EnableGitIntegration, cancellationToken).ConfigureAwait(true);
+        ShowFolderSizesSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "showFolderSizes", defaults.ShowFolderSizes, cancellationToken).ConfigureAwait(true);
 
-        // Tools
-        await CheckRarInstalledAsync().ConfigureAwait(true);
+        await CheckRarInstalledAsync(cancellationToken).ConfigureAwait(true);
 
-        // Updates
-        var version = await fileOps.GetAppVersionAsync().ConfigureAwait(true);
-        CurrentVersionText.Text = $"Current Version: {version}";
-        AboutVersionText.Text = $"Version {version}";
-    }
-
-    public async Task SaveSettingsAsync(FileOperationService fileOps)
-    {
-        var theme = ((ComboBoxItem)ThemeComboBox.SelectedItem).Tag.ToString()!;
-        var columnPreset = ColumnPreset;
-        var showHidden = ShowHiddenSwitch.IsOn ? "true" : "false";
-        var useTrash = UseTrashSwitch.IsOn ? "true" : "false";
-        var confirmDelete = ConfirmDeleteSwitch.IsOn ? "true" : "false";
-        var startLoc = ((ComboBoxItem)StartLocationComboBox.SelectedItem).Tag.ToString()!;
-        var customPath = CustomPathBox.Text;
-        var openInNewTab = OpenInNewTabSwitch.IsOn ? "true" : "false";
-        var enableGit = EnableGitSwitch.IsOn ? "true" : "false";
-        var showFolderSizes = ShowFolderSizesSwitch.IsOn ? "true" : "false";
-
-        await fileOps.SetSettingAsync("theme", theme).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("columnPreset", columnPreset).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("showHidden", showHidden).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("useTrash", useTrash).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("confirmDelete", confirmDelete).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("startLocation", startLoc).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("customPath", customPath).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("openInNewTab", openInNewTab).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("enableGitIntegration", enableGit).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("showFolderSizes", showFolderSizes).ConfigureAwait(false);
+        await LoadVersionAsync(fileOps, cancellationToken).ConfigureAwait(true);
     }
 
     private void SelectColumnPreset(string preset)
@@ -152,12 +135,82 @@ public sealed partial class SettingsDialog : ContentDialog
         ColumnPresetComboBox.SelectedItem = selected ?? ColumnPresetComboBox.Items[0];
     }
 
-    private async Task CheckRarInstalledAsync()
+    private void SelectTheme(string? theme)
+    {
+        ThemeComboBox.SelectedIndex = UiSettings.NormalizeTheme(theme) switch
+        {
+            "light" => 1,
+            "dark" => 2,
+            _ => 0,
+        };
+    }
+
+    private static async Task<string?> GetSettingOrDefaultAsync(
+        FileOperationService fileOps,
+        string key,
+        string? fallback,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await fileOps.GetSettingAsync(key, cancellationToken).ConfigureAwait(true) ?? fallback;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return fallback;
+        }
+    }
+
+    private static async Task<bool> ReadBoolSettingAsync(
+        FileOperationService fileOps,
+        string key,
+        bool fallback,
+        CancellationToken cancellationToken)
+    {
+        var value = await GetSettingOrDefaultAsync(fileOps, key, fallback ? "true" : "false", cancellationToken).ConfigureAwait(true);
+        if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return fallback;
+    }
+
+    private async Task LoadVersionAsync(FileOperationService fileOps, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var version = await fileOps.GetAppVersionAsync(cancellationToken).ConfigureAwait(true);
+            CurrentVersionText.Text = $"Current Version: {version}";
+            AboutVersionText.Text = $"Version {version}";
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            CurrentVersionText.Text = "Current Version: unavailable";
+            AboutVersionText.Text = "Version unavailable";
+            UpdateStatusText.Text = $"Unable to load version: {exception.Message}";
+        }
+    }
+
+    private async Task CheckRarInstalledAsync(CancellationToken cancellationToken = default)
     {
         if (_fileOps == null) return;
-        var installed = await _fileOps.CheckRarInstalledAsync().ConfigureAwait(true);
-        RarStatusText.Text = installed ? "Installed" : "Not Installed";
-        InstallRarButton.IsEnabled = !installed;
+        try
+        {
+            var installed = await _fileOps.CheckRarInstalledAsync(cancellationToken).ConfigureAwait(true);
+            RarStatusText.Text = installed ? "Installed" : "Not installed";
+            InstallRarButton.IsEnabled = !installed;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            RarStatusText.Text = $"Unable to check RAR support: {exception.Message}";
+            InstallRarButton.IsEnabled = true;
+        }
     }
 
     private async void OnInstallRarClicked(object sender, RoutedEventArgs e)
@@ -166,33 +219,46 @@ public sealed partial class SettingsDialog : ContentDialog
         InstallRarButton.IsEnabled = false;
         RarStatusText.Text = "Preparing install...";
 
-        var prepResult = await _fileOps.PrepareRarInstallAsync().ConfigureAwait(true);
-        if (prepResult != null)
+        try
         {
-            var dialog = new ContentDialog
+            var prepResult = await _fileOps.PrepareRarInstallAsync().ConfigureAwait(true);
+            if (prepResult != null)
             {
-                Title = "Install RAR Support",
-                Content = "This will download and install third-party components to support RAR extraction. Do you agree to their terms?",
-                PrimaryButtonText = "Install",
-                CloseButtonText = "Cancel",
-                XamlRoot = this.XamlRoot
-            };
+                var dialog = new ContentDialog
+                {
+                    Title = "Install RAR Support",
+                    Content = "This will download and install third-party components to support RAR extraction. Do you agree to their terms?",
+                    PrimaryButtonText = "Install",
+                    CloseButtonText = "Cancel",
+                    XamlRoot = this.XamlRoot
+                };
 
-            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-            {
-                RarStatusText.Text = "Installing...";
-                await _fileOps.InstallRarAsync(prepResult.ConfirmationToken).ConfigureAwait(true);
-                await CheckRarInstalledAsync().ConfigureAwait(true);
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    RarStatusText.Text = "Installing...";
+                    await _fileOps.InstallRarAsync(prepResult.ConfirmationToken).ConfigureAwait(true);
+                    await CheckRarInstalledAsync().ConfigureAwait(true);
+                }
+                else
+                {
+                    await _fileOps.DiscardRarInstallAsync(prepResult.ConfirmationToken).ConfigureAwait(true);
+                    await CheckRarInstalledAsync().ConfigureAwait(true);
+                }
             }
             else
             {
-                await _fileOps.DiscardRarInstallAsync(prepResult.ConfirmationToken).ConfigureAwait(true);
-                await CheckRarInstalledAsync().ConfigureAwait(true);
+                RarStatusText.Text = "Failed to prepare installation.";
+                InstallRarButton.IsEnabled = true;
             }
         }
-        else
+        catch (OperationCanceledException)
         {
-            RarStatusText.Text = "Failed to prepare installation.";
+            RarStatusText.Text = "Installation cancelled.";
+            InstallRarButton.IsEnabled = true;
+        }
+        catch (Exception exception)
+        {
+            RarStatusText.Text = exception.Message;
             InstallRarButton.IsEnabled = true;
         }
     }
@@ -201,34 +267,133 @@ public sealed partial class SettingsDialog : ContentDialog
     {
         if (_fileOps == null) return;
         CheckUpdatesButton.IsEnabled = false;
-        var hasUpdate = await _fileOps.CheckForUpdateAsync().ConfigureAwait(true);
-        if (hasUpdate != null)
+        InstallUpdateButton.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Text = "Checking...";
+        try
         {
-            InstallUpdateButton.Visibility = Visibility.Visible;
+            var update = await _fileOps.CheckForUpdateAsync().ConfigureAwait(true);
+            if (update != null)
+            {
+                InstallUpdateButton.Visibility = Visibility.Visible;
+                InstallUpdateButton.IsEnabled = true;
+                UpdateStatusText.Text = string.IsNullOrWhiteSpace(update.Version)
+                    ? "Update available."
+                    : $"Update available: {update.Version}";
+            }
+            else
+            {
+                UpdateStatusText.Text = "No updates available.";
+            }
         }
-        CheckUpdatesButton.IsEnabled = true;
+        catch (OperationCanceledException)
+        {
+            UpdateStatusText.Text = "Update check cancelled.";
+        }
+        catch (Exception exception)
+        {
+            UpdateStatusText.Text = exception.Message;
+        }
+        finally
+        {
+            CheckUpdatesButton.IsEnabled = true;
+        }
     }
 
     private async void OnInstallUpdateClicked(object sender, RoutedEventArgs e)
     {
         if (_fileOps == null) return;
         InstallUpdateButton.IsEnabled = false;
-        await _fileOps.InstallUpdateAsync().ConfigureAwait(true);
+        UpdateStatusText.Text = "Installing update...";
+        try
+        {
+            await _fileOps.InstallUpdateAsync().ConfigureAwait(true);
+            UpdateStatusText.Text = "Update installed.";
+        }
+        catch (OperationCanceledException)
+        {
+            UpdateStatusText.Text = "Update install cancelled.";
+            InstallUpdateButton.IsEnabled = true;
+        }
+        catch (Exception exception)
+        {
+            UpdateStatusText.Text = exception.Message;
+            InstallUpdateButton.IsEnabled = true;
+        }
     }
 
     private async void OnBrowseCustomPath(object sender, RoutedEventArgs e)
     {
-        var picker = new FolderPicker();
-        picker.FileTypeFilter.Add("*");
-        if (OwnerHwnd != 0)
+        var browseButton = sender as Button;
+        if (browseButton is not null)
         {
-            WinRT.Interop.InitializeWithWindow.Initialize(picker, OwnerHwnd);
+            browseButton.IsEnabled = false;
         }
 
-        var folder = await picker.PickSingleFolderAsync();
-        if (folder is not null)
+        CustomPathStatusText.Visibility = Visibility.Collapsed;
+        try
         {
-            CustomPathBox.Text = folder.Path;
+            var picker = new FolderPicker();
+            picker.FileTypeFilter.Add("*");
+            if (OwnerHwnd != 0)
+            {
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, OwnerHwnd);
+            }
+
+            var folder = await picker.PickSingleFolderAsync();
+            if (folder is not null)
+            {
+                CustomPathBox.Text = folder.Path;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            CustomPathStatusText.Text = exception.Message;
+            CustomPathStatusText.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            if (browseButton is not null)
+            {
+                browseButton.IsEnabled = true;
+            }
+        }
+    }
+
+    private async void OnGitHubClicked(object sender, RoutedEventArgs e)
+    {
+        if (_fileOps is null)
+        {
+            return;
+        }
+
+        var link = sender as Control;
+        if (link is not null)
+        {
+            link.IsEnabled = false;
+        }
+
+        AboutStatusText.Visibility = Visibility.Collapsed;
+        try
+        {
+            await _fileOps.OpenExternalUrlAsync(RepositoryUrl).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            AboutStatusText.Text = exception.Message;
+            AboutStatusText.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            if (link is not null)
+            {
+                link.IsEnabled = true;
+            }
         }
     }
 }
