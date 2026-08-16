@@ -276,13 +276,17 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `copy` `cut` `paste` | Palette clipboard | Handlers | Catalog + clipboard tests | — | `PASS` |
 | `clipboard-history` | Palette | `ClipboardHistory` | Catalog + tests | — | `PASS` |
 | `operation-history` | Palette | `OperationLog` retry | Catalog + workspace | — | `PASS` |
+| `clear-recent-history` | Palette clears recents | `ClearRecentHistoryAsync` | Catalog test | — | `PASS` |
 | `undo` `redo` | Palette | Undo stack | Tests | — | `PASS` |
 | `delete` `rename` `new-folder` `new-file` | Palette | Dialogs | Catalog | — | `PASS` |
 | `advanced-rename` | Palette | Find/replace/number | Catalog + rename tests | — | `PASS` |
 | `create-archive` | Palette | Dialog | Catalog | — | `MANUAL` |
 | `terminal` | Palette / F4 | IPC | Catalog | F4 | `MANUAL` |
 | `preview` | Toggle preview | Handler | Catalog | — | `MANUAL` |
+| `toggle-side-menu` | Toggle sidebar | Handler | Catalog test | — | `PASS` |
 | `dual-pane` | Toggle | Handler | Dual-pane tests | F6 | `PASS` |
+| `view-details` `view-list` `view-tiles` `view-content` | Palette display style commands | Handler applies file-list presentation | Catalog test | Switch each view | `MANUAL` |
+| `icon-size-small` `icon-size-medium` `icon-size-large` `icon-size-extra-large` | Palette icon size commands | Handler updates file-list icon size | Catalog test | Change each icon size | `MANUAL` |
 | `search` | Focus search | Handler | Catalog | Ctrl+F | `MANUAL` |
 | `quick-look` | Space | Handler | Catalog | Space | `MANUAL` |
 | `properties` | Properties | Dialog | Catalog | — | `MANUAL` |
@@ -297,6 +301,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `ctx-open-with` | Open With | Builder | Same | — | `PASS` |
 | `ctx-preview` | Quick Look | Builder | Same | — | `PASS` |
 | `ctx-compare` | Compare | Builder | Same | Two files | `PASS` |
+| `ctx-view-archive` | View archive contents | Builder + handler | `DesktopPolishTests` | Right-click archive | `PASS` |
 | `ctx-terminal` | Terminal | Builder | Same | — | `PASS` |
 | `ctx-powershell-admin` | Admin PS | Builder | Same | — | `PASS` |
 | `ctx-color-label` | Color label | Builder | Same | — | `PASS` |
@@ -307,6 +312,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `ctx-advanced-rename` | Advanced rename | Builder | Same | — | `PASS` |
 | `ctx-copy` `ctx-cut` `ctx-paste` | Clipboard | Builder | Same | — | `PASS` |
 | `ctx-copy-to-pane` `ctx-move-to-pane` | Other pane | Builder | Same | Dual pane | `PASS` |
+| `ctx-close-dual-pane` | Close right pane | Builder + handler | `DesktopPolishTests` | F6 or pane menu | `PASS` |
 | `ctx-pack` `ctx-unpack` | Pack/unpack | Builder | Same | — | `PASS` |
 | `ctx-compress` | Compress | Builder | Same | — | `PASS` |
 | `ctx-extract-menu` `ctx-extract` `ctx-extract-folder` `ctx-extract-to` | Extract menu | Builder | Same | Archive | `PASS` |

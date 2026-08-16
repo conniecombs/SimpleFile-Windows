@@ -701,9 +701,9 @@
                                     <Button
                                         x:Name="DualPaneButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
-                                        AutomationProperties.Name="Toggle dual pane"
+                                        AutomationProperties.Name="Open right pane"
                                         Click="OnToggleDualPane"
-                                        ToolTipService.ToolTip="Toggle dual pane (F6)">
+                                        ToolTipService.ToolTip="Open right pane (F6)">
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A7;" />
                                     </Button>
                                     <Button
@@ -902,6 +902,14 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A5;" />
                                     </Button>
                                     <Button
+                                        x:Name="CloseDualPaneButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Close right pane"
+                                        Click="OnCloseDualPane"
+                                        ToolTipService.ToolTip="Close right pane (F6)">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="12" Glyph="&#xE711;" />
+                                    </Button>
+                                    <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="View options"
                                         ToolTipService.ToolTip="View options">
@@ -1060,6 +1068,24 @@
 
                             <ScrollViewer Grid.Row="1" Margin="0,12,0,0" VerticalScrollBarVisibility="Auto">
                                 <StackPanel Spacing="10">
+                                    <StackPanel
+                                        x:Name="PreviewIconPanel"
+                                        HorizontalAlignment="Center"
+                                        Spacing="6"
+                                        Visibility="Collapsed">
+                                        <Image
+                                            x:Name="PreviewIconImage"
+                                            Width="96"
+                                            Height="96"
+                                            Stretch="Uniform" />
+                                        <TextBlock
+                                            x:Name="PreviewIconLabel"
+                                            HorizontalAlignment="Center"
+                                            FontSize="12"
+                                            Foreground="{ThemeResource SfTextMutedBrush}"
+                                            TextTrimming="CharacterEllipsis"
+                                            TextWrapping="NoWrap" />
+                                    </StackPanel>
                                     <Image
                                         x:Name="PreviewImage"
                                         MaxHeight="220"

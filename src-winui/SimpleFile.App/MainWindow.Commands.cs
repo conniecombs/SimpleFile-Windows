@@ -303,7 +303,7 @@ public sealed partial class MainWindow
                 await ToggleSidebarAsync();
                 break;
             case "dual-pane":
-                await _workspace.ToggleDualPaneAsync();
+                await ToggleDualPaneFromUiAsync();
                 break;
             case "view-details":
                 await ApplyViewOptionAsync("view:details");
@@ -447,6 +447,17 @@ public sealed partial class MainWindow
 
         flyout.Items.Clear();
 
+        var dualPaneItem = new MenuFlyoutItem
+        {
+            Text = _workspace.DualPaneEnabled ? "Close right pane" : "Open right pane",
+            Tag = "pane:dual",
+            KeyboardAcceleratorTextOverride = "F6",
+            Icon = CreateMenuIcon(_workspace.DualPaneEnabled ? "\uE711" : "\uE8A7"),
+        };
+        dualPaneItem.Click += OnViewOptionClicked;
+        flyout.Items.Add(dualPaneItem);
+        flyout.Items.Add(new MenuFlyoutSeparator());
+
         var styleMenu = new MenuFlyoutSubItem
         {
             Text = "Display style",
@@ -529,6 +540,10 @@ public sealed partial class MainWindow
             && int.TryParse(tag["icon:".Length..], out var iconSize))
         {
             _workspace.SetFileListIconSize(iconSize);
+        }
+        else if (tag == "pane:dual")
+        {
+            await ToggleDualPaneFromUiAsync();
         }
 
         ApplyFileListViewPresentation();
@@ -717,6 +732,9 @@ public sealed partial class MainWindow
             case "ctx-move-to-pane":
                 await CopyOrMoveToOtherPaneAsync(move: true);
                 break;
+            case "ctx-close-dual-pane":
+                await CloseDualPaneFromUiAsync();
+                break;
             case "ctx-pack":
                 await PromptPackIntoFolderAsync();
                 break;
@@ -859,10 +877,11 @@ public sealed partial class MainWindow
 
         var workspace = _workspace;
         var fileOps = workspace?.FileOps;
-        var body = new StackPanel { Spacing = 8, Width = 480 };
+        var body = new StackPanel { Spacing = 8, Width = 560 };
         body.Children.Add(new TextBlock { Text = row.Name, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
         body.Children.Add(new TextBlock { Text = row.Path, TextWrapping = TextWrapping.Wrap, Opacity = 0.8 });
         body.Children.Add(new TextBlock { Text = $"{row.TypeText}  {row.SizeText}  {row.ModifiedText}" });
+        var hasVisualPreview = false;
         if (fileOps is not null && !row.IsDir)
         {
             var utilityCts = BeginUtilityOperation();
@@ -885,10 +904,17 @@ public sealed partial class MainWindow
                         FontSize = 12,
                         MaxHeight = 280,
                     });
+                    hasVisualPreview = true;
+                }
+                else if (preview.FileType == "image" && await TryAddQuickLookImageAsync(body, row, preview, fileOps, utilityCts.Token))
+                {
+                    hasVisualPreview = true;
                 }
                 else
                 {
-                    body.Children.Add(new TextBlock { Text = preview.Content is null ? "No inline preview." : preview.FileType });
+                    body.Children.Add(CreateFileTypePreviewIcon(row, 96));
+                    body.Children.Add(new TextBlock { Text = IconPreviewMessage(preview), TextWrapping = TextWrapping.Wrap });
+                    hasVisualPreview = true;
                 }
             }
             catch (OperationCanceledException)
@@ -905,6 +931,11 @@ public sealed partial class MainWindow
             }
         }
 
+        if (!hasVisualPreview)
+        {
+            body.Children.Add(CreateFileTypePreviewIcon(row, 96));
+        }
+
         if (workspace is not null && !ReferenceEquals(_workspace, workspace))
         {
             return;
@@ -918,6 +949,44 @@ public sealed partial class MainWindow
             XamlRoot = Content.XamlRoot,
         };
         await dialog.ShowAsync();
+    }
+
+    private static async Task<bool> TryAddQuickLookImageAsync(
+        StackPanel body,
+        FileRow row,
+        FilePreview preview,
+        FileOperationService fileOps,
+        CancellationToken cancellationToken)
+    {
+        var imageData = preview.Content;
+        if (string.IsNullOrWhiteSpace(imageData))
+        {
+            try
+            {
+                imageData = await fileOps.GenerateThumbnailAsync(row.Path, 512, cancellationToken);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        try
+        {
+            var source = await CreatePreviewImageSourceAsync(imageData, row.Path);
+            body.Children.Add(new Image
+            {
+                Source = source,
+                MaxHeight = 420,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Stretch = Stretch.Uniform,
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task ShowPropertiesAsync()

@@ -13,12 +13,21 @@ use crate::progress::OperationRegistry;
 use crate::watcher::WatcherState;
 use simplefile_core::cleanup::{scan_disk_cleanup, scan_duplicate_check, DuplicateScanOptions};
 use simplefile_core::models::ProgressUpdate;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 #[derive(Clone)]
 struct EventSink {
     sender: tokio::sync::mpsc::UnboundedSender<JsonRpcNotification>,
+}
+
+struct DuplicateCheckJob {
+    cancel: Arc<AtomicBool>,
+    id: Option<Value>,
+    directory: String,
+    min_size: Option<u64>,
+    partial_hash_bytes: Option<u64>,
+    operation_id: Option<String>,
 }
 
 impl EventSink {
@@ -134,12 +143,14 @@ where
                 spawn_duplicate_check(
                     writer.clone(),
                     events.clone(),
-                    state.duplicate_check_cancel.clone(),
-                    id,
-                    directory,
-                    min_size,
-                    partial_hash_bytes,
-                    operation_id,
+                    DuplicateCheckJob {
+                        cancel: state.duplicate_check_cancel.clone(),
+                        id,
+                        directory,
+                        min_size,
+                        partial_hash_bytes,
+                        operation_id,
+                    },
                 );
             }
             Dispatch::CancelDuplicateCheck { id } => {
@@ -352,15 +363,18 @@ fn spawn_search_files<W>(
 fn spawn_duplicate_check<W>(
     writer: std::sync::Arc<tokio::sync::Mutex<W>>,
     events: EventSink,
-    cancel: Arc<std::sync::atomic::AtomicBool>,
-    id: Option<Value>,
-    directory: String,
-    min_size: Option<u64>,
-    partial_hash_bytes: Option<u64>,
-    operation_id: Option<String>,
+    job: DuplicateCheckJob,
 ) where
     W: AsyncWrite + Unpin + Send + 'static,
 {
+    let DuplicateCheckJob {
+        cancel,
+        id,
+        directory,
+        min_size,
+        partial_hash_bytes,
+        operation_id,
+    } = job;
     cancel.store(false, Ordering::Relaxed);
     let operation_id = operation_id.unwrap_or_else(|| "duplicate_check".to_string());
     tokio::spawn(async move {

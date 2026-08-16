@@ -19,6 +19,7 @@ public class DesktopPolishTests
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "toggle-side-menu");
         Assert.Equal("Go home", AppCommandCatalog.Find("go-home")?.Label);
         Assert.Equal("Disk cleanup", AppCommandCatalog.Find("disk-cleanup")?.Label);
+        Assert.Equal("Open or close right pane", AppCommandCatalog.Find("dual-pane")?.Label);
         Assert.Equal(AppCommandCatalog.All.Count, AppCommandCatalog.Filter("").Count);
         var git = AppCommandCatalog.Filter("git");
         Assert.Equal(2, git.Count);
@@ -89,7 +90,14 @@ public class DesktopPolishTests
         Assert.Contains(empty, entry => entry.Id == "ctx-duplicates");
         Assert.Contains(empty, entry => entry.Id == "ctx-cleanup");
         Assert.Contains(empty, entry => entry.Id == "ctx-terminal" && entry.Shortcut == "F4");
+        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-close-dual-pane");
         Assert.DoesNotContain(empty, entry => entry.Kind == ContextMenuKind.Divider && empty.Last() == entry);
+
+        var dualPane = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            DualPaneEnabled = true,
+        });
+        Assert.Contains(dualPane, entry => entry.Id == "ctx-close-dual-pane" && entry.Label == "Close right pane" && entry.Shortcut == "F6");
 
         var archive = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
         {
@@ -196,6 +204,7 @@ public class DesktopPolishTests
     {
         Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "commandPalette.open" && item.Keys == "Ctrl+Shift+P");
         Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "pane.switch" && item.Keys == "Tab");
+        Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "pane.toggleDual" && item.Label == "Open or close right pane");
         var remapped = KeyboardShortcutMap.ApplyOverrides(new Dictionary<string, string>
         {
             ["search.focus"] = "Ctrl+K",

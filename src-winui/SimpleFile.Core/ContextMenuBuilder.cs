@@ -103,6 +103,8 @@ public static class ContextMenuBuilder
 
         var entries = new List<ContextMenuEntry>
         {
+            Item("ctx-close-dual-pane", "Close right pane", !request.DualPaneEnabled, "F6", "\uE711"),
+            Divider(),
             Item("ctx-rename", "Rename", !singleSelection, "F2", "\uE8AC"),
             Item("ctx-delete", deleteLabel, !hasSelection, "Delete", "\uE74D"),
             Item("ctx-color-label", "Set color label...", !hasSelection, null, "\uE790"),

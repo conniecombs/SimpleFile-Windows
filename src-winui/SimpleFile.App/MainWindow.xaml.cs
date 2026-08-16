@@ -3,6 +3,7 @@ using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
@@ -315,9 +316,7 @@ public sealed partial class MainWindow : Window
         SidebarTargetSwitch.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
         HighlightSidebarTarget();
         SyncQuickFilterFromWorkspace();
-        ToolTipService.SetToolTip(
-            DualPaneButton,
-            _workspace.DualPaneEnabled ? "Single pane (F6)" : "Toggle dual pane (F6)");
+        UpdateDualPaneButton(_workspace.DualPaneEnabled);
 
         if (!_editingPrimaryPath)
         {
@@ -380,6 +379,13 @@ public sealed partial class MainWindow : Window
             PrimaryColumn.Width = new GridLength(1, GridUnitType.Star);
             SecondaryColumn.Width = new GridLength(0);
         }
+    }
+
+    private void UpdateDualPaneButton(bool dualPaneEnabled)
+    {
+        var label = dualPaneEnabled ? "Close right pane" : "Open right pane";
+        AutomationProperties.SetName(DualPaneButton, label);
+        ToolTipService.SetToolTip(DualPaneButton, $"{label} (F6)");
     }
 
     private void RebuildBreadcrumbs(StackPanel host, IReadOnlyList<BreadcrumbSegment> crumbs, PaneId pane)
@@ -901,10 +907,35 @@ public sealed partial class MainWindow : Window
 
     private async void OnToggleDualPane(object sender, RoutedEventArgs e)
     {
-        if (_workspace is not null)
+        await RunUiActionAsync("Dual pane", ToggleDualPaneFromUiAsync);
+    }
+
+    private async void OnCloseDualPane(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync("Dual pane", CloseDualPaneFromUiAsync);
+    }
+
+    private async Task ToggleDualPaneFromUiAsync()
+    {
+        if (_workspace is null)
         {
-            await RunUiActionAsync("Dual pane", () => _workspace.ToggleDualPaneAsync());
+            return;
         }
+
+        var closing = _workspace.DualPaneEnabled;
+        await _workspace.ToggleDualPaneAsync();
+        StatusText.Text = closing ? "Right pane closed" : "Right pane opened";
+    }
+
+    private async Task CloseDualPaneFromUiAsync()
+    {
+        if (_workspace?.DualPaneEnabled != true)
+        {
+            return;
+        }
+
+        await _workspace.ToggleDualPaneAsync();
+        StatusText.Text = "Right pane closed";
     }
 
     private async void OnToggleSidebar(object sender, RoutedEventArgs e) =>
@@ -1385,6 +1416,7 @@ public sealed partial class MainWindow : Window
         _ = Interlocked.Increment(ref _previewToken);
         PreviewTitle.Text = "Preview";
         PreviewSubtitle.Text = "Select a file";
+        ClearPreviewIcon();
         PreviewImage.Source = null;
         PreviewImage.Visibility = Visibility.Collapsed;
         PreviewTextBox.Text = "";
@@ -1427,6 +1459,7 @@ public sealed partial class MainWindow : Window
         {
             PreviewTitle.Text = row.Name;
             PreviewSubtitle.Text = row.Path;
+            ShowPreviewIcon(row);
             PreviewImage.Source = null;
             PreviewImage.Visibility = Visibility.Collapsed;
             PreviewTextBox.Text = "";
@@ -1456,7 +1489,7 @@ public sealed partial class MainWindow : Window
                 AddMetadataRow("Preview type", preview.FileType);
                 AddMetadataRow("MIME", preview.MimeType);
                 AddMetadataRow("Preview size", EntryPresentation.FormatFileSize(preview.Size, isDirectory: false));
-                await RenderPreviewContentAsync(row.Path, preview, token, cancellationToken);
+                await RenderPreviewContentAsync(row, preview, token, cancellationToken);
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
@@ -1484,8 +1517,9 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task RenderPreviewContentAsync(string path, FilePreview preview, int token, CancellationToken cancellationToken)
+    private async Task RenderPreviewContentAsync(FileRow row, FilePreview preview, int token, CancellationToken cancellationToken)
     {
+        var path = row.Path;
         if (preview.FileType == "text" && preview.Content is not null)
         {
             if (!IsPreviewCurrent(path, token, cancellationToken))
@@ -1493,6 +1527,7 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            ClearPreviewIcon();
             PreviewTextBox.Text = preview.Content;
             PreviewTextBox.Visibility = Visibility.Visible;
             PreviewEmptyText.Visibility = Visibility.Collapsed;
@@ -1503,6 +1538,7 @@ public sealed partial class MainWindow : Window
         {
             if (preview.Content is not null && await TrySetPreviewImageAsync(preview.Content, path, token, cancellationToken))
             {
+                ClearPreviewIcon();
                 PreviewEmptyText.Visibility = Visibility.Collapsed;
                 return;
             }
@@ -1512,6 +1548,7 @@ public sealed partial class MainWindow : Window
                 var thumbnail = await _workspace!.FileOps!.GenerateThumbnailAsync(path, 256, cancellationToken);
                 if (await TrySetPreviewImageAsync(thumbnail, path, token, cancellationToken))
                 {
+                    ClearPreviewIcon();
                     PreviewEmptyText.Text = "Thumbnail preview";
                     return;
                 }
@@ -1527,9 +1564,102 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        PreviewEmptyText.Text = preview.Content is null
-            ? "No inline preview is available for this file."
-            : $"Preview content uses {preview.Encoding ?? "an unsupported"} encoding.";
+        ShowPreviewIcon(row, FileTypePreviewLabel(row, preview));
+        PreviewEmptyText.Text = IconPreviewMessage(preview);
+        PreviewEmptyText.Visibility = Visibility.Visible;
+    }
+
+    private void ShowPreviewIcon(FileRow row, string? label = null)
+    {
+        PreviewIconImage.Source = ShellIconLoader.ForEntry(row.Path, row.IsDir, 96);
+        PreviewIconLabel.Text = string.IsNullOrWhiteSpace(label) ? row.TypeText : label;
+        PreviewIconPanel.Visibility = Visibility.Visible;
+    }
+
+    private void ClearPreviewIcon()
+    {
+        PreviewIconImage.Source = null;
+        PreviewIconLabel.Text = "";
+        PreviewIconPanel.Visibility = Visibility.Collapsed;
+    }
+
+    private static Image CreateFileTypePreviewIcon(FileRow row, int iconSize)
+    {
+        return new Image
+        {
+            Width = iconSize,
+            Height = iconSize,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Stretch = Stretch.Uniform,
+            Source = ShellIconLoader.ForEntry(row.Path, row.IsDir, iconSize),
+        };
+    }
+
+    private static string FileTypePreviewLabel(FileRow row, FilePreview preview)
+    {
+        if (!string.IsNullOrWhiteSpace(row.TypeText))
+        {
+            return row.TypeText;
+        }
+
+        return preview.FileType switch
+        {
+            "audio" => "Audio file",
+            "video" => "Video file",
+            "image" => "Image file",
+            "pdf" => "PDF file",
+            "document" => "Document",
+            "spreadsheet" => "Spreadsheet",
+            "presentation" => "Presentation",
+            "archive" => "Archive",
+            "package" => "Package",
+            "executable" => "Application",
+            "font" => "Font file",
+            "database" => "Database file",
+            "disk-image" => "Disk image",
+            "ebook" => "Ebook",
+            "email" => "Email",
+            "calendar" => "Calendar file",
+            "contact" => "Contact file",
+            "certificate" => "Certificate",
+            "design" => "Design file",
+            "model" => "3D model",
+            "cad" => "CAD file",
+            "torrent" => "Torrent file",
+            "binary" => "Binary file",
+            _ => "File",
+        };
+    }
+
+    private static string IconPreviewMessage(FilePreview preview)
+    {
+        return preview.FileType switch
+        {
+            "pdf" => "Showing the file-type icon for this PDF.",
+            "image" => "Showing the file-type icon for this image.",
+            "audio" => "Showing the file-type icon for this audio file.",
+            "video" => "Showing the file-type icon for this video file.",
+            "document" => "Showing the file-type icon for this document.",
+            "spreadsheet" => "Showing the file-type icon for this spreadsheet.",
+            "presentation" => "Showing the file-type icon for this presentation.",
+            "archive" => "Showing the file-type icon for this archive.",
+            "package" => "Showing the file-type icon for this package.",
+            "executable" => "Showing the file-type icon for this application or script.",
+            "font" => "Showing the file-type icon for this font.",
+            "database" => "Showing the file-type icon for this database file.",
+            "disk-image" => "Showing the file-type icon for this disk image.",
+            "ebook" => "Showing the file-type icon for this ebook.",
+            "email" => "Showing the file-type icon for this email file.",
+            "calendar" => "Showing the file-type icon for this calendar file.",
+            "contact" => "Showing the file-type icon for this contact file.",
+            "certificate" => "Showing the file-type icon for this certificate or key.",
+            "design" => "Showing the file-type icon for this design file.",
+            "model" => "Showing the file-type icon for this 3D model.",
+            "cad" => "Showing the file-type icon for this CAD file.",
+            "torrent" => "Showing the file-type icon for this torrent file.",
+            "binary" => "Showing the file-type icon for this binary file.",
+            _ => "Showing the file-type icon for this file.",
+        };
     }
 
     private async Task LoadMetadataAsync(string path, string? previewType, int token, CancellationToken cancellationToken)
@@ -1598,23 +1728,14 @@ public sealed partial class MainWindow : Window
                 return false;
             }
 
-            var bytes = Convert.FromBase64String(base64);
-            var stream = new InMemoryRandomAccessStream();
-            var writer = new DataWriter(stream.GetOutputStreamAt(0));
-            writer.WriteBytes(bytes);
-            await writer.StoreAsync();
-            await writer.FlushAsync();
-            writer.DetachStream();
-            writer.Dispose();
-            stream.Seek(0);
-            var bitmap = new BitmapImage();
-            await bitmap.SetSourceAsync(stream);
+            var source = await CreatePreviewImageSourceAsync(base64, path);
+
             if (!IsPreviewCurrent(path, token, cancellationToken))
             {
                 return false;
             }
 
-            PreviewImage.Source = bitmap;
+            PreviewImage.Source = source;
             PreviewImage.Visibility = Visibility.Visible;
             return true;
         }
@@ -1624,6 +1745,31 @@ public sealed partial class MainWindow : Window
             PreviewImage.Visibility = Visibility.Collapsed;
             return false;
         }
+    }
+
+    private static async Task<ImageSource> CreatePreviewImageSourceAsync(string base64, string path)
+    {
+        var bytes = Convert.FromBase64String(base64);
+        using var stream = new InMemoryRandomAccessStream();
+        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
+        {
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+        }
+
+        stream.Seek(0);
+        if (System.IO.Path.GetExtension(path).Equals(".svg", StringComparison.OrdinalIgnoreCase))
+        {
+            var svg = new SvgImageSource();
+            await svg.SetSourceAsync(stream);
+            return svg;
+        }
+
+        var bitmap = new BitmapImage();
+        await bitmap.SetSourceAsync(stream);
+        return bitmap;
     }
 
     private void AddMetadataRows(IEnumerable<string[]> rows)
@@ -2096,10 +2242,7 @@ public sealed partial class MainWindow : Window
     private async void OnDualPaneAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        if (_workspace is not null)
-        {
-            await RunUiActionAsync("Dual pane", () => _workspace.ToggleDualPaneAsync());
-        }
+        await RunUiActionAsync("Dual pane", ToggleDualPaneFromUiAsync);
     }
 
     private async void OnBackAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)

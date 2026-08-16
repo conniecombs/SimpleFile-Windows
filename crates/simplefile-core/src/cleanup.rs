@@ -205,7 +205,10 @@ pub fn scan_duplicate_check(
                 hash,
                 size,
                 wasted_bytes,
-                files: files.into_iter().map(duplicate_file_from_candidate).collect(),
+                files: files
+                    .into_iter()
+                    .map(duplicate_file_from_candidate)
+                    .collect(),
             })
         })
         .collect();
@@ -501,8 +504,8 @@ mod tests {
         fs::write(root.join("unique.txt"), b"different").unwrap();
 
         let cancel = AtomicBool::new(false);
-        let result = scan_disk_cleanup(&root.to_string_lossy(), Some(10), &cancel, |_, _, _| {})
-            .unwrap();
+        let result =
+            scan_disk_cleanup(&root.to_string_lossy(), Some(10), &cancel, |_, _, _| {}).unwrap();
 
         assert_eq!(result.large_files.len(), 1);
         assert!(result.large_files[0].path.ends_with("large.bin"));

@@ -50,7 +50,7 @@ public static class KeyboardShortcutMap
         new("history.undo", "Ctrl+Z", "Undo"),
         new("history.redo", "Ctrl+Y", "Redo"),
         new("terminal.open", "F4", "Open terminal"),
-        new("pane.toggleDual", "F6", "Toggle dual pane"),
+        new("pane.toggleDual", "F6", "Open or close right pane"),
         new("pane.switch", "Tab", "Switch pane"),
         new("pane.focusPrimary", "Alt+1", "Focus left pane"),
         new("pane.focusSecondary", "Alt+2", "Focus right pane"),

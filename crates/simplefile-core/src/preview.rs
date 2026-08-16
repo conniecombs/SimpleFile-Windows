@@ -19,57 +19,32 @@ pub fn read_file_preview(path: String, max_size: Option<u64>) -> Result<FilePrev
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    let (file_type, mime_type) = match extension.as_str() {
-        "txt" | "md" | "json" | "xml" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf"
-        | "log" | "csv" | "tsv" => ("text", format!("text/{extension}")),
-        "rs" | "js" | "ts" | "jsx" | "tsx" | "py" | "rb" | "go" | "java" | "c" | "cpp" | "h"
-        | "hpp" | "cs" | "php" | "swift" | "kt" | "scala" | "sh" | "bash" | "zsh" | "ps1"
-        | "bat" | "cmd" | "sql" | "r" | "lua" | "pl" | "pm" => {
-            ("text", format!("text/x-{extension}"))
-        }
-        "html" | "htm" => ("text", "text/html".to_string()),
-        "css" => ("text", "text/css".to_string()),
-        "scss" | "sass" | "less" => ("text", format!("text/x-{extension}")),
-        "png" => ("image", "image/png".to_string()),
-        "jpg" | "jpeg" => ("image", "image/jpeg".to_string()),
-        "gif" => ("image", "image/gif".to_string()),
-        "webp" => ("image", "image/webp".to_string()),
-        "svg" => ("image", "image/svg+xml".to_string()),
-        "bmp" => ("image", "image/bmp".to_string()),
-        "ico" => ("image", "image/x-icon".to_string()),
-        "pdf" => ("pdf", "application/pdf".to_string()),
-        "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" => ("video", format!("video/{extension}")),
-        "mp3" | "wav" | "flac" | "aac" | "m4a" => ("audio", format!("audio/{extension}")),
-        "zip" | "tar" | "gz" | "7z" | "rar" | "exe" | "dll" | "so" | "dylib" => {
-            ("unsupported", "application/octet-stream".to_string())
-        }
-        _ => {
-            if size <= max_preview_size {
-                // Only read the first 8KB to detect binary content instead of the entire file
-                let detect_size = std::cmp::min(size, 8192) as usize;
-                if let Ok(mut file) = fs::File::open(&path_buf) {
-                    use std::io::Read;
-                    let mut buffer = vec![0u8; detect_size];
-                    if let Ok(bytes_read) = file.read(&mut buffer) {
-                        buffer.truncate(bytes_read);
-                        if buffer
-                            .iter()
-                            .all(|&b| b != 0 && (b >= 32 || b == 9 || b == 10 || b == 13))
-                        {
-                            ("text", "text/plain".to_string())
-                        } else {
-                            ("binary", "application/octet-stream".to_string())
-                        }
-                    } else {
-                        ("unsupported", "application/octet-stream".to_string())
-                    }
+    let (file_type, mime_type) = if let Some(known) = classify_known_extension(&extension) {
+        known
+    } else if size <= max_preview_size {
+        // Only read the first 8KB to detect binary content instead of the entire file.
+        let detect_size = std::cmp::min(size, 8192) as usize;
+        if let Ok(mut file) = fs::File::open(&path_buf) {
+            use std::io::Read;
+            let mut buffer = vec![0u8; detect_size];
+            if let Ok(bytes_read) = file.read(&mut buffer) {
+                buffer.truncate(bytes_read);
+                if buffer
+                    .iter()
+                    .all(|&b| b != 0 && (b >= 32 || b == 9 || b == 10 || b == 13))
+                {
+                    ("text", "text/plain".to_string())
                 } else {
-                    ("unsupported", "application/octet-stream".to_string())
+                    ("binary", "application/octet-stream".to_string())
                 }
             } else {
                 ("unsupported", "application/octet-stream".to_string())
             }
+        } else {
+            ("unsupported", "application/octet-stream".to_string())
         }
+    } else {
+        ("unsupported", "application/octet-stream".to_string())
     };
 
     let (content, encoding) = match file_type {
@@ -174,10 +149,211 @@ pub fn generate_thumbnails(paths: Vec<String>, size: Option<u32>) -> Vec<Thumbna
         .collect()
 }
 
+fn classify_known_extension(extension: &str) -> Option<(&'static str, String)> {
+    let extension = extension.to_ascii_lowercase();
+    let mime = |value: &'static str| value.to_string();
+    match extension.as_str() {
+        "txt" => Some(("text", mime("text/plain"))),
+        "md" | "markdown" => Some(("text", mime("text/markdown"))),
+        "json" | "jsonc" | "map" => Some(("text", mime("application/json"))),
+        "xml" | "xaml" => Some(("text", mime("application/xml"))),
+        "yaml" | "yml" => Some(("text", mime("application/yaml"))),
+        "toml" | "ini" | "cfg" | "conf" | "config" | "properties" | "env" | "editorconfig"
+        | "gitignore" | "gitattributes" | "npmrc" | "log" | "srt" | "vtt" => {
+            Some(("text", mime("text/plain")))
+        }
+        "csv" => Some(("text", mime("text/csv"))),
+        "tsv" => Some(("text", mime("text/tab-separated-values"))),
+        "html" | "htm" => Some(("text", mime("text/html"))),
+        "css" => Some(("text", mime("text/css"))),
+        "scss" | "sass" | "less" => Some(("text", format!("text/x-{extension}"))),
+        "rs" | "js" | "mjs" | "cjs" | "ts" | "jsx" | "tsx" | "py" | "rb" | "go" | "java" | "c"
+        | "cc" | "cpp" | "cxx" | "h" | "hh" | "hpp" | "hxx" | "cs" | "php" | "swift" | "kt"
+        | "kts" | "scala" | "sh" | "bash" | "zsh" | "fish" | "ps1" | "bat" | "cmd" | "sql"
+        | "r" | "lua" | "pl" | "pm" | "perl" | "ex" | "exs" | "erl" | "hrl" | "fs" | "fsx"
+        | "fsi" | "vb" | "clj" | "cljs" | "groovy" | "gradle" | "dart" | "vue" | "svelte"
+        | "astro" => Some(("text", format!("text/x-{extension}"))),
+        "png" => Some(("image", mime("image/png"))),
+        "jpg" | "jpeg" => Some(("image", mime("image/jpeg"))),
+        "gif" => Some(("image", mime("image/gif"))),
+        "webp" => Some(("image", mime("image/webp"))),
+        "bmp" => Some(("image", mime("image/bmp"))),
+        "svg" => Some(("image", mime("image/svg+xml"))),
+        "ico" | "cur" => Some(("image", mime("image/x-icon"))),
+        "tif" | "tiff" => Some(("image", mime("image/tiff"))),
+        "heic" | "heif" => Some(("image", mime("image/heif"))),
+        "avif" => Some(("image", mime("image/avif"))),
+        "jxl" => Some(("image", mime("image/jxl"))),
+        "pdf" => Some(("pdf", mime("application/pdf"))),
+        "mp3" => Some(("audio", mime("audio/mpeg"))),
+        "wav" => Some(("audio", mime("audio/wav"))),
+        "flac" => Some(("audio", mime("audio/flac"))),
+        "aac" => Some(("audio", mime("audio/aac"))),
+        "m4a" => Some(("audio", mime("audio/mp4"))),
+        "ogg" | "oga" => Some(("audio", mime("audio/ogg"))),
+        "opus" => Some(("audio", mime("audio/opus"))),
+        "wma" => Some(("audio", mime("audio/x-ms-wma"))),
+        "aiff" | "aif" => Some(("audio", mime("audio/aiff"))),
+        "mid" | "midi" => Some(("audio", mime("audio/midi"))),
+        "wv" => Some(("audio", mime("audio/x-wavpack"))),
+        "ape" => Some(("audio", mime("audio/ape"))),
+        "mp4" | "m4v" => Some(("video", mime("video/mp4"))),
+        "mov" => Some(("video", mime("video/quicktime"))),
+        "webm" => Some(("video", mime("video/webm"))),
+        "mkv" => Some(("video", mime("video/x-matroska"))),
+        "avi" => Some(("video", mime("video/x-msvideo"))),
+        "wmv" => Some(("video", mime("video/x-ms-wmv"))),
+        "mpg" | "mpeg" => Some(("video", mime("video/mpeg"))),
+        "flv" => Some(("video", mime("video/x-flv"))),
+        "3gp" => Some(("video", mime("video/3gpp"))),
+        "doc" => Some(("document", mime("application/msword"))),
+        "docx" => Some((
+            "document",
+            mime("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+        )),
+        "rtf" => Some(("document", mime("application/rtf"))),
+        "odt" => Some(("document", mime("application/vnd.oasis.opendocument.text"))),
+        "pages" | "wpd" => Some(("document", mime("application/octet-stream"))),
+        "xls" => Some(("spreadsheet", mime("application/vnd.ms-excel"))),
+        "xlsx" | "xlsm" => Some((
+            "spreadsheet",
+            mime("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        )),
+        "ods" => Some((
+            "spreadsheet",
+            mime("application/vnd.oasis.opendocument.spreadsheet"),
+        )),
+        "numbers" => Some(("spreadsheet", mime("application/octet-stream"))),
+        "ppt" => Some(("presentation", mime("application/vnd.ms-powerpoint"))),
+        "pptx" | "pptm" => Some((
+            "presentation",
+            mime("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+        )),
+        "odp" => Some((
+            "presentation",
+            mime("application/vnd.oasis.opendocument.presentation"),
+        )),
+        "zip" | "zipx" => Some(("archive", mime("application/zip"))),
+        "7z" => Some(("archive", mime("application/x-7z-compressed"))),
+        "rar" => Some(("archive", mime("application/vnd.rar"))),
+        "tar" => Some(("archive", mime("application/x-tar"))),
+        "gz" | "tgz" => Some(("archive", mime("application/gzip"))),
+        "bz2" | "tbz" | "tbz2" => Some(("archive", mime("application/x-bzip2"))),
+        "xz" | "txz" => Some(("archive", mime("application/x-xz"))),
+        "zst" | "tzst" => Some(("archive", mime("application/zstd"))),
+        "cab" => Some(("archive", mime("application/vnd.ms-cab-compressed"))),
+        "jar" => Some(("archive", mime("application/java-archive"))),
+        "apk" | "ipa" | "crx" | "xpi" => Some(("package", mime("application/octet-stream"))),
+        "exe" | "com" | "dll" | "sys" | "drv" | "ocx" | "scr" | "msi" | "msp" | "appx" | "msix"
+        | "deb" | "rpm" => Some(("executable", mime("application/octet-stream"))),
+        "ttf" => Some(("font", mime("font/ttf"))),
+        "otf" => Some(("font", mime("font/otf"))),
+        "woff" => Some(("font", mime("font/woff"))),
+        "woff2" => Some(("font", mime("font/woff2"))),
+        "eot" | "fon" => Some(("font", mime("application/octet-stream"))),
+        "db" | "sqlite" | "sqlite3" | "mdb" | "accdb" | "dbf" | "parquet" | "orc" => {
+            Some(("database", mime("application/octet-stream")))
+        }
+        "iso" | "img" | "dmg" | "vhd" | "vhdx" | "vmdk" | "qcow" | "qcow2" => {
+            Some(("disk-image", mime("application/octet-stream")))
+        }
+        "epub" => Some(("ebook", mime("application/epub+zip"))),
+        "mobi" | "azw" | "azw3" | "fb2" => Some(("ebook", mime("application/octet-stream"))),
+        "eml" => Some(("email", mime("message/rfc822"))),
+        "msg" | "pst" | "ost" => Some(("email", mime("application/octet-stream"))),
+        "ics" => Some(("calendar", mime("text/calendar"))),
+        "vcf" => Some(("contact", mime("text/vcard"))),
+        "cer" | "crt" | "der" | "pem" | "pfx" | "p12" | "csr" | "key" => {
+            Some(("certificate", mime("application/octet-stream")))
+        }
+        "psd" | "ai" | "eps" | "indd" | "xd" | "fig" | "sketch" | "afdesign" => {
+            Some(("design", mime("application/octet-stream")))
+        }
+        "obj" | "fbx" | "stl" | "blend" | "dae" | "gltf" | "glb" | "3ds" | "ply" => {
+            Some(("model", mime("application/octet-stream")))
+        }
+        "dwg" | "dxf" => Some(("cad", mime("application/octet-stream"))),
+        "torrent" => Some(("torrent", mime("application/x-bittorrent"))),
+        _ => None,
+    }
+}
+
 fn resolve_readable_path(path: &str) -> Result<std::path::PathBuf, String> {
     if crate::archive::is_archive_virtual_path(path) {
         return crate::archive::materialize_archive_entry_to_temp(path);
     }
 
     validate_existing_path_no_resolve(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_known_extension, read_file_preview};
+    use std::{fs, path::PathBuf};
+
+    #[test]
+    fn classify_known_extension_keeps_inline_preview_types() {
+        for (extension, expected_kind) in [
+            ("txt", "text"),
+            ("json", "text"),
+            ("rs", "text"),
+            ("png", "image"),
+            ("svg", "image"),
+            ("webp", "image"),
+            ("pdf", "pdf"),
+            ("mp3", "audio"),
+            ("wv", "audio"),
+            ("mp4", "video"),
+        ] {
+            let (kind, _) = classify_known_extension(extension).expect("extension is known");
+            assert_eq!(kind, expected_kind, "{extension}");
+        }
+    }
+
+    #[test]
+    fn classify_known_extension_covers_icon_preview_types() {
+        for (extension, expected_kind) in [
+            ("docx", "document"),
+            ("xlsx", "spreadsheet"),
+            ("pptx", "presentation"),
+            ("zip", "archive"),
+            ("apk", "package"),
+            ("exe", "executable"),
+            ("ttf", "font"),
+            ("sqlite", "database"),
+            ("iso", "disk-image"),
+            ("epub", "ebook"),
+            ("eml", "email"),
+            ("cer", "certificate"),
+            ("psd", "design"),
+            ("stl", "model"),
+            ("dwg", "cad"),
+            ("torrent", "torrent"),
+        ] {
+            let (kind, _) = classify_known_extension(extension).expect("extension is known");
+            assert_eq!(kind, expected_kind, "{extension}");
+        }
+    }
+
+    #[test]
+    fn read_file_preview_reports_known_icon_preview_category() {
+        let path = temp_preview_file("sample.docx", b"not a real office package");
+        let preview =
+            read_file_preview(path.to_string_lossy().to_string(), Some(128)).expect("preview");
+        fs::remove_file(path).ok();
+
+        assert_eq!(preview.file_type, "document");
+        assert_eq!(
+            preview.mime_type,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        );
+        assert_eq!(preview.content, None);
+    }
+
+    fn temp_preview_file(name: &str, content: &[u8]) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("simplefile-preview-{}-{name}", std::process::id()));
+        fs::write(&path, content).expect("write temp preview file");
+        path
+    }
 }
