@@ -56,6 +56,18 @@ public sealed class DriveRow
     public bool IsActive { get; set; }
     public DriveInfo Source { get; set; } = new();
     public Visibility UsageVisibility => ShowUsage ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility BadgeVisibility => string.IsNullOrWhiteSpace(Badge) ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility DescriptionVisibility => string.IsNullOrWhiteSpace(Description) ? Visibility.Collapsed : Visibility.Visible;
+    public double RowOpacity => Badge.Equals("Offline", StringComparison.OrdinalIgnoreCase) ? 0.62 : 1.0;
+    public string AutomationName
+    {
+        get
+        {
+            var details = new[] { Name, Path, Badge, Description, UsageText }
+                .Where(part => !string.IsNullOrWhiteSpace(part));
+            return string.Join(", ", details);
+        }
+    }
 
     public static DriveRow From(DriveInfo drive, string currentPath)
     {

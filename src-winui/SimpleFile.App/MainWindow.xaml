@@ -195,7 +195,11 @@
                                 </ListView.ItemContainerStyle>
                                 <ListView.ItemTemplate>
                                     <DataTemplate x:DataType="local:DriveRow">
-                                        <Grid ColumnSpacing="10" Padding="0,1">
+                                        <Grid
+                                            Padding="0,1"
+                                            ColumnSpacing="10"
+                                            AutomationProperties.Name="{x:Bind AutomationName}"
+                                            Opacity="{x:Bind RowOpacity}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
@@ -207,11 +211,39 @@
                                                 Margin="0,2,0,0"
                                                 Path="{x:Bind Path}" />
                                             <StackPanel Grid.Column="1" Spacing="3">
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock
+                                                        VerticalAlignment="Center"
+                                                        Foreground="{ThemeResource SfTextPrimaryBrush}"
+                                                        Text="{x:Bind Name}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        TextWrapping="NoWrap" />
+                                                    <Border
+                                                        Grid.Column="1"
+                                                        Padding="5,1"
+                                                        VerticalAlignment="Center"
+                                                        Background="{ThemeResource SfAccentSoftBrush}"
+                                                        BorderBrush="{ThemeResource SfAccentBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="4"
+                                                        Visibility="{x:Bind BadgeVisibility}">
+                                                        <TextBlock
+                                                            FontSize="10"
+                                                            Foreground="{ThemeResource SfTextPrimaryBrush}"
+                                                            Text="{x:Bind Badge}" />
+                                                    </Border>
+                                                </Grid>
                                                 <TextBlock
-                                                    Foreground="{ThemeResource SfTextPrimaryBrush}"
-                                                    Text="{x:Bind Name}"
+                                                    FontSize="11"
+                                                    Foreground="{ThemeResource SfTextMutedBrush}"
+                                                    Text="{x:Bind Description}"
                                                     TextTrimming="CharacterEllipsis"
-                                                    TextWrapping="NoWrap" />
+                                                    TextWrapping="NoWrap"
+                                                    Visibility="{x:Bind DescriptionVisibility}" />
                                                 <ProgressBar
                                                     Style="{StaticResource SfUsageBarStyle}"
                                                     Maximum="100"
@@ -222,6 +254,8 @@
                                                     FontSize="11"
                                                     Foreground="{ThemeResource SfTextMutedBrush}"
                                                     Text="{x:Bind UsageText}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    TextWrapping="NoWrap"
                                                     Visibility="{x:Bind UsageVisibility}" />
                                             </StackPanel>
                                         </Grid>

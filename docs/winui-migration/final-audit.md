@@ -79,7 +79,7 @@ Workflows:
 
 | Command | Result |
 | --- | --- |
-| `npm run check` | Pass — 74 domain methods, 6 emitted events, 12 goldens; updater 1.1.0; workflows; no cloud surface; WinUI packaging; parity gate 74 commands / 26 context ids / 29 palette ids |
+| `npm run check` | Pass — 74 domain methods, 6 emitted events, 12 goldens; updater 1.1.0; workflows; provider-surface guard; WinUI packaging; parity gate 74 commands / 26 context ids / 29 palette ids |
 | `npm run check:winui` | Pass — 120 xUnit tests |
 | `npm run check:rust` | Pass — `cargo fmt --check`; 77 Rust tests; Clippy `-D warnings` |
 | `npm run check:security` | Pass — `cargo-audit` on 213 lockfile crates |
