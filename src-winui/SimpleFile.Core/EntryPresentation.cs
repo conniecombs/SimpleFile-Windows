@@ -62,6 +62,41 @@ public static class EntryPresentation
             : $"{entry.Extension.ToUpperInvariant()} File";
     }
 
+    public static string ColumnText(FileEntry entry, string columnId)
+    {
+        return columnId switch
+        {
+            "name" => entry.Name,
+            "size" => FormatEntrySize(entry),
+            "items" => FormatItemCount(entry),
+            "date" or "modified" => FormatModified(entry.Modified),
+            "type" => FileType(entry),
+            "extension" => FormatExtension(entry),
+            "git" => entry.GitStatus ?? "",
+            "symlink" => entry.SymlinkTarget ?? "",
+            "path" => entry.Path,
+            "parent" => PathRules.GetParentPath(entry.Path) ?? "",
+            _ => "",
+        };
+    }
+
+    public static string FormatEntrySize(FileEntry entry)
+    {
+        return entry.IsDir && entry.Size == 0
+            ? ""
+            : FormatFileSize(entry.Size);
+    }
+
+    public static string FormatItemCount(FileEntry entry)
+    {
+        if (!entry.IsDir || entry.ItemCount is not { } count)
+        {
+            return "";
+        }
+
+        return count == 1 ? "1 item" : $"{count:N0} items";
+    }
+
     public static string EntryIcon(FileEntry entry)
     {
         return entry.IsDir ? "\uE8B7" : "\uE8A5";
@@ -122,8 +157,11 @@ public static class EntryPresentation
             case "date":
                 return DateTimeOffset.TryParse(entry.Modified, out var date) ? date.ToUnixTimeMilliseconds() : 0L;
             case "extension":
+                return (entry.Extension ?? "").ToLowerInvariant();
             case "type":
                 return entry.IsDir ? "folder" : (entry.Extension ?? "").ToLowerInvariant();
+            case "items":
+                return entry.ItemCount ?? 0UL;
             case "git":
                 return (entry.GitStatus ?? "").ToLowerInvariant();
             case "path":
@@ -135,5 +173,16 @@ public static class EntryPresentation
             default:
                 return entry.Name.ToLowerInvariant();
         }
+    }
+
+    private static string FormatExtension(FileEntry entry)
+    {
+        if (entry.IsDir)
+        {
+            return "";
+        }
+
+        var extension = (entry.Extension ?? "").Trim().TrimStart('.');
+        return extension.Length == 0 ? "" : "." + extension;
     }
 }

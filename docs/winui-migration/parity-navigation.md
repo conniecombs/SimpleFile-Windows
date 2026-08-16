@@ -89,7 +89,7 @@ These are intentional. They stay on Svelte until a later PR.
 | UNC breadcrumb first segment | Svelte accumulates `server` not `\\server` | **Matched on purpose** (same quirk) |
 | Breadcrumb path after drive | `C:\` + `\Users` → `C:\\Users` | **Matched on purpose** (Win32 still opens the folder) |
 | Modified-date exact `Intl` string | `DateTimeFormat` locale options | `DateTimeOffset.ToString("g")` — same instant, locale format may differ slightly |
-| Column resize / presets / extra columns | `fileListColumns.ts` | Fixed Name/Size/Modified/Type |
+| Column resize / presets / extra columns | `fileListColumns.ts` | Dynamic columns with persisted widths and Settings presets |
 | Virtualized huge lists | `FileList.svelte` windowing | `ListView` default virtualization only |
 | Startup `last` tabs/history restore | `resolveStartupLocation` | Always `home` |
 

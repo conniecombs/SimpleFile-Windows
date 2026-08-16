@@ -229,6 +229,28 @@ public class ExplorerWorkspaceTests
         Assert.Equal(second.Primary.Path, activePrimaryTab.Path);
     }
 
+    [Fact]
+    public async Task UiSettings_RestoresColumnPresetAndWidths()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        var fileOps = new FileOperationService(settingsIpc);
+        var first = new ExplorerWorkspace(backend, fileOps);
+        await first.InitializeAsync();
+        var settings = UiSettings.CreateDefault();
+        settings.ColumnPreset = "developer";
+        first.ApplyUiSettings(settings);
+        first.Columns.Resize("path", 360);
+        await first.SaveUiSettingsAsync();
+
+        var second = new ExplorerWorkspace(backend, fileOps);
+        await second.InitializeAsync();
+
+        Assert.Equal("developer", second.Settings.ColumnPreset);
+        Assert.Equal(["name", "size", "date", "extension", "git", "symlink", "path"], second.Columns.VisibleColumns.Select(column => column.Id));
+        Assert.Equal(360, second.Columns.WidthOf("path"));
+    }
+
 }
 internal sealed class FakeExplorerBackend : IExplorerBackend
 {

@@ -33,6 +33,9 @@ public sealed class FileEntry
 
     [JsonPropertyName("git_status")]
     public string? GitStatus { get; set; }
+
+    [JsonPropertyName("itemCount")]
+    public ulong? ItemCount { get; set; }
 }
 
 public sealed class DirectoryListing

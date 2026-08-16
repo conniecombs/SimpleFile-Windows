@@ -32,6 +32,7 @@ public class ModelsTests
         Assert.Equal("txt", entry.Extension);
         Assert.Null(entry.Permissions);
         Assert.Null(entry.GitStatus);
+        Assert.Null(entry.ItemCount);
     }
 
     [Fact]

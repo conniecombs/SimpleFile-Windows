@@ -78,6 +78,7 @@ public class DesktopPolishTests
         Assert.Equal(220, columns.WidthOf("size"));
         columns.ApplyPreset("developer");
         Assert.Contains("git", columns.VisibleIds);
+        Assert.Equal(["name", "size", "date", "extension", "git", "symlink", "path"], columns.VisibleColumns.Select(column => column.Id));
         columns.RestoreWidths(new Dictionary<string, double> { ["name"] = 300 });
         Assert.Equal(300, columns.WidthOf("name"));
     }

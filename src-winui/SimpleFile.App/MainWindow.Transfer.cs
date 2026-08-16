@@ -463,7 +463,7 @@ public sealed partial class MainWindow
         }
 
         _columnDragging = true;
-        _columnDragId = id == "name" ? "size" : id;
+        _columnDragId = id;
         _columnDragStartX = e.GetCurrentPoint(RootGrid).Position.X;
         _columnDragStartWidth = ColumnLayoutHost.Shared.WidthOf(_columnDragId);
         element.CapturePointer(e.Pointer);
@@ -495,11 +495,7 @@ public sealed partial class MainWindow
     private void ApplyColumnWidths()
     {
         var columns = _workspace?.Columns ?? ColumnLayoutHost.Shared;
-        PrimarySizeCol.Width = new GridLength(columns.WidthOf("size"));
-        PrimaryDateCol.Width = new GridLength(columns.WidthOf("date"));
-        PrimaryTypeCol.Width = new GridLength(columns.WidthOf("type"));
-        SecondarySizeCol.Width = new GridLength(columns.WidthOf("size"));
-        SecondaryDateCol.Width = new GridLength(columns.WidthOf("date"));
-        SecondaryTypeCol.Width = new GridLength(columns.WidthOf("type"));
+        ApplyColumnHeader(PrimaryColumnHeader, columns, ref _primaryColumnHeaderKey);
+        ApplyColumnHeader(SecondaryColumnHeader, columns, ref _secondaryColumnHeaderKey);
     }
 }

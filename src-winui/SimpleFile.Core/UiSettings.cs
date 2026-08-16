@@ -52,4 +52,10 @@ public sealed class UiSettings
             _ => "home",
         };
     }
+
+    public static string NormalizeColumnPreset(string? preset)
+    {
+        var normalized = (preset ?? "").Trim().ToLowerInvariant();
+        return ColumnLayout.Presets.ContainsKey(normalized) ? normalized : "default";
+    }
 }

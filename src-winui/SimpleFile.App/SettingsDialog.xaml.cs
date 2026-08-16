@@ -55,12 +55,14 @@ public sealed partial class SettingsDialog : ContentDialog
     }
 
     public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "System";
+    public string ColumnPreset => ((ComboBoxItem?)ColumnPresetComboBox.SelectedItem)?.Tag?.ToString() ?? "default";
     public bool ShowHidden => ShowHiddenSwitch.IsOn;
     public nint OwnerHwnd { get; set; }
 
     public void ApplyTo(UiSettings settings)
     {
         settings.Theme = UiSettings.NormalizeTheme(Theme);
+        settings.ColumnPreset = UiSettings.NormalizeColumnPreset(ColumnPreset);
         settings.ShowHidden = ShowHiddenSwitch.IsOn;
         settings.UseTrash = UseTrashSwitch.IsOn;
         settings.ConfirmDelete = ConfirmDeleteSwitch.IsOn;
@@ -75,39 +77,41 @@ public sealed partial class SettingsDialog : ContentDialog
     public async Task LoadSettingsAsync(FileOperationService fileOps)
     {
         _fileOps = fileOps;
-        
-        var theme = await fileOps.GetSettingAsync("theme").ConfigureAwait(false) ?? "System";
+
+        var theme = await fileOps.GetSettingAsync("theme").ConfigureAwait(true) ?? "System";
         ThemeComboBox.SelectedIndex = theme.Equals("Light", StringComparison.OrdinalIgnoreCase)
             ? 1
             : theme.Equals("Dark", StringComparison.OrdinalIgnoreCase)
                 ? 2
                 : 0;
-        
-        var showHidden = await fileOps.GetSettingAsync("showHidden").ConfigureAwait(false);
+
+        SelectColumnPreset(await fileOps.GetSettingAsync("columnPreset").ConfigureAwait(true) ?? "default");
+
+        var showHidden = await fileOps.GetSettingAsync("showHidden").ConfigureAwait(true);
         ShowHiddenSwitch.IsOn = showHidden == "true";
-        
-        var useTrash = await fileOps.GetSettingAsync("useTrash").ConfigureAwait(false);
+
+        var useTrash = await fileOps.GetSettingAsync("useTrash").ConfigureAwait(true);
         UseTrashSwitch.IsOn = useTrash != "false";
-        
-        var confirmDelete = await fileOps.GetSettingAsync("confirmDelete").ConfigureAwait(false);
+
+        var confirmDelete = await fileOps.GetSettingAsync("confirmDelete").ConfigureAwait(true);
         ConfirmDeleteSwitch.IsOn = confirmDelete != "false";
-        
-        var startLoc = await fileOps.GetSettingAsync("startLocation").ConfigureAwait(false) ?? "Home";
+
+        var startLoc = await fileOps.GetSettingAsync("startLocation").ConfigureAwait(true) ?? "Home";
         StartLocationComboBox.SelectedIndex = startLoc == "Custom" ? 2 : (startLoc == "Last" ? 1 : 0);
-        
-        CustomPathBox.Text = await fileOps.GetSettingAsync("customPath").ConfigureAwait(false) ?? "";
-        
-        var openInNewTab = await fileOps.GetSettingAsync("openInNewTab").ConfigureAwait(false);
+
+        CustomPathBox.Text = await fileOps.GetSettingAsync("customPath").ConfigureAwait(true) ?? "";
+
+        var openInNewTab = await fileOps.GetSettingAsync("openInNewTab").ConfigureAwait(true);
         OpenInNewTabSwitch.IsOn = openInNewTab == "true";
 
-        var enableGit = await fileOps.GetSettingAsync("enableGitIntegration").ConfigureAwait(false);
+        var enableGit = await fileOps.GetSettingAsync("enableGitIntegration").ConfigureAwait(true);
         EnableGitSwitch.IsOn = enableGit != "false";
-        var showSizes = await fileOps.GetSettingAsync("showFolderSizes").ConfigureAwait(false);
+        var showSizes = await fileOps.GetSettingAsync("showFolderSizes").ConfigureAwait(true);
         ShowFolderSizesSwitch.IsOn = showSizes == "true";
 
         // Tools
         await CheckRarInstalledAsync().ConfigureAwait(true);
-        
+
         // Updates
         var version = await fileOps.GetAppVersionAsync().ConfigureAwait(true);
         CurrentVersionText.Text = $"Current Version: {version}";
@@ -116,17 +120,36 @@ public sealed partial class SettingsDialog : ContentDialog
 
     public async Task SaveSettingsAsync(FileOperationService fileOps)
     {
-        await fileOps.SetSettingAsync("theme", ((ComboBoxItem)ThemeComboBox.SelectedItem).Tag.ToString()!).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("showHidden", ShowHiddenSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
-        await fileOps.SetSettingAsync("useTrash", UseTrashSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
-        await fileOps.SetSettingAsync("confirmDelete", ConfirmDeleteSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
-        
+        var theme = ((ComboBoxItem)ThemeComboBox.SelectedItem).Tag.ToString()!;
+        var columnPreset = ColumnPreset;
+        var showHidden = ShowHiddenSwitch.IsOn ? "true" : "false";
+        var useTrash = UseTrashSwitch.IsOn ? "true" : "false";
+        var confirmDelete = ConfirmDeleteSwitch.IsOn ? "true" : "false";
         var startLoc = ((ComboBoxItem)StartLocationComboBox.SelectedItem).Tag.ToString()!;
+        var customPath = CustomPathBox.Text;
+        var openInNewTab = OpenInNewTabSwitch.IsOn ? "true" : "false";
+        var enableGit = EnableGitSwitch.IsOn ? "true" : "false";
+        var showFolderSizes = ShowFolderSizesSwitch.IsOn ? "true" : "false";
+
+        await fileOps.SetSettingAsync("theme", theme).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("columnPreset", columnPreset).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("showHidden", showHidden).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("useTrash", useTrash).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("confirmDelete", confirmDelete).ConfigureAwait(false);
         await fileOps.SetSettingAsync("startLocation", startLoc).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("customPath", CustomPathBox.Text).ConfigureAwait(false);
-        await fileOps.SetSettingAsync("openInNewTab", OpenInNewTabSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
-        await fileOps.SetSettingAsync("enableGitIntegration", EnableGitSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
-        await fileOps.SetSettingAsync("showFolderSizes", ShowFolderSizesSwitch.IsOn ? "true" : "false").ConfigureAwait(false);
+        await fileOps.SetSettingAsync("customPath", customPath).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("openInNewTab", openInNewTab).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("enableGitIntegration", enableGit).ConfigureAwait(false);
+        await fileOps.SetSettingAsync("showFolderSizes", showFolderSizes).ConfigureAwait(false);
+    }
+
+    private void SelectColumnPreset(string preset)
+    {
+        var normalized = UiSettings.NormalizeColumnPreset(preset);
+        var selected = ColumnPresetComboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), normalized, StringComparison.Ordinal));
+        ColumnPresetComboBox.SelectedItem = selected ?? ColumnPresetComboBox.Items[0];
     }
 
     private async Task CheckRarInstalledAsync()
@@ -142,7 +165,7 @@ public sealed partial class SettingsDialog : ContentDialog
         if (_fileOps == null) return;
         InstallRarButton.IsEnabled = false;
         RarStatusText.Text = "Preparing install...";
-        
+
         var prepResult = await _fileOps.PrepareRarInstallAsync().ConfigureAwait(true);
         if (prepResult != null)
         {
@@ -154,7 +177,7 @@ public sealed partial class SettingsDialog : ContentDialog
                 CloseButtonText = "Cancel",
                 XamlRoot = this.XamlRoot
             };
-            
+
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
                 RarStatusText.Text = "Installing...";

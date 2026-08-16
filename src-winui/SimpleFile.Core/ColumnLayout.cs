@@ -42,8 +42,14 @@ public sealed class ColumnLayout
         [
             new("name", "Name", "name", 240, 120, 720),
             new("size", "Size", "size", 100, 72, 220),
+            new("items", "Items", "items", 86, 64, 160),
             new("date", "Modified", "date", 160, 112, 260),
             new("type", "Type", "type", 100, 84, 260),
+            new("extension", "Ext", "extension", 72, 56, 120),
+            new("git", "Git", "git", 92, 72, 180),
+            new("symlink", "Link target", "symlink", 180, 100, 420),
+            new("path", "Path", "path", 220, 140, 640),
+            new("parent", "Parent", "parent", 180, 120, 480),
         ];
         VisibleIds = [.. DefaultVisible];
     }
@@ -60,6 +66,11 @@ public sealed class ColumnLayout
             .Where(column => column is not null)
             .Cast<FileListColumn>()
             .ToList();
+
+    public bool IsVisible(string id)
+    {
+        return VisibleIds.Any(visible => string.Equals(visible, id, StringComparison.Ordinal));
+    }
 
     public FileListColumn? Find(string id)
     {
@@ -91,7 +102,12 @@ public sealed class ColumnLayout
         }
 
         VisibleIds.Clear();
-        VisibleIds.AddRange(ids);
+        VisibleIds.AddRange(ids.Where(id => Find(id) is not null));
+        if (VisibleIds.Count == 0)
+        {
+            VisibleIds.AddRange(DefaultVisible);
+        }
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 

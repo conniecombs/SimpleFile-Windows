@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 using SimpleFile.Core;
 using SimpleFile.Ipc;
 using Windows.Graphics;
@@ -44,6 +45,10 @@ public sealed partial class MainWindow : Window
     private string? _previewPath;
     private bool _applyingWorkspace;
     private int _folderRefreshToken;
+    private string? _primaryColumnHeaderKey;
+    private string? _secondaryColumnHeaderKey;
+    private string? _columnEnrichmentSignature;
+    private int _columnEnrichmentToken;
 
     public ObservableCollection<FileRow> PrimaryFiles { get; } = [];
     public ObservableCollection<FileRow> SecondaryFiles { get; } = [];
@@ -255,6 +260,7 @@ public sealed partial class MainWindow : Window
         }
 
         QueueWatchActiveDirectory();
+        QueueColumnEnrichment();
 
         if (_workspace.PendingReconnect is { } drive && !_reconnectDialogOpen)
         {
@@ -632,10 +638,15 @@ public sealed partial class MainWindow : Window
         && left.IsDir == right.IsDir
         && left.IsCut == right.IsCut
         && left.Size == right.Size
+        && left.ItemsText == right.ItemsText
         && left.ModifiedText == right.ModifiedText
         && left.SizeText == right.SizeText
         && left.TypeText == right.TypeText
+        && left.ExtensionText == right.ExtensionText
         && left.GitText == right.GitText
+        && left.SymlinkText == right.SymlinkText
+        && left.PathText == right.PathText
+        && left.ParentText == right.ParentText
         && left.TagColor == right.TagColor
         && left.Icon == right.Icon;
 
@@ -1556,13 +1567,92 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnSortName(object sender, RoutedEventArgs e) => _workspace?.SetSort("name");
+    private void OnSortColumn(object sender, RoutedEventArgs e)
+    {
+        if (_workspace is not null && sender is FrameworkElement { Tag: string sort })
+        {
+            _workspace.SetSort(sort);
+        }
+    }
 
-    private void OnSortSize(object sender, RoutedEventArgs e) => _workspace?.SetSort("size");
+    private void ApplyColumnHeader(Grid header, ColumnLayout columns, ref string? renderedKey)
+    {
+        var visible = columns.VisibleColumns;
+        var key = string.Join(
+            '\u001f',
+            visible.Select(column => $"{column.Id}:{column.Width:0.###}"))
+            + $"|{_workspace?.SortBy}:{_workspace?.SortAscending}";
+        if (string.Equals(renderedKey, key, StringComparison.Ordinal))
+        {
+            return;
+        }
 
-    private void OnSortDate(object sender, RoutedEventArgs e) => _workspace?.SetSort("date");
+        renderedKey = key;
+        header.ColumnDefinitions.Clear();
+        header.Children.Clear();
 
-    private void OnSortType(object sender, RoutedEventArgs e) => _workspace?.SetSort("type");
+        var gridColumn = 0;
+        for (var index = 0; index < visible.Count; index++)
+        {
+            var column = visible[index];
+            header.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = column.Id == "name"
+                    ? new GridLength(1, GridUnitType.Star)
+                    : new GridLength(column.Width),
+            });
+
+            var button = new Button
+            {
+                Style = ChromeStyle("SfColumnHeaderButtonStyle"),
+                Padding = column.Id == "name" ? new Thickness(24, 6, 8, 6) : new Thickness(8, 6, 8, 6),
+                Content = HeaderLabel(column),
+                Tag = column.Sort,
+            };
+            button.Click += OnSortColumn;
+            ToolTipService.SetToolTip(button, $"Sort by {column.Label}");
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"Sort by {column.Label}");
+            Grid.SetColumn(button, gridColumn);
+            header.Children.Add(button);
+
+            if (index == visible.Count - 1)
+            {
+                break;
+            }
+
+            gridColumn += 1;
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(6) });
+            var resizeId = column.Id == "name" ? visible[index + 1].Id : column.Id;
+            var thumb = new Border
+            {
+                Background = Brush("SfTransparentBrush"),
+                Tag = resizeId,
+                Child = new Rectangle
+                {
+                    Width = 1,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Fill = Brush("SfBorderBrush"),
+                },
+            };
+            thumb.PointerMoved += OnColumnThumbMoved;
+            thumb.PointerPressed += OnColumnThumbPressed;
+            thumb.PointerReleased += OnColumnThumbReleased;
+            Grid.SetColumn(thumb, gridColumn);
+            header.Children.Add(thumb);
+            gridColumn += 1;
+        }
+    }
+
+    private string HeaderLabel(FileListColumn column)
+    {
+        var label = column.Id == "date" ? "Date modified" : column.Label;
+        if (_workspace is null || !string.Equals(_workspace.SortBy, column.Sort, StringComparison.OrdinalIgnoreCase))
+        {
+            return label;
+        }
+
+        return _workspace.SortAscending ? $"{label} ↑" : $"{label} ↓";
+    }
 
     private void OnDividerPressed(object sender, PointerRoutedEventArgs e)
     {
@@ -1767,6 +1857,89 @@ public sealed partial class MainWindow : Window
 
         _watchTargetPath = path;
         _ = WatchDirectoryAsync(path);
+    }
+
+    private void QueueColumnEnrichment()
+    {
+        if (_workspace?.FileOps is null)
+        {
+            return;
+        }
+
+        var needsGit = _workspace.Columns.IsVisible("git") && _workspace.Settings.EnableGitIntegration;
+        var needsItems = _workspace.Columns.IsVisible("items");
+        var needsSizes = _workspace.Settings.ShowFolderSizes;
+        if (!needsGit && !needsItems && !needsSizes)
+        {
+            return;
+        }
+
+        var panes = _workspace.DualPaneEnabled
+            ? new[] { PaneId.Primary, PaneId.Secondary }
+            : new[] { PaneId.Primary };
+        var signatureParts = new List<string>
+        {
+            string.Join(',', _workspace.Columns.VisibleIds),
+            $"git={needsGit}",
+            $"items={needsItems}",
+            $"sizes={needsSizes}",
+        };
+        signatureParts.AddRange(panes.Select(ColumnEnrichmentSignatureFor));
+        var signature = string.Join('|', signatureParts);
+        if (string.Equals(signature, _columnEnrichmentSignature, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _columnEnrichmentSignature = signature;
+        var token = Interlocked.Increment(ref _columnEnrichmentToken);
+        _ = EnrichColumnsAsync(panes, needsGit, needsSizes, needsItems, token);
+    }
+
+    private string ColumnEnrichmentSignatureFor(PaneId pane)
+    {
+        if (_workspace is null)
+        {
+            return "";
+        }
+
+        var state = _workspace.Pane(pane);
+        var entries = string.Join(
+            '\u001e',
+            state.Entries.Take(64).Select(entry => $"{entry.Path}:{entry.Modified}:{entry.IsDir}"));
+        return $"{pane}:{state.Path}:{state.NavigationToken}:{state.ListingInProgress}:{state.Entries.Count}:{entries}";
+    }
+
+    private async Task EnrichColumnsAsync(
+        IReadOnlyList<PaneId> panes,
+        bool needsGit,
+        bool needsSizes,
+        bool needsItems,
+        int token)
+    {
+        var workspace = _workspace;
+        if (workspace is null)
+        {
+            return;
+        }
+
+        foreach (var pane in panes)
+        {
+            if (token != _columnEnrichmentToken || workspace.Pane(pane).ListingInProgress)
+            {
+                return;
+            }
+
+            if (needsGit)
+            {
+                await workspace.ApplyGitStatusesAsync(pane).ConfigureAwait(false);
+            }
+
+            if (needsSizes || needsItems)
+            {
+                await workspace.FillFolderMetricsAsync(pane, needsSizes, needsItems).ConfigureAwait(false);
+            }
+        }
     }
 
     private async Task WatchDirectoryAsync(string path)
@@ -2447,7 +2620,7 @@ public sealed partial class MainWindow : Window
         {
             await dialog.SaveSettingsAsync(_workspace.FileOps);
             dialog.ApplyTo(_workspace.Settings);
-            _workspace.SetShowHidden(_workspace.Settings.ShowHidden);
+            _workspace.ApplyUiSettings(_workspace.Settings);
             ApplyTheme(_workspace.Settings.Theme);
             await _workspace.SaveUiSettingsAsync();
         }
@@ -2513,7 +2686,7 @@ public sealed partial class MainWindow : Window
         if (result == ContentDialogResult.Primary)
         {
             await _workspace.FileOps.CreateArchiveAsync(
-                dialog.SelectedPaths, 
+                dialog.SelectedPaths,
                 System.IO.Path.Combine(dialog.TargetDirectory, dialog.ArchiveName),
                 dialog.ArchiveFormat);
             await _workspace.RefreshAsync();
@@ -2674,16 +2847,16 @@ public sealed partial class MainWindow : Window
     private async void OnSmartFolderClicked(object sender, ItemClickEventArgs e)
     {
         if (_workspace == null || e.ClickedItem is not SimpleFile.Ipc.SmartFolder folder) return;
-        
+
         await CancelActiveSearchAsync();
-        
+
         var pane = _workspace.ActivePane;
         var root = folder.SearchOptions.SearchPath;
         if (string.IsNullOrEmpty(root)) root = _workspace.Active.Path;
-        
+
         var searchId = $"search_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Interlocked.Increment(ref _searchCounter)}";
         folder.SearchOptions.SearchId = searchId;
-        
+
         _activeSearchId = searchId;
         _searchMode = true;
         _searchPane = pane;
@@ -2692,7 +2865,7 @@ public sealed partial class MainWindow : Window
         SearchCancelButton.IsEnabled = true;
         ApplySearchRows();
         StatusText.Text = $"Searching Smart Folder...";
-        
+
         try
         {
             var results = await _workspace.FileOps!.SearchAsync(
@@ -2709,7 +2882,7 @@ public sealed partial class MainWindow : Window
                     if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
                         StatusText.Text = $"Search complete: {count} result(s)";
                 }));
-            
+
             if (string.Equals(_activeSearchId, searchId, StringComparison.Ordinal))
             {
                 _activeSearchResults.Clear();

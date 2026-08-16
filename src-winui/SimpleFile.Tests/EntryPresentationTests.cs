@@ -49,4 +49,33 @@ public class EntryPresentationTests
         var visible = EntryPresentation.VisibleEntries(entries, filterQuery: "readme");
         Assert.Equal("ReadMe.md", Assert.Single(visible).Name);
     }
+
+    [Fact]
+    public void ColumnText_FormatsExtraColumns()
+    {
+        var folder = new FileEntry
+        {
+            Name = "src",
+            Path = @"C:\Projects\App\src",
+            IsDir = true,
+            Size = 4096,
+            ItemCount = 42,
+            SymlinkTarget = @"D:\Shared\src",
+        };
+        Assert.Equal("4.0 KB", EntryPresentation.ColumnText(folder, "size"));
+        Assert.Equal("42 items", EntryPresentation.ColumnText(folder, "items"));
+        Assert.Equal(@"D:\Shared\src", EntryPresentation.ColumnText(folder, "symlink"));
+        Assert.Equal(@"C:\Projects\App", EntryPresentation.ColumnText(folder, "parent"));
+
+        var file = new FileEntry
+        {
+            Name = "notes.txt",
+            Path = @"C:\Projects\App\notes.txt",
+            Extension = "txt",
+            GitStatus = "modified",
+        };
+        Assert.Equal(".txt", EntryPresentation.ColumnText(file, "extension"));
+        Assert.Equal("modified", EntryPresentation.ColumnText(file, "git"));
+        Assert.Equal(@"C:\Projects\App\notes.txt", EntryPresentation.ColumnText(file, "path"));
+    }
 }

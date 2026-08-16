@@ -12,15 +12,38 @@ public sealed class FileRow
     public bool IsDir { get; set; }
     public string Icon { get; set; } = "";
     public string SizeText { get; set; } = "";
+    public string ItemsText { get; set; } = "";
     public string ModifiedText { get; set; } = "";
     public string TypeText { get; set; } = "";
     public bool IsCut { get; set; }
     public ulong Size { get; set; }
     public string Extension { get; set; } = "";
+    public string ExtensionText { get; set; } = "";
     public string GitText { get; set; } = "";
+    public string SymlinkText { get; set; } = "";
+    public string PathText { get; set; } = "";
+    public string ParentText { get; set; } = "";
     public string TagColor { get; set; } = "";
     public string TagName { get; set; } = "";
     public string AutomationName => IsDir ? $"Folder {Name}" : $"File {Name}";
+
+    public string ColumnText(string columnId)
+    {
+        return columnId switch
+        {
+            "name" => Name,
+            "size" => SizeText,
+            "items" => ItemsText,
+            "date" or "modified" => ModifiedText,
+            "type" => TypeText,
+            "extension" => ExtensionText,
+            "git" => GitText,
+            "symlink" => SymlinkText,
+            "path" => PathText,
+            "parent" => ParentText,
+            _ => "",
+        };
+    }
 
     public static FileRow From(FileEntry entry, bool isCut = false, Tag? tag = null)
     {
@@ -30,13 +53,18 @@ public sealed class FileRow
             Path = entry.Path,
             IsDir = entry.IsDir,
             Icon = EntryPresentation.EntryIcon(entry),
-            SizeText = EntryPresentation.FormatFileSize(entry.Size, entry.IsDir),
+            SizeText = EntryPresentation.ColumnText(entry, "size"),
+            ItemsText = EntryPresentation.ColumnText(entry, "items"),
             ModifiedText = EntryPresentation.FormatModified(entry.Modified),
             TypeText = EntryPresentation.FileType(entry),
             IsCut = isCut,
             Size = entry.Size,
             Extension = entry.Extension ?? "",
+            ExtensionText = EntryPresentation.ColumnText(entry, "extension"),
             GitText = entry.GitStatus ?? "",
+            SymlinkText = entry.SymlinkTarget ?? "",
+            PathText = entry.Path,
+            ParentText = EntryPresentation.ColumnText(entry, "parent"),
             TagColor = tag?.Color ?? "",
             TagName = tag?.Name ?? "",
         };

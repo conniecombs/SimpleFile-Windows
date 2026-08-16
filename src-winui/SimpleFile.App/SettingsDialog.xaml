@@ -39,6 +39,13 @@
                         <ComboBoxItem Content="Light" Tag="Light" />
                         <ComboBoxItem Content="Dark" Tag="Dark" />
                     </ComboBox>
+                    <ComboBox x:Name="ColumnPresetComboBox" Header="File list columns" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Default" Tag="default" />
+                        <ComboBoxItem Content="Details" Tag="details" />
+                        <ComboBoxItem Content="Media" Tag="media" />
+                        <ComboBoxItem Content="Developer" Tag="developer" />
+                        <ComboBoxItem Content="Photo" Tag="photo" />
+                    </ComboBox>
                     <ToggleSwitch x:Name="ShowHiddenSwitch" Header="Show Hidden Files" />
                 </StackPanel>
                 

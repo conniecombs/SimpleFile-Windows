@@ -463,6 +463,7 @@ public sealed class ExplorerWorkspace
             return;
         }
 
+        var token = state.NextNavigationToken();
         var selected = state.SelectedPath;
         try
         {
@@ -471,7 +472,7 @@ public sealed class ExplorerWorkspace
 
             lock (_gate)
             {
-                if (!PathRules.PathsEqual(state.Path, path))
+                if (token != state.NavigationToken || !PathRules.PathsEqual(state.Path, path))
                 {
                     return;
                 }
@@ -1130,16 +1131,30 @@ public sealed class ExplorerWorkspace
 
     public async Task ApplyGitStatusesAsync(CancellationToken cancellationToken = default)
     {
+        await ApplyGitStatusesAsync(ActivePane, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task ApplyGitStatusesAsync(PaneId pane, CancellationToken cancellationToken = default)
+    {
         if (FileOps is null || !Settings.EnableGitIntegration)
         {
             return;
         }
 
+        var target = Normalize(pane);
+        var state = Pane(target);
+        var path = state.Path;
+        var navigationToken = state.NavigationToken;
         try
         {
-            var statuses = await FileOps.GetGitFileStatusesAsync(Active.Path, cancellationToken).ConfigureAwait(false);
+            var statuses = await FileOps.GetGitFileStatusesAsync(path, cancellationToken).ConfigureAwait(false);
             var map = statuses.ToDictionary(entry => entry.Path, entry => entry.GitStatus ?? "", StringComparer.OrdinalIgnoreCase);
-            foreach (var entry in Active.Entries)
+            if (navigationToken != state.NavigationToken || !PathRules.PathsEqual(state.Path, path))
+            {
+                return;
+            }
+
+            foreach (var entry in state.Entries)
             {
                 if (map.TryGetValue(entry.Path, out var status))
                 {
@@ -1157,24 +1172,60 @@ public sealed class ExplorerWorkspace
 
     public async Task FillFolderSizesAsync(CancellationToken cancellationToken = default)
     {
-        if (FileOps is null || !Settings.ShowFolderSizes)
+        await FillFolderMetricsAsync(ActivePane, includeSizes: Settings.ShowFolderSizes, includeItemCounts: false, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task FillFolderMetricsAsync(
+        PaneId pane,
+        bool includeSizes,
+        bool includeItemCounts,
+        CancellationToken cancellationToken = default)
+    {
+        if (FileOps is null || (!includeSizes && !includeItemCounts))
         {
             return;
         }
 
-        foreach (var entry in Active.Entries.Where(item => item.IsDir).Take(32))
+        var target = Normalize(pane);
+        var state = Pane(target);
+        var path = state.Path;
+        var navigationToken = state.NavigationToken;
+        var folders = state.Entries.Where(item => item.IsDir).Take(32).ToList();
+        var changed = false;
+        foreach (var entry in folders)
         {
+            if (cancellationToken.IsCancellationRequested
+                || navigationToken != state.NavigationToken
+                || !PathRules.PathsEqual(state.Path, path))
+            {
+                return;
+            }
+
             try
             {
-                entry.Size = await FileOps.CalculateFolderSizeAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                if (includeSizes)
+                {
+                    entry.Size = await FileOps.CalculateFolderSizeAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                    changed = true;
+                }
+
+                if (includeItemCounts)
+                {
+                    entry.ItemCount = await FileOps.CountFolderItemsAsync(entry.Path, cancellationToken).ConfigureAwait(false);
+                    changed = true;
+                }
             }
             catch
             {
-                // Skip folders that cannot be measured.
+                // Skip folders that cannot be measured or counted.
             }
         }
 
-        RaiseChanged();
+        if (changed)
+        {
+            RaiseChanged();
+        }
     }
 
     public void RememberClipboard()
@@ -1381,6 +1432,7 @@ public sealed class ExplorerWorkspace
         }
 
         Settings.ShowHidden = ShowHiddenFiles;
+        Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(Settings.ColumnPreset);
         Settings.ColumnWidths = Columns.SnapshotWidths();
         await FileOps.SetSettingAsync("theme", Settings.Theme, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("showHidden", Settings.ShowHidden ? "true" : "false", cancellationToken).ConfigureAwait(false);
@@ -1390,7 +1442,13 @@ public sealed class ExplorerWorkspace
         await FileOps.SetSettingAsync("customPath", Settings.CustomPath, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("openInNewTab", Settings.OpenInNewTab ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("enableGitIntegration", Settings.EnableGitIntegration ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("showFolderSizes", Settings.ShowFolderSizes ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("previewVisible", Settings.PreviewVisible ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("columnPreset", Settings.ColumnPreset, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync(
+            "columnWidths",
+            System.Text.Json.JsonSerializer.Serialize(Settings.ColumnWidths),
+            cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("sidebar.quickAccessCollapsed", Settings.QuickAccessCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("sidebar.myPcCollapsed", Settings.MyPcCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("lastPath", Settings.LastPath, cancellationToken).ConfigureAwait(false);
@@ -1478,14 +1536,39 @@ public sealed class ExplorerWorkspace
             Settings.LastPath = await FileOps.GetSettingAsync("lastPath", cancellationToken).ConfigureAwait(false) ?? "";
             Settings.OpenInNewTab = await ReadBoolSettingAsync("openInNewTab", false, cancellationToken).ConfigureAwait(false);
             Settings.EnableGitIntegration = await ReadBoolSettingAsync("enableGitIntegration", true, cancellationToken).ConfigureAwait(false);
+            Settings.ShowFolderSizes = await ReadBoolSettingAsync("showFolderSizes", false, cancellationToken).ConfigureAwait(false);
             Settings.PreviewVisible = await ReadBoolSettingAsync("previewVisible", true, cancellationToken).ConfigureAwait(false);
+            Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(
+                await FileOps.GetSettingAsync("columnPreset", cancellationToken).ConfigureAwait(false));
+            Settings.ColumnWidths = await ReadColumnWidthsAsync(cancellationToken).ConfigureAwait(false);
             Settings.QuickAccessCollapsed = await ReadBoolSettingAsync("sidebar.quickAccessCollapsed", false, cancellationToken).ConfigureAwait(false);
             Settings.MyPcCollapsed = await ReadBoolSettingAsync("sidebar.myPcCollapsed", false, cancellationToken).ConfigureAwait(false);
             ShowHiddenFiles = Settings.ShowHidden;
+            Columns.ApplyPreset(Settings.ColumnPreset);
+            Columns.RestoreWidths(Settings.ColumnWidths);
         }
         catch
         {
             // Missing keys or a stub IPC keep defaults.
+        }
+    }
+
+    private async Task<Dictionary<string, double>> ReadColumnWidthsAsync(CancellationToken cancellationToken)
+    {
+        var raw = await FileOps!.GetSettingAsync("columnWidths", cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return new Dictionary<string, double>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, double>>(raw)
+                ?? new Dictionary<string, double>(StringComparer.Ordinal);
+        }
+        catch
+        {
+            return new Dictionary<string, double>(StringComparer.Ordinal);
         }
     }
 
