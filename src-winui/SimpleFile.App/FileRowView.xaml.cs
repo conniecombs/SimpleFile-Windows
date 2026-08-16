@@ -93,16 +93,18 @@ public sealed partial class FileRowView : UserControl
             ToolTipService.SetToolTip(_nameText, Row.Name);
         }
 
+        var isTileView = FileListViewHost.View == "tiles";
+
         if (_metadataText is not null)
         {
-            var value = MetadataText(Row);
+            var value = isTileView ? TilePrimaryMetadataText(Row) : MetadataText(Row);
             _metadataText.Text = value;
             ToolTipService.SetToolTip(_metadataText, string.IsNullOrWhiteSpace(value) ? null : value);
         }
 
         if (_secondaryText is not null)
         {
-            var value = SecondaryText(Row);
+            var value = isTileView ? Row.ModifiedText : SecondaryText(Row);
             _secondaryText.Text = value;
             ToolTipService.SetToolTip(_secondaryText, string.IsNullOrWhiteSpace(value) ? null : value);
         }
@@ -263,8 +265,10 @@ public sealed partial class FileRowView : UserControl
         };
         _nameText = CreateNameText(wrapName: true);
         _metadataText = CreateMetadataText();
+        _secondaryText = CreateMetadataText(opacity: 0.74);
         stack.Children.Add(_nameText);
         stack.Children.Add(_metadataText);
+        stack.Children.Add(_secondaryText);
         Grid.SetColumn(stack, 1);
         RowGrid.Children.Add(stack);
     }
@@ -384,6 +388,13 @@ public sealed partial class FileRowView : UserControl
     {
         var sizeOrItems = row.IsDir && !string.IsNullOrWhiteSpace(row.ItemsText) ? row.ItemsText : row.SizeText;
         return string.Join("  ", new[] { sizeOrItems, row.TypeText, row.ModifiedText }
+            .Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private static string TilePrimaryMetadataText(FileRow row)
+    {
+        var sizeOrItems = row.IsDir && !string.IsNullOrWhiteSpace(row.ItemsText) ? row.ItemsText : row.SizeText;
+        return string.Join("  ", new[] { sizeOrItems, row.TypeText }
             .Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 

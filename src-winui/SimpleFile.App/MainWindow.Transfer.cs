@@ -22,8 +22,45 @@ public sealed partial class MainWindow
     private void OnFileDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
         _dragPaths = e.Items.OfType<FileRow>().Select(row => row.Path).ToArray();
+        if (_dragPaths.Length == 0)
+        {
+            e.Cancel = true;
+            return;
+        }
+
         e.Data.SetText($"{InternalDragFormat}|{string.Join('\n', _dragPaths)}");
         e.Data.RequestedOperation = DataPackageOperation.Copy | DataPackageOperation.Move;
+
+        // Provide StorageItems so files can be dragged to Windows Explorer and other apps.
+        var storageItems = new List<IStorageItem>();
+        foreach (var path in _dragPaths)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    storageItems.Add(StorageFolder.GetFolderFromPathAsync(path).AsTask().GetAwaiter().GetResult());
+                }
+                else if (File.Exists(path))
+                {
+                    storageItems.Add(StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult());
+                }
+            }
+            catch
+            {
+                // Skip items that cannot be resolved to StorageItems (e.g. permission issues).
+            }
+        }
+
+        if (storageItems.Count > 0)
+        {
+            e.Data.SetStorageItems(storageItems);
+        }
+    }
+
+    private void OnFileDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
+    {
+        _dragPaths = [];
     }
 
     private void OnPrimaryFileDragOver(object sender, DragEventArgs e) => HandleFileDragOver(e, PaneId.Primary);

@@ -8,7 +8,7 @@
     Title="SimpleFile">
     <Grid
         x:Name="RootGrid"
-        Background="{ThemeResource SfBgPrimaryBrush}"
+        Background="Transparent"
         PreviewKeyDown="OnRootPreviewKeyDown">
         <Grid.KeyboardAccelerators>
             <KeyboardAccelerator Key="F5" Invoked="OnRefreshAccelerator" />
@@ -231,8 +231,7 @@
                                                         Padding="5,1"
                                                         VerticalAlignment="Center"
                                                         Background="{ThemeResource SfAccentSoftBrush}"
-                                                        BorderBrush="{ThemeResource SfAccentBrush}"
-                                                        BorderThickness="1"
+                                                        BorderThickness="0"
                                                         CornerRadius="4"
                                                         Visibility="{x:Bind BadgeVisibility}">
                                                         <TextBlock
@@ -540,7 +539,6 @@
                         <Grid
                             x:Name="PrimaryPaneRoot"
                             Grid.Column="0"
-                            BorderBrush="{ThemeResource SfAccentBrush}"
                             BorderThickness="0"
                             PointerPressed="OnPrimaryPanePressed">
                             <Grid.RowDefinitions>
@@ -740,13 +738,22 @@
                                 Background="Transparent"
                                 BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1" />
-                            <Grid Grid.Row="3">
+                            <Grid
+                                Grid.Row="3"
+                                Background="Transparent"
+                                PointerPressed="OnPrimaryMarqueePressed"
+                                PointerMoved="OnMarqueePointerMoved"
+                                PointerReleased="OnMarqueePointerReleased"
+                                PointerCanceled="OnMarqueePointerCanceled">
                                 <ListView
                                     x:Name="PrimaryFileList"
                                     Padding="2,4,2,6"
                                     AllowDrop="True"
+                                    CanDragItems="True"
                                     AutomationProperties.Name="Left pane files"
                                     DoubleTapped="OnPrimaryFileDoubleTapped"
+                                    DragItemsStarting="OnFileDragItemsStarting"
+                                    DragItemsCompleted="OnFileDragItemsCompleted"
                                     DragLeave="OnFileDragLeave"
                                     DragOver="OnPrimaryFileDragOver"
                                     Drop="OnPrimaryFileDrop"
@@ -769,6 +776,16 @@
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>
+                                <Canvas x:Name="PrimaryMarqueeCanvas" IsHitTestVisible="False">
+                                    <Rectangle
+                                        x:Name="PrimaryMarqueeRect"
+                                        Visibility="Collapsed"
+                                        Stroke="{ThemeResource SfAccentBrush}"
+                                        StrokeThickness="1"
+                                        Fill="{ThemeResource SfAccentSoftBrush}"
+                                        RadiusX="2"
+                                        RadiusY="2" />
+                                </Canvas>
                                 <TextBlock
                                     x:Name="PrimaryEmptyText"
                                     HorizontalAlignment="Center"
@@ -796,7 +813,6 @@
                         <Grid
                             x:Name="SecondaryPaneRoot"
                             Grid.Column="2"
-                            BorderBrush="{ThemeResource SfAccentBrush}"
                             BorderThickness="0"
                             PointerPressed="OnSecondaryPanePressed"
                             Visibility="Collapsed">
@@ -936,13 +952,22 @@
                                 Background="Transparent"
                                 BorderBrush="{ThemeResource SfBorderBrush}"
                                 BorderThickness="0,0,0,1" />
-                            <Grid Grid.Row="3">
+                            <Grid
+                                Grid.Row="3"
+                                Background="Transparent"
+                                PointerPressed="OnSecondaryMarqueePressed"
+                                PointerMoved="OnMarqueePointerMoved"
+                                PointerReleased="OnMarqueePointerReleased"
+                                PointerCanceled="OnMarqueePointerCanceled">
                                 <ListView
                                     x:Name="SecondaryFileList"
                                     Padding="2,4,2,6"
                                     AllowDrop="True"
+                                    CanDragItems="True"
                                     AutomationProperties.Name="Right pane files"
                                     DoubleTapped="OnSecondaryFileDoubleTapped"
+                                    DragItemsStarting="OnFileDragItemsStarting"
+                                    DragItemsCompleted="OnFileDragItemsCompleted"
                                     DragLeave="OnFileDragLeave"
                                     DragOver="OnSecondaryFileDragOver"
                                     Drop="OnSecondaryFileDrop"
@@ -965,6 +990,16 @@
                                         </DataTemplate>
                                     </ListView.ItemTemplate>
                                 </ListView>
+                                <Canvas x:Name="SecondaryMarqueeCanvas" IsHitTestVisible="False">
+                                    <Rectangle
+                                        x:Name="SecondaryMarqueeRect"
+                                        Visibility="Collapsed"
+                                        Stroke="{ThemeResource SfAccentBrush}"
+                                        StrokeThickness="1"
+                                        Fill="{ThemeResource SfAccentSoftBrush}"
+                                        RadiusX="2"
+                                        RadiusY="2" />
+                                </Canvas>
                                 <TextBlock
                                     x:Name="SecondaryEmptyText"
                                     HorizontalAlignment="Center"

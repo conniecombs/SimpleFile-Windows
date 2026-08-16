@@ -1063,23 +1063,56 @@ public sealed partial class MainWindow
             return;
         }
 
-        var folder = ActiveSelectedRows.FirstOrDefault(row => row.IsDir);
-        var path = folder?.Path ?? workspace.Active.Path;
+        var folders = ActiveSelectedRows.Where(row => row.IsDir).ToArray();
+        var paths = folders.Length > 0
+            ? folders.Select(f => f.Path).ToArray()
+            : [workspace.Active.Path];
+
         var utilityCts = BeginUtilityOperation();
         try
         {
-            StatusText.Text = $"Calculating metrics for {path}...";
-            var size = await fileOps.CalculateFolderSizeAsync(path, utilityCts.Token);
-            var count = await fileOps.CountFolderItemsAsync(path, utilityCts.Token);
-            if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+            var lines = new List<string>();
+            ulong totalSize = 0;
+            ulong totalCount = 0;
+
+            foreach (var path in paths)
             {
-                return;
+                StatusText.Text = $"Calculating metrics for {path}...";
+                var size = await fileOps.CalculateFolderSizeAsync(path, utilityCts.Token);
+                var count = await fileOps.CountFolderItemsAsync(path, utilityCts.Token);
+                if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                lines.Add($"{path}{Environment.NewLine}{EntryPresentation.FormatFileSize(size)} · {count} item(s)");
+                totalSize += size;
+                totalCount += count;
             }
 
+            if (paths.Length > 1)
+            {
+                lines.Add($"Total: {EntryPresentation.FormatFileSize(totalSize)} · {totalCount} item(s) across {paths.Length} folders");
+            }
+            else
+            {
+                lines.Add($"Total: {EntryPresentation.FormatFileSize(totalSize)} · {totalCount} item(s)");
+            }
+
+            StatusText.Text = "";
             var dialog = new ContentDialog
             {
                 Title = "Folder metrics",
-                Content = $"{path}{Environment.NewLine}{EntryPresentation.FormatFileSize(size)} · {count} item(s)",
+                Content = new ScrollViewer
+                {
+                    MaxHeight = 400,
+                    Content = new TextBlock
+                    {
+                        Text = string.Join(Environment.NewLine + Environment.NewLine, lines),
+                        TextWrapping = TextWrapping.Wrap,
+                        Width = 420,
+                    },
+                },
                 CloseButtonText = "Close",
                 XamlRoot = Content.XamlRoot,
             };
