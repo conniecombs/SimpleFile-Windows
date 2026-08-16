@@ -17,42 +17,51 @@ public sealed class AppCommand
 }
 
 /// <summary>
-/// Command-palette catalog. IDs match
-/// frontend/src/lib/components/layout-shell/CommandPalette.svelte.
+/// Command-palette catalog for the WinUI shell.
 /// </summary>
 public static class AppCommandCatalog
 {
     public static readonly IReadOnlyList<AppCommand> All =
     [
-        new("go-home", "Go Home", "Navigation", "Alt+Home"),
+        new("go-home", "Go home", "Navigation", "Alt+Home"),
         new("refresh", "Refresh", "Navigation", "F5"),
         new("copy", "Copy", "Clipboard", "Ctrl+C"),
         new("cut", "Cut", "Clipboard", "Ctrl+X"),
         new("paste", "Paste", "Clipboard", "Ctrl+V"),
-        new("clipboard-history", "Clipboard History", "Clipboard", "Ctrl+Shift+V"),
-        new("operation-history", "Operation History", "History"),
+        new("clipboard-history", "Clipboard history", "Clipboard", "Ctrl+Shift+V"),
+        new("operation-history", "Operation history", "History"),
+        new("clear-recent-history", "Clear recent history", "History"),
         new("undo", "Undo", "History", "Ctrl+Z"),
         new("redo", "Redo", "History", "Ctrl+Y"),
         new("delete", "Delete", "File", "Delete"),
         new("rename", "Rename", "File", "F2"),
-        new("advanced-rename", "Advanced Rename", "File"),
-        new("new-folder", "New Folder", "File", "Ctrl+Shift+N"),
-        new("new-file", "New File", "File", "Ctrl+N"),
-        new("create-archive", "Create Archive", "Archive"),
-        new("terminal", "Open Terminal", "Tools", "F4"),
-        new("preview", "Toggle Preview Pane", "View"),
-        new("dual-pane", "Toggle Dual Pane", "View", "F6"),
-        new("search", "Focus Search", "Search", "Ctrl+F"),
+        new("advanced-rename", "Advanced rename", "File"),
+        new("new-folder", "New folder", "File", "Ctrl+Shift+N"),
+        new("new-file", "New file", "File", "Ctrl+N"),
+        new("create-archive", "Create archive", "Archive"),
+        new("terminal", "Open terminal", "Tools", "F4"),
+        new("preview", "Toggle preview pane", "View"),
+        new("toggle-side-menu", "Toggle side menu", "View"),
+        new("dual-pane", "Toggle dual pane", "View", "F6"),
+        new("view-details", "View: details", "View"),
+        new("view-list", "View: list", "View"),
+        new("view-tiles", "View: tiles", "View"),
+        new("view-content", "View: content", "View"),
+        new("icon-size-small", "Icon size: small", "View"),
+        new("icon-size-medium", "Icon size: medium", "View"),
+        new("icon-size-large", "Icon size: large", "View"),
+        new("icon-size-extra-large", "Icon size: extra large", "View"),
+        new("search", "Focus search", "Search", "Ctrl+F"),
         new("quick-look", "Quick Look", "Inspection", "Space"),
         new("properties", "Properties", "Inspection"),
-        new("color-label", "Set Color Label", "Organization"),
-        new("folder-metrics", "Calculate Folder Metrics", "Tools"),
-        new("disk-cleanup", "Analyze Cleanup", "Tools"),
-        new("duplicate-checker", "Duplicate Checker", "Tools"),
+        new("color-label", "Set color label", "Organization"),
+        new("folder-metrics", "Folder metrics", "Tools"),
+        new("disk-cleanup", "Disk cleanup", "Tools"),
+        new("duplicate-checker", "Duplicate checker", "Tools"),
         new("settings", "Settings", "App", "Ctrl+Shift+S"),
-        new("keyboard-help", "Keyboard Shortcuts", "App", "F1"),
-        new("git-pull", "Git: Pull (Current Directory)", "Git"),
-        new("git-push", "Git: Push (Current Directory)", "Git"),
+        new("keyboard-help", "Keyboard shortcuts", "App", "F1"),
+        new("git-pull", "Git: pull current directory", "Git"),
+        new("git-push", "Git: push current directory", "Git"),
     ];
 
     public static IReadOnlyList<AppCommand> Filter(string? query)

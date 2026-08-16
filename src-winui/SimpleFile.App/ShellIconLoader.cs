@@ -17,14 +17,15 @@ internal static class ShellIconLoader
 
     private static readonly ConcurrentDictionary<string, BitmapImage> Cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public static BitmapImage? ForEntry(string path, bool isDirectory)
+    public static BitmapImage? ForEntry(string path, bool isDirectory, int iconSize = 16)
     {
         var key = isDirectory
             ? "dir"
             : System.IO.Path.GetExtension(path) is { Length: > 0 } extension
                 ? extension
                 : "file";
-        return Cache.GetOrAdd(key, _ => Load(path, isDirectory) ?? new BitmapImage());
+        var iconKind = iconSize <= 16 ? "small" : "large";
+        return Cache.GetOrAdd($"{iconKind}:{key}", _ => Load(path, isDirectory, iconSize) ?? new BitmapImage());
     }
 
     public static BitmapImage? ForPath(string path)
@@ -36,22 +37,27 @@ internal static class ShellIconLoader
 
         return Cache.GetOrAdd("path:" + path, _ =>
         {
-            var loaded = Load(path, isDirectory: false, useAttributes: false);
+            var loaded = Load(path, isDirectory: false, iconSize: 16, useAttributes: false);
             if (loaded is not null)
             {
                 return loaded;
             }
 
             var treatAsDirectory = path.EndsWith('\\') || path.EndsWith('/') || Directory.Exists(path);
-            return Load(path, treatAsDirectory, useAttributes: true) ?? new BitmapImage();
+            return Load(path, treatAsDirectory, iconSize: 16, useAttributes: true) ?? new BitmapImage();
         });
     }
 
-    private static BitmapImage? Load(string path, bool isDirectory, bool useAttributes = true)
+    private static BitmapImage? Load(string path, bool isDirectory, int iconSize, bool useAttributes = true)
     {
         var info = new ShFileInfo();
         var attributes = isDirectory ? FileAttributeDirectory : FileAttributeNormal;
-        var flags = ShgfiIcon | ShgfiSmallIcon;
+        var flags = ShgfiIcon;
+        if (iconSize <= 16)
+        {
+            flags |= ShgfiSmallIcon;
+        }
+
         if (useAttributes)
         {
             flags |= ShgfiUseFileAttributes;

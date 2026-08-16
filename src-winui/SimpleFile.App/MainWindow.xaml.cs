@@ -292,16 +292,17 @@ public sealed partial class MainWindow : Window
         SecondaryForwardButton.IsEnabled = _workspace.Secondary.CanGoForward;
         SecondaryUpButton.IsEnabled = _workspace.Secondary.CanGoUp;
 
-        DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
-        QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
         SetExpandGlyph(QuickAccessCollapseButton, _quickAccessCollapsed);
         SetExpandGlyph(MyPcCollapseButton, _myPcCollapsed);
         RefreshSmartFolders();
         BindItemsSource(FolderTreeList, _workspace.FolderTreeRows);
         BindItemsSource(BookmarksList, _workspace.Bookmarks);
         BindItemsSource(RecentsList, _workspace.RecentPaths);
+        ApplySidebarLayout();
         UpdateSidebarEmptyStates();
+        ApplySidebarSectionVisibility();
         ApplyPreviewVisibility();
+        ApplyFileListViewPresentation();
         ApplyColumnWidths();
         ApplyTheme(_workspace.Settings.Theme);
         UpdateEmptyStates();
@@ -550,6 +551,61 @@ public sealed partial class MainWindow : Window
         BookmarksEmptyText.Visibility = _workspace.Bookmarks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         RecentsEmptyText.Visibility = _workspace.RecentPaths.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         SmartFoldersEmptyText.Visibility = _workspace.SmartFolders.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ClearRecentsButton.IsEnabled = _workspace.RecentPaths.Count > 0;
+    }
+
+    private void ApplySidebarSectionVisibility()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        QuickAccessSection.Visibility = _workspace.Settings.ShowQuickAccess ? Visibility.Visible : Visibility.Collapsed;
+        FolderTreeSection.Visibility = _workspace.Settings.ShowFolderTree ? Visibility.Visible : Visibility.Collapsed;
+        BookmarksSection.Visibility = _workspace.Settings.ShowBookmarks ? Visibility.Visible : Visibility.Collapsed;
+        RecentSection.Visibility = _workspace.Settings.ShowRecentLocations ? Visibility.Visible : Visibility.Collapsed;
+        SmartFoldersSection.Visibility = _workspace.Settings.ShowSmartFolders ? Visibility.Visible : Visibility.Collapsed;
+
+        QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ApplySidebarLayout()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var settings = _workspace.Settings;
+        settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(settings.SidebarWidth);
+        if (settings.SidebarVisible)
+        {
+            SidebarColumn.MinWidth = UiSettings.SidebarMinWidth;
+            SidebarColumn.MaxWidth = UiSettings.SidebarMaxWidth;
+            SidebarColumn.Width = new GridLength(settings.SidebarWidth);
+            SidebarDividerColumn.Width = new GridLength(5);
+            SidebarRoot.Visibility = Visibility.Visible;
+            SidebarDivider.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            SidebarColumn.MinWidth = 0;
+            SidebarColumn.MaxWidth = 0;
+            SidebarColumn.Width = new GridLength(0);
+            SidebarDividerColumn.Width = new GridLength(0);
+            SidebarRoot.Visibility = Visibility.Collapsed;
+            SidebarDivider.Visibility = Visibility.Collapsed;
+        }
+
+        UpdateSidebarToggleButton(PrimarySidebarToggleButton, settings.SidebarVisible);
+        UpdateSidebarToggleButton(SecondarySidebarToggleButton, settings.SidebarVisible);
+    }
+
+    private static void UpdateSidebarToggleButton(Button button, bool sidebarVisible)
+    {
+        ToolTipService.SetToolTip(button, sidebarVisible ? "Hide side menu" : "Show side menu");
     }
 
     private void HighlightSidebarTarget()
@@ -630,12 +686,14 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static Style? ChromeStyle(string key)
+    private static T? ChromeResource<T>(string key) where T : class
     {
-        return Application.Current.Resources.TryGetValue(key, out var value) && value is Style style
-            ? style
+        return Application.Current.Resources.TryGetValue(key, out var value) && value is T resource
+            ? resource
             : null;
     }
+
+    private static Style? ChromeStyle(string key) => ChromeResource<Style>(key);
 
     private static Brush Brush(string key)
     {
@@ -645,6 +703,55 @@ public sealed partial class MainWindow : Window
         }
 
         return new SolidColorBrush(Colors.Transparent);
+    }
+
+    private void ApplyFileListViewPresentation()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var view = UiSettings.NormalizeDefaultView(_workspace.Settings.DefaultView);
+        var iconSize = UiSettings.NormalizeIconSize(_workspace.Settings.DefaultIconSize);
+        FileListViewHost.Apply(view, iconSize);
+
+        var detailsVisible = view == "details" ? Visibility.Visible : Visibility.Collapsed;
+        PrimaryColumnHeader.Visibility = detailsVisible;
+        SecondaryColumnHeader.Visibility = detailsVisible;
+
+        var usesTiles = view == "tiles";
+        var itemStyle = usesTiles ? "SfFileTileItemStyle" : "SfFileListItemStyle";
+        var itemsPanel = usesTiles ? "SfWrapItemsPanelTemplate" : "SfStackItemsPanelTemplate";
+        ApplyFileListPresentation(PrimaryFileList, itemStyle, itemsPanel, usesTiles);
+        ApplyFileListPresentation(SecondaryFileList, itemStyle, itemsPanel, usesTiles);
+    }
+
+    private static void ApplyFileListPresentation(
+        ListView list,
+        string itemStyleKey,
+        string itemsPanelKey,
+        bool usesTiles)
+    {
+        var style = ChromeStyle(itemStyleKey);
+        if (style is not null && !ReferenceEquals(list.ItemContainerStyle, style))
+        {
+            list.ItemContainerStyle = style;
+        }
+
+        var itemsPanel = ChromeResource<ItemsPanelTemplate>(itemsPanelKey);
+        if (itemsPanel is not null && !ReferenceEquals(list.ItemsPanel, itemsPanel))
+        {
+            list.ItemsPanel = itemsPanel;
+        }
+
+        list.Padding = usesTiles
+            ? new Thickness(6, 6, 2, 6)
+            : new Thickness(2, 4, 2, 6);
+        ScrollViewer.SetHorizontalScrollBarVisibility(
+            list,
+            usesTiles ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
+        ScrollViewer.SetVerticalScrollBarVisibility(list, ScrollBarVisibility.Auto);
     }
 
     private static void SelectRow(ListView list, ObservableCollection<FileRow> rows, string? path)
@@ -800,6 +907,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private async void OnToggleSidebar(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Side menu", ToggleSidebarAsync);
+
+    private async Task ToggleSidebarAsync()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        _workspace.Settings.SidebarVisible = !_workspace.Settings.SidebarVisible;
+        ApplySidebarLayout();
+        await _workspace.SaveUiSettingsAsync();
+        StatusText.Text = _workspace.Settings.SidebarVisible ? "Side menu shown" : "Side menu hidden";
+    }
+
     private void OnSidebarLeft(object sender, RoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Primary);
 
     private void OnSidebarRight(object sender, RoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Secondary);
@@ -870,7 +993,7 @@ public sealed partial class MainWindow : Window
         }
 
         SetExpandGlyph(QuickAccessCollapseButton, _quickAccessCollapsed);
-        QuickAccessList.Visibility = _quickAccessCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        ApplySidebarSectionVisibility();
     }
 
     private void OnToggleMyPc(object sender, RoutedEventArgs e)
@@ -882,7 +1005,7 @@ public sealed partial class MainWindow : Window
         }
 
         SetExpandGlyph(MyPcCollapseButton, _myPcCollapsed);
-        DriveList.Visibility = _myPcCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        ApplySidebarSectionVisibility();
     }
 
     private async void OnTabKeyDown(object sender, KeyRoutedEventArgs e)
@@ -3208,6 +3331,7 @@ public sealed partial class MainWindow : Window
         };
 
         var utilityCts = BeginUtilityOperation();
+        dialog.ClearRecentHistoryAction = () => ClearRecentHistoryAsync(utilityCts.Token);
         try
         {
             try
@@ -3257,7 +3381,10 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async void OnViewArchiveClicked(object sender, RoutedEventArgs e)
+    private async void OnViewArchiveClicked(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("View archive", ViewSelectedArchiveAsync);
+
+    private async Task ViewSelectedArchiveAsync()
     {
         if (_workspace?.FileOps == null) return;
         var selected = GetSelectedEntries();
@@ -3796,6 +3923,23 @@ public sealed partial class MainWindow : Window
         {
             await RunUiActionAsync("Recent", () => _workspace.NavigateToAsync(path));
         }
+    }
+
+    private async void OnClearRecentHistory(object sender, RoutedEventArgs e) =>
+        await RunUiActionAsync("Recent history", () => ClearRecentHistoryAsync());
+
+    private async Task ClearRecentHistoryAsync(CancellationToken cancellationToken = default)
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        _workspace.ClearRecentHistory();
+        await _workspace.SaveUiSettingsAsync(cancellationToken);
+        StatusText.Text = "Recent history cleared";
+        UpdateSidebarEmptyStates();
+        ApplySidebarSectionVisibility();
     }
 
     private async void OnSaveSmartFolder(object sender, RoutedEventArgs e)

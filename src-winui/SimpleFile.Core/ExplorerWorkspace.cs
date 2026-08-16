@@ -165,6 +165,9 @@ public sealed class ExplorerWorkspace
     public void ApplyUiSettings(UiSettings settings)
     {
         Settings = settings;
+        Settings.DefaultView = UiSettings.NormalizeDefaultView(settings.DefaultView);
+        Settings.DefaultIconSize = UiSettings.NormalizeIconSize(settings.DefaultIconSize);
+        Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(settings.SidebarWidth);
         ShowHiddenFiles = settings.ShowHidden;
         Columns.ApplyPreset(string.IsNullOrWhiteSpace(settings.ColumnPreset) ? "default" : settings.ColumnPreset);
         Columns.RestoreWidths(settings.ColumnWidths);
@@ -175,6 +178,18 @@ public sealed class ExplorerWorkspace
     {
         ShowHiddenFiles = showHidden;
         Settings.ShowHidden = showHidden;
+        RaiseChanged();
+    }
+
+    public void SetFileListView(string view)
+    {
+        Settings.DefaultView = UiSettings.NormalizeDefaultView(view);
+        RaiseChanged();
+    }
+
+    public void SetFileListIconSize(int iconSize)
+    {
+        Settings.DefaultIconSize = UiSettings.NormalizeIconSize(iconSize);
         RaiseChanged();
     }
 
@@ -1119,6 +1134,17 @@ public sealed class ExplorerWorkspace
         RaiseChanged();
     }
 
+    public void ClearRecentHistory()
+    {
+        if (RecentPaths.Count == 0)
+        {
+            return;
+        }
+
+        RecentPaths = [];
+        RaiseChanged();
+    }
+
     public void SetTagFilter(long? tagId)
     {
         ActiveTagFilter = tagId;
@@ -1523,9 +1549,14 @@ public sealed class ExplorerWorkspace
         }
 
         Settings.ShowHidden = ShowHiddenFiles;
+        Settings.DefaultView = UiSettings.NormalizeDefaultView(Settings.DefaultView);
+        Settings.DefaultIconSize = UiSettings.NormalizeIconSize(Settings.DefaultIconSize);
+        Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(Settings.SidebarWidth);
         Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(Settings.ColumnPreset);
         Settings.ColumnWidths = Columns.SnapshotWidths();
         await FileOps.SetSettingAsync("theme", Settings.Theme, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("defaultView", Settings.DefaultView, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("defaultIconSize", Settings.DefaultIconSize.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("showHidden", Settings.ShowHidden ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("useTrash", Settings.UseTrash ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("confirmDelete", Settings.ConfirmDelete ? "true" : "false", cancellationToken).ConfigureAwait(false);
@@ -1540,6 +1571,13 @@ public sealed class ExplorerWorkspace
             "columnWidths",
             System.Text.Json.JsonSerializer.Serialize(Settings.ColumnWidths),
             cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.showQuickAccess", Settings.ShowQuickAccess ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.showFolders", Settings.ShowFolderTree ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.showBookmarks", Settings.ShowBookmarks ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.showRecent", Settings.ShowRecentLocations ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.showSmartFolders", Settings.ShowSmartFolders ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.visible", Settings.SidebarVisible ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("sidebar.width", Settings.SidebarWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("sidebar.quickAccessCollapsed", Settings.QuickAccessCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("sidebar.myPcCollapsed", Settings.MyPcCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("lastPath", Settings.LastPath, cancellationToken).ConfigureAwait(false);
@@ -1635,6 +1673,8 @@ public sealed class ExplorerWorkspace
         try
         {
             Settings.Theme = UiSettings.NormalizeTheme(await FileOps.GetSettingAsync("theme", cancellationToken).ConfigureAwait(false));
+            Settings.DefaultView = UiSettings.NormalizeDefaultView(await FileOps.GetSettingAsync("defaultView", cancellationToken).ConfigureAwait(false));
+            Settings.DefaultIconSize = UiSettings.NormalizeIconSize(await FileOps.GetSettingAsync("defaultIconSize", cancellationToken).ConfigureAwait(false));
             Settings.ShowHidden = await ReadBoolSettingAsync("showHidden", false, cancellationToken).ConfigureAwait(false);
             Settings.UseTrash = await ReadBoolSettingAsync("useTrash", true, cancellationToken).ConfigureAwait(false);
             Settings.ConfirmDelete = await ReadBoolSettingAsync("confirmDelete", true, cancellationToken).ConfigureAwait(false);
@@ -1649,6 +1689,14 @@ public sealed class ExplorerWorkspace
             Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(
                 await FileOps.GetSettingAsync("columnPreset", cancellationToken).ConfigureAwait(false));
             Settings.ColumnWidths = await ReadColumnWidthsAsync(cancellationToken).ConfigureAwait(false);
+            Settings.ShowQuickAccess = await ReadBoolSettingAsync("sidebar.showQuickAccess", true, cancellationToken).ConfigureAwait(false);
+            Settings.ShowFolderTree = await ReadBoolSettingAsync("sidebar.showFolders", false, cancellationToken).ConfigureAwait(false);
+            Settings.ShowBookmarks = await ReadBoolSettingAsync("sidebar.showBookmarks", true, cancellationToken).ConfigureAwait(false);
+            Settings.ShowRecentLocations = await ReadBoolSettingAsync("sidebar.showRecent", true, cancellationToken).ConfigureAwait(false);
+            Settings.ShowSmartFolders = await ReadBoolSettingAsync("sidebar.showSmartFolders", true, cancellationToken).ConfigureAwait(false);
+            Settings.SidebarVisible = await ReadBoolSettingAsync("sidebar.visible", true, cancellationToken).ConfigureAwait(false);
+            Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(
+                await ReadDoubleSettingAsync("sidebar.width", UiSettings.SidebarDefaultWidth, cancellationToken).ConfigureAwait(false));
             Settings.QuickAccessCollapsed = await ReadBoolSettingAsync("sidebar.quickAccessCollapsed", false, cancellationToken).ConfigureAwait(false);
             Settings.MyPcCollapsed = await ReadBoolSettingAsync("sidebar.myPcCollapsed", false, cancellationToken).ConfigureAwait(false);
             Bookmarks = await ReadBookmarksAsync(cancellationToken).ConfigureAwait(false);
@@ -1763,7 +1811,30 @@ public sealed class ExplorerWorkspace
             return fallback;
         }
 
-        return raw.Equals("true", StringComparison.OrdinalIgnoreCase);
+        if (raw.Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (raw.Equals("false", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return fallback;
+    }
+
+    private async Task<double> ReadDoubleSettingAsync(string key, double fallback, CancellationToken cancellationToken)
+    {
+        var raw = await FileOps!.GetSettingAsync(key, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return fallback;
+        }
+
+        return double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
     }
 
     private static WorkspacePaneLayout CapturePane(ExplorerPane pane)

@@ -164,6 +164,22 @@
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             </Style>
 
+            <Style x:Key="SfFileTileItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource SfFileListItemStyle}">
+                <Setter Property="Width" Value="236" />
+                <Setter Property="MinHeight" Value="76" />
+                <Setter Property="Margin" Value="2" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+
+            <ItemsPanelTemplate x:Key="SfStackItemsPanelTemplate">
+                <ItemsStackPanel Orientation="Vertical" />
+            </ItemsPanelTemplate>
+
+            <ItemsPanelTemplate x:Key="SfWrapItemsPanelTemplate">
+                <ItemsWrapGrid Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+
             <Style x:Key="SfTextBoxStyle" TargetType="TextBox">
                 <Setter Property="MinHeight" Value="30" />
                 <Setter Property="CornerRadius" Value="6" />

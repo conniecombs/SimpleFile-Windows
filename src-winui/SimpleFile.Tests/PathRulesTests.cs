@@ -14,7 +14,7 @@ public class PathRulesTests
     [InlineData(@"C:\Users", false)]
     [InlineData("/", true)]
     [InlineData("/home", false)]
-    public void IsRootPath_MatchesSvelte(string path, bool expected)
+    public void IsRootPath_MatchesWindowsPathContract(string path, bool expected)
     {
         Assert.Equal(expected, PathRules.IsRootPath(path));
     }
@@ -25,7 +25,7 @@ public class PathRulesTests
     [InlineData(@"C:\", null)]
     [InlineData("C:", null)]
     [InlineData(@"\\server\share\folder", @"\\server\share")]
-    public void GetParentPath_MatchesSvelte(string path, string? expected)
+    public void GetParentPath_MatchesWindowsPathContract(string path, string? expected)
     {
         Assert.Equal(expected, PathRules.GetParentPath(path));
     }

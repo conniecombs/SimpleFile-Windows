@@ -13,7 +13,7 @@ public sealed class DropTarget
 }
 
 /// <summary>
-/// Resolves a drop destination the same way Svelte <c>dropDestinationFromTarget</c> does:
+/// Resolves a drop destination the same way the legacy frontend drop target did:
 /// hover a folder row → that folder; otherwise the pane path. Rejects drops into a
 /// source or a descendant of a source.
 /// </summary>

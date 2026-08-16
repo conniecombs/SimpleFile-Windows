@@ -266,6 +266,9 @@ public sealed partial class MainWindow
             case "operation-history":
                 await ShowOperationHistoryAsync();
                 break;
+            case "clear-recent-history":
+                await ClearRecentHistoryAsync();
+                break;
             case "undo":
                 await UndoLastAsync();
                 break;
@@ -296,8 +299,35 @@ public sealed partial class MainWindow
             case "preview":
                 OnTogglePreview(this, new RoutedEventArgs());
                 break;
+            case "toggle-side-menu":
+                await ToggleSidebarAsync();
+                break;
             case "dual-pane":
                 await _workspace.ToggleDualPaneAsync();
+                break;
+            case "view-details":
+                await ApplyViewOptionAsync("view:details");
+                break;
+            case "view-list":
+                await ApplyViewOptionAsync("view:list");
+                break;
+            case "view-tiles":
+                await ApplyViewOptionAsync("view:tiles");
+                break;
+            case "view-content":
+                await ApplyViewOptionAsync("view:content");
+                break;
+            case "icon-size-small":
+                await ApplyViewOptionAsync("icon:16");
+                break;
+            case "icon-size-medium":
+                await ApplyViewOptionAsync("icon:32");
+                break;
+            case "icon-size-large":
+                await ApplyViewOptionAsync("icon:48");
+                break;
+            case "icon-size-extra-large":
+                await ApplyViewOptionAsync("icon:96");
                 break;
             case "search":
                 SearchBox.Focus(FocusState.Programmatic);
@@ -348,7 +378,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        _workspace.ActivatePane(ReferenceEquals(list, SecondaryFileList) ? PaneId.Secondary : PaneId.Primary);
+        var pane = ReferenceEquals(list, SecondaryFileList) ? PaneId.Secondary : PaneId.Primary;
+        _workspace.ActivatePane(pane);
 
         var row = view.Row;
         if (!list.SelectedItems.OfType<FileRow>().Any(selected =>
@@ -363,7 +394,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        PopulateFileListContextFlyout(flyout);
+        PopulateFileListContextFlyout(flyout, pane);
         if (e.TryGetPosition(list, out var point))
         {
             flyout.ShowAt(list, new FlyoutShowOptions { Position = point });
@@ -392,37 +423,178 @@ public sealed partial class MainWindow
         return null;
     }
 
-    private void OnFileListContextOpening(object sender, object e)
+    private void OnPrimaryFileListContextOpening(object sender, object e) =>
+        PopulateFileListContextFlyout(sender as MenuFlyout, PaneId.Primary);
+
+    private void OnSecondaryFileListContextOpening(object sender, object e) =>
+        PopulateFileListContextFlyout(sender as MenuFlyout, PaneId.Secondary);
+
+    private void OnPrimaryMoreMenuOpening(object sender, object e) =>
+        PopulatePaneMoreMenu(sender as MenuFlyout, PaneId.Primary);
+
+    private void OnSecondaryMoreMenuOpening(object sender, object e) =>
+        PopulatePaneMoreMenu(sender as MenuFlyout, PaneId.Secondary);
+
+    private void OnViewOptionsMenuOpening(object sender, object e)
     {
-        if (sender is MenuFlyout flyout)
+        if (sender is not MenuFlyout flyout || _workspace is null)
         {
-            PopulateFileListContextFlyout(flyout);
+            return;
         }
+
+        var currentView = UiSettings.NormalizeDefaultView(_workspace.Settings.DefaultView);
+        var currentIconSize = UiSettings.NormalizeIconSize(_workspace.Settings.DefaultIconSize);
+
+        flyout.Items.Clear();
+
+        var styleMenu = new MenuFlyoutSubItem
+        {
+            Text = "Display style",
+            Icon = CreateMenuIcon("\uE8A9"),
+        };
+        AddViewStyleItem(styleMenu, "details", "Details", "\uE8FD", currentView);
+        AddViewStyleItem(styleMenu, "list", "List", "\uEA37", currentView);
+        AddViewStyleItem(styleMenu, "tiles", "Tiles", "\uECA5", currentView);
+        AddViewStyleItem(styleMenu, "content", "Content", "\uE8A5", currentView);
+        flyout.Items.Add(styleMenu);
+
+        var sizeMenu = new MenuFlyoutSubItem
+        {
+            Text = "Icon size",
+            Icon = CreateMenuIcon("\uE8B9"),
+        };
+        foreach (var option in UiSettings.IconSizeOptions)
+        {
+            AddIconSizeItem(sizeMenu, option.Size, option.Label, currentIconSize);
+        }
+
+        flyout.Items.Add(sizeMenu);
     }
 
-    private void PopulateFileListContextFlyout(MenuFlyout flyout)
+    private void AddViewStyleItem(
+        MenuFlyoutSubItem menu,
+        string view,
+        string label,
+        string iconGlyph,
+        string currentView)
+    {
+        var item = new RadioMenuFlyoutItem
+        {
+            Text = label,
+            Tag = $"view:{view}",
+            GroupName = "file-list-display-style",
+            IsChecked = string.Equals(view, currentView, StringComparison.Ordinal),
+            Icon = CreateMenuIcon(iconGlyph),
+        };
+        item.Click += OnViewOptionClicked;
+        menu.Items.Add(item);
+    }
+
+    private void AddIconSizeItem(MenuFlyoutSubItem menu, int size, string label, int currentIconSize)
+    {
+        var item = new RadioMenuFlyoutItem
+        {
+            Text = label,
+            Tag = $"icon:{size}",
+            GroupName = "file-list-icon-size",
+            IsChecked = size == currentIconSize,
+            KeyboardAcceleratorTextOverride = $"{size}px",
+        };
+        item.Click += OnViewOptionClicked;
+        menu.Items.Add(item);
+    }
+
+    private async void OnViewOptionClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuFlyoutItem item || item.Tag is not string tag)
+        {
+            return;
+        }
+
+        await RunUiActionAsync("View options", () => ApplyViewOptionAsync(tag));
+    }
+
+    private async Task ApplyViewOptionAsync(string tag)
     {
         if (_workspace is null)
         {
             return;
         }
 
-        var selected = ActiveSelectedRows;
-        var request = new ContextMenuRequest
+        if (tag.StartsWith("view:", StringComparison.Ordinal))
+        {
+            _workspace.SetFileListView(tag["view:".Length..]);
+        }
+        else if (tag.StartsWith("icon:", StringComparison.Ordinal)
+            && int.TryParse(tag["icon:".Length..], out var iconSize))
+        {
+            _workspace.SetFileListIconSize(iconSize);
+        }
+
+        ApplyFileListViewPresentation();
+        await _workspace.SaveUiSettingsAsync();
+    }
+
+    private void PopulateFileListContextFlyout(MenuFlyout? flyout, PaneId pane)
+    {
+        if (flyout is null || _workspace is null)
+        {
+            return;
+        }
+
+        var targetPane = ActivatePaneForMenu(pane);
+        var selected = SelectedRowsForPane(targetPane);
+
+        PopulateMenuFlyout(flyout, ContextMenuBuilder.Build(BuildContextMenuRequest(selected)));
+    }
+
+    private void PopulatePaneMoreMenu(MenuFlyout? flyout, PaneId pane)
+    {
+        if (flyout is null || _workspace is null)
+        {
+            return;
+        }
+
+        var targetPane = ActivatePaneForMenu(pane);
+        var selected = SelectedRowsForPane(targetPane);
+
+        PopulateMenuFlyout(flyout, ContextMenuBuilder.BuildPaneMoreMenu(BuildContextMenuRequest(selected)));
+    }
+
+    private PaneId ActivatePaneForMenu(PaneId pane)
+    {
+        var targetPane = _workspace?.Normalize(pane) ?? PaneId.Primary;
+        _workspace?.ActivatePane(targetPane);
+        return targetPane;
+    }
+
+    private IReadOnlyList<FileRow> SelectedRowsForPane(PaneId pane)
+    {
+        var list = pane == PaneId.Secondary ? SecondaryFileList : PrimaryFileList;
+        return list.SelectedItems.OfType<FileRow>().ToArray();
+    }
+
+    private ContextMenuRequest BuildContextMenuRequest(IReadOnlyList<FileRow> selected)
+    {
+        return new ContextMenuRequest
         {
             SelectionCount = selected.Count,
-            HasClipboard = _workspace.Clipboard.HasItems,
-            DualPaneEnabled = _workspace.DualPaneEnabled,
-            OtherPaneHasPath = _workspace.OtherPanePath() is not null,
+            HasClipboard = _workspace?.Clipboard.HasItems == true,
+            DualPaneEnabled = _workspace?.DualPaneEnabled == true,
+            OtherPaneHasPath = _workspace?.OtherPanePath() is not null,
             SelectedIsDirectory = selected.Count == 1 && selected[0].IsDir,
             HasFolderSelection = selected.Any(row => row.IsDir),
             AllSelectedAreFiles = selected.Count > 0 && selected.All(row => !row.IsDir),
             SelectedIsArchive = selected.Count == 1 && !selected[0].IsDir && ArchivePaths.IsArchiveFile(selected[0].Path),
             ArchiveExtractFolderName = selected.Count == 1 ? ArchivePaths.ExtractFolderName(selected[0].Name) : null,
+            UseTrash = _workspace?.Settings.UseTrash != false,
         };
+    }
 
+    private void PopulateMenuFlyout(MenuFlyout flyout, IReadOnlyList<ContextMenuEntry> entries)
+    {
         flyout.Items.Clear();
-        foreach (var entry in ContextMenuBuilder.Build(request))
+        foreach (var entry in entries)
         {
             flyout.Items.Add(CreateMenuEntry(entry));
         }
@@ -438,6 +610,11 @@ public sealed partial class MainWindow
         if (entry.Children.Count > 0)
         {
             var sub = new MenuFlyoutSubItem { Text = entry.Label, Tag = entry.Id };
+            if (!string.IsNullOrWhiteSpace(entry.IconGlyph))
+            {
+                sub.Icon = CreateMenuIcon(entry.IconGlyph);
+            }
+
             foreach (var child in entry.Children)
             {
                 sub.Items.Add(CreateMenuEntry(child));
@@ -451,9 +628,25 @@ public sealed partial class MainWindow
             Text = entry.Label,
             Tag = entry.Id,
             Name = entry.Id,
+            KeyboardAcceleratorTextOverride = entry.Shortcut ?? "",
         };
+        if (!string.IsNullOrWhiteSpace(entry.IconGlyph))
+        {
+            item.Icon = CreateMenuIcon(entry.IconGlyph);
+        }
+
         item.Click += OnContextMenuItemClick;
         return item;
+    }
+
+    private static FontIcon CreateMenuIcon(string glyph)
+    {
+        return new FontIcon
+        {
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontSize = 16,
+            Glyph = glyph,
+        };
     }
 
     private async void OnContextMenuItemClick(object sender, RoutedEventArgs e)
@@ -481,6 +674,9 @@ public sealed partial class MainWindow
                 break;
             case "ctx-compare":
                 await CompareSelectedFilesAsync();
+                break;
+            case "ctx-view-archive":
+                await ViewSelectedArchiveAsync();
                 break;
             case "ctx-terminal":
                 await OpenTerminalInActivePathAsync();

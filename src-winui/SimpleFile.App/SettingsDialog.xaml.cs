@@ -76,13 +76,26 @@ public sealed partial class SettingsDialog : ContentDialog
     }
 
     public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "System";
+    public string DefaultView => ((ComboBoxItem?)DefaultViewComboBox.SelectedItem)?.Tag?.ToString() ?? "details";
+    public int DefaultIconSize => int.TryParse(((ComboBoxItem?)DefaultIconSizeComboBox.SelectedItem)?.Tag?.ToString(), out var size)
+        ? size
+        : 16;
     public string ColumnPreset => ((ComboBoxItem?)ColumnPresetComboBox.SelectedItem)?.Tag?.ToString() ?? "default";
     public bool ShowHidden => ShowHiddenSwitch.IsOn;
+    public bool SidebarVisible => ShowSideMenuSwitch.IsOn;
+    public bool ShowQuickAccess => ShowQuickAccessSwitch.IsOn;
+    public bool ShowFolderTree => ShowFolderTreeSwitch.IsOn;
+    public bool ShowBookmarks => ShowBookmarksSwitch.IsOn;
+    public bool ShowRecentLocations => ShowRecentSwitch.IsOn;
+    public bool ShowSmartFolders => ShowSmartFoldersSwitch.IsOn;
     public nint OwnerHwnd { get; set; }
+    public Func<Task>? ClearRecentHistoryAction { get; set; }
 
     public void ApplyTo(UiSettings settings)
     {
         settings.Theme = UiSettings.NormalizeTheme(Theme);
+        settings.DefaultView = UiSettings.NormalizeDefaultView(DefaultView);
+        settings.DefaultIconSize = UiSettings.NormalizeIconSize(DefaultIconSize);
         settings.ColumnPreset = UiSettings.NormalizeColumnPreset(ColumnPreset);
         settings.ShowHidden = ShowHiddenSwitch.IsOn;
         settings.UseTrash = UseTrashSwitch.IsOn;
@@ -91,6 +104,12 @@ public sealed partial class SettingsDialog : ContentDialog
             ((ComboBoxItem?)StartLocationComboBox.SelectedItem)?.Tag?.ToString());
         settings.CustomPath = CustomPathBox.Text.Trim();
         settings.OpenInNewTab = OpenInNewTabSwitch.IsOn;
+        settings.SidebarVisible = ShowSideMenuSwitch.IsOn;
+        settings.ShowQuickAccess = ShowQuickAccessSwitch.IsOn;
+        settings.ShowFolderTree = ShowFolderTreeSwitch.IsOn;
+        settings.ShowBookmarks = ShowBookmarksSwitch.IsOn;
+        settings.ShowRecentLocations = ShowRecentSwitch.IsOn;
+        settings.ShowSmartFolders = ShowSmartFoldersSwitch.IsOn;
         settings.EnableGitIntegration = EnableGitSwitch.IsOn;
         settings.ShowFolderSizes = ShowFolderSizesSwitch.IsOn;
     }
@@ -101,6 +120,10 @@ public sealed partial class SettingsDialog : ContentDialog
         var defaults = UiSettings.CreateDefault();
 
         SelectTheme(await GetSettingOrDefaultAsync(fileOps, "theme", defaults.Theme, cancellationToken).ConfigureAwait(true));
+
+        SelectDefaultView(await GetSettingOrDefaultAsync(fileOps, "defaultView", defaults.DefaultView, cancellationToken).ConfigureAwait(true));
+
+        SelectDefaultIconSize(await GetSettingOrDefaultAsync(fileOps, "defaultIconSize", defaults.DefaultIconSize.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(true));
 
         SelectColumnPreset(await GetSettingOrDefaultAsync(fileOps, "columnPreset", defaults.ColumnPreset, cancellationToken).ConfigureAwait(true) ?? defaults.ColumnPreset);
 
@@ -117,6 +140,12 @@ public sealed partial class SettingsDialog : ContentDialog
         CustomPathBox.Text = await GetSettingOrDefaultAsync(fileOps, "customPath", defaults.CustomPath, cancellationToken).ConfigureAwait(true) ?? "";
 
         OpenInNewTabSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "openInNewTab", defaults.OpenInNewTab, cancellationToken).ConfigureAwait(true);
+        ShowSideMenuSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "sidebar.visible", defaults.SidebarVisible, cancellationToken).ConfigureAwait(true);
+        ShowQuickAccessSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "sidebar.showQuickAccess", defaults.ShowQuickAccess, cancellationToken).ConfigureAwait(true);
+        ShowFolderTreeSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "sidebar.showFolders", defaults.ShowFolderTree, cancellationToken).ConfigureAwait(true);
+        ShowBookmarksSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "sidebar.showBookmarks", defaults.ShowBookmarks, cancellationToken).ConfigureAwait(true);
+        ShowRecentSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "sidebar.showRecent", defaults.ShowRecentLocations, cancellationToken).ConfigureAwait(true);
+        ShowSmartFoldersSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "sidebar.showSmartFolders", defaults.ShowSmartFolders, cancellationToken).ConfigureAwait(true);
 
         EnableGitSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "enableGitIntegration", defaults.EnableGitIntegration, cancellationToken).ConfigureAwait(true);
         ShowFolderSizesSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "showFolderSizes", defaults.ShowFolderSizes, cancellationToken).ConfigureAwait(true);
@@ -133,6 +162,24 @@ public sealed partial class SettingsDialog : ContentDialog
             .OfType<ComboBoxItem>()
             .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), normalized, StringComparison.Ordinal));
         ColumnPresetComboBox.SelectedItem = selected ?? ColumnPresetComboBox.Items[0];
+    }
+
+    private void SelectDefaultView(string? view)
+    {
+        var normalized = UiSettings.NormalizeDefaultView(view);
+        var selected = DefaultViewComboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), normalized, StringComparison.Ordinal));
+        DefaultViewComboBox.SelectedItem = selected ?? DefaultViewComboBox.Items[0];
+    }
+
+    private void SelectDefaultIconSize(string? iconSize)
+    {
+        var normalized = UiSettings.NormalizeIconSize(iconSize);
+        var selected = DefaultIconSizeComboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => int.TryParse(item.Tag?.ToString(), out var size) && size == normalized);
+        DefaultIconSizeComboBox.SelectedItem = selected ?? DefaultIconSizeComboBox.Items[0];
     }
 
     private void SelectTheme(string? theme)
@@ -179,6 +226,37 @@ public sealed partial class SettingsDialog : ContentDialog
         }
 
         return fallback;
+    }
+
+    private async void OnClearRecentHistoryClicked(object sender, RoutedEventArgs e)
+    {
+        if (ClearRecentHistoryAction is null)
+        {
+            return;
+        }
+
+        ClearRecentHistoryButton.IsEnabled = false;
+        RecentHistoryStatusText.Visibility = Visibility.Collapsed;
+        try
+        {
+            await ClearRecentHistoryAction().ConfigureAwait(true);
+            RecentHistoryStatusText.Text = "Recent history cleared.";
+            RecentHistoryStatusText.Visibility = Visibility.Visible;
+        }
+        catch (OperationCanceledException)
+        {
+            RecentHistoryStatusText.Text = "Clear recent history cancelled.";
+            RecentHistoryStatusText.Visibility = Visibility.Visible;
+        }
+        catch (Exception exception)
+        {
+            RecentHistoryStatusText.Text = exception.Message;
+            RecentHistoryStatusText.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            ClearRecentHistoryButton.IsEnabled = true;
+        }
     }
 
     private async Task LoadVersionAsync(FileOperationService fileOps, CancellationToken cancellationToken = default)

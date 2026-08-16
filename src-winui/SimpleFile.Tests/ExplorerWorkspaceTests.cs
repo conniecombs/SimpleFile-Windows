@@ -514,9 +514,20 @@ public class ExplorerWorkspaceTests
         await first.InitializeAsync();
         var settings = UiSettings.CreateDefault();
         settings.ColumnPreset = "developer";
+        settings.DefaultView = "tiles";
+        settings.DefaultIconSize = 96;
+        settings.ShowQuickAccess = false;
+        settings.ShowFolderTree = true;
+        settings.ShowBookmarks = false;
+        settings.ShowRecentLocations = false;
+        settings.ShowSmartFolders = false;
+        settings.SidebarVisible = false;
+        settings.SidebarWidth = 344;
         settings.QuickAccessCollapsed = true;
         settings.MyPcCollapsed = true;
         first.ApplyUiSettings(settings);
+        first.SetFileListView("content");
+        first.SetFileListIconSize(48);
         first.Columns.Resize("path", 360);
         await first.SaveUiSettingsAsync();
 
@@ -524,10 +535,28 @@ public class ExplorerWorkspaceTests
         await second.InitializeAsync();
 
         Assert.Equal("developer", second.Settings.ColumnPreset);
+        Assert.Equal("content", second.Settings.DefaultView);
+        Assert.Equal(48, second.Settings.DefaultIconSize);
         Assert.Equal(["name", "size", "date", "extension", "git", "symlink", "path"], second.Columns.VisibleColumns.Select(column => column.Id));
         Assert.Equal(360, second.Columns.WidthOf("path"));
+        Assert.False(second.Settings.ShowQuickAccess);
+        Assert.True(second.Settings.ShowFolderTree);
+        Assert.False(second.Settings.ShowBookmarks);
+        Assert.False(second.Settings.ShowRecentLocations);
+        Assert.False(second.Settings.ShowSmartFolders);
+        Assert.False(second.Settings.SidebarVisible);
+        Assert.Equal(344, second.Settings.SidebarWidth);
         Assert.True(second.Settings.QuickAccessCollapsed);
         Assert.True(second.Settings.MyPcCollapsed);
+        Assert.Equal("content", settingsIpc.Settings["defaultView"]);
+        Assert.Equal("48", settingsIpc.Settings["defaultIconSize"]);
+        Assert.Equal("false", settingsIpc.Settings["sidebar.showQuickAccess"]);
+        Assert.Equal("true", settingsIpc.Settings["sidebar.showFolders"]);
+        Assert.Equal("false", settingsIpc.Settings["sidebar.showBookmarks"]);
+        Assert.Equal("false", settingsIpc.Settings["sidebar.showRecent"]);
+        Assert.Equal("false", settingsIpc.Settings["sidebar.showSmartFolders"]);
+        Assert.Equal("false", settingsIpc.Settings["sidebar.visible"]);
+        Assert.Equal("344", settingsIpc.Settings["sidebar.width"]);
     }
 
     [Fact]
@@ -553,6 +582,12 @@ public class ExplorerWorkspaceTests
         Assert.Equal(
             [@"C:\Users\test", @"C:\", @"C:\Users\test\Desktop"],
             second.RecentPaths.Take(3));
+
+        second.ClearRecentHistory();
+        await second.SaveUiSettingsAsync();
+
+        Assert.Empty(second.RecentPaths);
+        Assert.Equal("[]", settingsIpc.Settings["places.recents"]);
     }
 
 }

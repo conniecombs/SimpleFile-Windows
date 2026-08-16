@@ -8,7 +8,7 @@ public sealed class BreadcrumbSegment
 }
 
 /// <summary>
-/// Matches frontend/src/lib/components/layout-shell/ContentShell.svelte pathSegments().
+/// Builds Windows breadcrumb segments for the WinUI shell.
 /// </summary>
 public static class BreadcrumbBuilder
 {

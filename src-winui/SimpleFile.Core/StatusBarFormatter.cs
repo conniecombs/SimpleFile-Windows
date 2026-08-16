@@ -12,7 +12,7 @@ public sealed class StatusBarSnapshot
 }
 
 /// <summary>
-/// Status-bar copy matches frontend/src/lib/components/status-bar/StatusBar.svelte.
+/// Status-bar copy for the WinUI shell.
 /// </summary>
 public static class StatusBarFormatter
 {

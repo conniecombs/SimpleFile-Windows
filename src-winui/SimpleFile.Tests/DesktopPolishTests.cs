@@ -8,21 +8,29 @@ namespace SimpleFile.Tests;
 public class DesktopPolishTests
 {
     [Fact]
-    public void CommandPalette_ContainsSvelteIdsAndFilters()
+    public void CommandPalette_ContainsWinUiIdsAndFilters()
     {
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "go-home");
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "git-pull");
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "keyboard-help");
+        Assert.Contains(AppCommandCatalog.All, command => command.Id == "view-tiles");
+        Assert.Contains(AppCommandCatalog.All, command => command.Id == "icon-size-extra-large");
+        Assert.Contains(AppCommandCatalog.All, command => command.Id == "clear-recent-history");
+        Assert.Contains(AppCommandCatalog.All, command => command.Id == "toggle-side-menu");
+        Assert.Equal("Go home", AppCommandCatalog.Find("go-home")?.Label);
+        Assert.Equal("Disk cleanup", AppCommandCatalog.Find("disk-cleanup")?.Label);
         Assert.Equal(AppCommandCatalog.All.Count, AppCommandCatalog.Filter("").Count);
         var git = AppCommandCatalog.Filter("git");
         Assert.Equal(2, git.Count);
         Assert.All(git, command => Assert.StartsWith("git-", command.Id, StringComparison.Ordinal));
+        Assert.Equal(4, AppCommandCatalog.Filter("icon size").Count);
+        Assert.Equal("toggle-side-menu", Assert.Single(AppCommandCatalog.Filter("side menu")).Id);
         Assert.Equal("settings", AppCommandCatalog.Find("settings")?.Id);
         Assert.Null(AppCommandCatalog.Find("missing"));
     }
 
     [Fact]
-    public void ContextMenu_HidesDisabledItemsAndKeepsSvelteIds()
+    public void ContextMenu_HidesDisabledItemsAndKeepsWinUiIds()
     {
         var empty = ContextMenuBuilder.Build(new ContextMenuRequest());
         Assert.Contains(empty, entry => entry.Id == "ctx-terminal");
@@ -42,10 +50,14 @@ public class DesktopPolishTests
             AllSelectedAreFiles = true,
         });
 
-        Assert.Contains(selected, entry => entry.Id == "ctx-open");
+        var open = Assert.Single(selected, entry => entry.Id == "ctx-open");
+        Assert.Equal("Enter", open.Shortcut);
+        Assert.False(string.IsNullOrWhiteSpace(open.IconGlyph));
         Assert.Contains(selected, entry => entry.Id == "ctx-open-with");
         Assert.Contains(selected, entry => entry.Id == "ctx-copy-to-pane");
+        Assert.Contains(selected, entry => entry.Id == "ctx-delete" && entry.Label == "Move to trash");
         var extract = Assert.Single(selected, entry => entry.Id == "ctx-extract-menu");
+        Assert.False(string.IsNullOrWhiteSpace(extract.IconGlyph));
         Assert.Contains(extract.Children, child => child.Id == "ctx-extract-folder" && child.Label.Contains("pack/", StringComparison.Ordinal));
         Assert.Contains(selected, entry => entry.Id == "ctx-info");
     }
@@ -66,6 +78,31 @@ public class DesktopPolishTests
             AllSelectedAreFiles = true,
         });
         Assert.Contains(twoFiles, entry => entry.Id == "ctx-compare");
+    }
+
+    [Fact]
+    public void PaneMoreMenu_UsesPolishedLabelsAndSelectionGating()
+    {
+        var empty = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest());
+        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-rename");
+        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-delete");
+        Assert.Contains(empty, entry => entry.Id == "ctx-duplicates");
+        Assert.Contains(empty, entry => entry.Id == "ctx-cleanup");
+        Assert.Contains(empty, entry => entry.Id == "ctx-terminal" && entry.Shortcut == "F4");
+        Assert.DoesNotContain(empty, entry => entry.Kind == ContextMenuKind.Divider && empty.Last() == entry);
+
+        var archive = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            SelectionCount = 1,
+            SelectedIsArchive = true,
+            UseTrash = false,
+        });
+
+        Assert.Contains(archive, entry => entry.Id == "ctx-rename" && entry.Shortcut == "F2");
+        Assert.Contains(archive, entry => entry.Id == "ctx-delete" && entry.Label == "Delete");
+        Assert.Contains(archive, entry => entry.Id == "ctx-view-archive");
+        Assert.Contains(archive, entry => entry.Id == "ctx-extract-to" && entry.Label == "Extract archive...");
+        Assert.Contains(archive, entry => entry.Id == "ctx-compress" && entry.Label == "Create archive...");
     }
 
     [Fact]
@@ -215,7 +252,7 @@ public class DesktopPolishTests
     }
 
     [Fact]
-    public void UiSettings_NormalizeThemeAndStartLocation()
+    public void UiSettings_NormalizesAppearanceAndStartLocation()
     {
         Assert.Equal("light", UiSettings.NormalizeTheme("Light"));
         Assert.Equal("system", UiSettings.NormalizeTheme("system"));
@@ -223,6 +260,16 @@ public class DesktopPolishTests
         Assert.Equal("last", UiSettings.NormalizeStartLocation("Last"));
         Assert.Equal("custom", UiSettings.NormalizeStartLocation("custom"));
         Assert.Equal("home", UiSettings.NormalizeStartLocation(null));
+        Assert.Equal("details", UiSettings.NormalizeDefaultView("Details"));
+        Assert.Equal("tiles", UiSettings.NormalizeDefaultView("tiles"));
+        Assert.Equal("details", UiSettings.NormalizeDefaultView("nope"));
+        Assert.Equal(16, UiSettings.NormalizeIconSize((int?)null));
+        Assert.Equal(32, UiSettings.NormalizeIconSize("33"));
+        Assert.Equal(96, UiSettings.NormalizeIconSize(120));
+        Assert.Equal(UiSettings.SidebarDefaultWidth, UiSettings.NormalizeSidebarWidth(double.NaN));
+        Assert.Equal(UiSettings.SidebarMinWidth, UiSettings.NormalizeSidebarWidth(120));
+        Assert.Equal(312, UiSettings.NormalizeSidebarWidth("312"));
+        Assert.Equal(UiSettings.SidebarMaxWidth, UiSettings.NormalizeSidebarWidth(900));
     }
 
     [Fact]

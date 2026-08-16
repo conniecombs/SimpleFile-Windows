@@ -87,6 +87,7 @@
             </Grid.ColumnDefinitions>
 
             <Grid
+                x:Name="SidebarRoot"
                 Grid.Column="0"
                 Background="{ThemeResource SfBgSecondaryBrush}"
                 BorderBrush="{ThemeResource SfBorderBrush}"
@@ -128,7 +129,7 @@
                 </Border>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel Padding="10,8,10,14" Spacing="10">
-                        <StackPanel Spacing="2">
+                        <StackPanel x:Name="QuickAccessSection" Spacing="2">
                             <Grid Margin="4,0,0,4">
                                 <TextBlock Style="{StaticResource SfSidebarHeaderStyle}" Text="Quick access" />
                                 <Button
@@ -267,7 +268,7 @@
                             </ListView>
                         </StackPanel>
 
-                        <StackPanel Spacing="2">
+                        <StackPanel x:Name="FolderTreeSection" Spacing="2">
                             <Grid Margin="4,0,0,4">
                                 <TextBlock Style="{StaticResource SfSidebarHeaderStyle}" Text="Folders" />
                                 <Button
@@ -325,7 +326,7 @@
                             </ListView>
                         </StackPanel>
 
-                        <StackPanel Spacing="2">
+                        <StackPanel x:Name="BookmarksSection" Spacing="2">
                             <Grid Margin="4,0,0,4">
                                 <TextBlock Style="{StaticResource SfSidebarHeaderStyle}" Text="Bookmarks" />
                                 <Button
@@ -386,11 +387,18 @@
                             </ListView>
                         </StackPanel>
 
-                        <StackPanel Spacing="2">
-                            <TextBlock
-                                Margin="4,0,0,4"
-                                Style="{StaticResource SfSidebarHeaderStyle}"
-                                Text="Recent" />
+                        <StackPanel x:Name="RecentSection" Spacing="2">
+                            <Grid Margin="4,0,0,4">
+                                <TextBlock Style="{StaticResource SfSidebarHeaderStyle}" Text="Recent" />
+                                <Button
+                                    x:Name="ClearRecentsButton"
+                                    Style="{StaticResource SfSidebarIconButtonStyle}"
+                                    AutomationProperties.Name="Clear recent history"
+                                    Click="OnClearRecentHistory"
+                                    ToolTipService.ToolTip="Clear recent history">
+                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="10" Glyph="&#xE74D;" />
+                                </Button>
+                            </Grid>
                             <TextBlock
                                 x:Name="RecentsEmptyText"
                                 Style="{StaticResource SfEmptyHintStyle}"
@@ -424,7 +432,7 @@
                             </ListView>
                         </StackPanel>
 
-                        <StackPanel Spacing="2">
+                        <StackPanel x:Name="SmartFoldersSection" Spacing="2">
                             <Grid Margin="4,0,0,4">
                                 <TextBlock Style="{StaticResource SfSidebarHeaderStyle}" Text="Smart folders" />
                                 <Button
@@ -555,6 +563,14 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <Button
+                                        x:Name="PrimarySidebarToggleButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Toggle side menu"
+                                        Click="OnToggleSidebar"
+                                        ToolTipService.ToolTip="Hide side menu">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE700;" />
+                                    </Button>
                                     <Button
                                         x:Name="PrimaryBackButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
@@ -692,6 +708,15 @@
                                     </Button>
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="View options"
+                                        ToolTipService.ToolTip="View options">
+                                        <Button.Flyout>
+                                            <MenuFlyout Opening="OnViewOptionsMenuOpening" />
+                                        </Button.Flyout>
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A9;" />
+                                    </Button>
+                                    <Button
+                                        Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="Settings"
                                         Click="OnSettingsClicked"
                                         ToolTipService.ToolTip="Settings (Ctrl+Shift+S)">
@@ -702,20 +727,7 @@
                                         AutomationProperties.Name="More"
                                         ToolTipService.ToolTip="More">
                                         <Button.Flyout>
-                                            <MenuFlyout>
-                                                <MenuFlyoutItem Text="Rename" Click="OnPrimaryRename" />
-                                                <MenuFlyoutItem Text="Move to trash" Click="OnPrimaryDelete" />
-                                                <MenuFlyoutItem Text="Set color label" Click="OnSetColorLabelClicked" />
-                                                <MenuFlyoutSeparator />
-                                                <MenuFlyoutItem Text="View archive contents" Click="OnViewArchiveClicked" />
-                                                <MenuFlyoutItem Text="Extract archive" Click="OnExtractArchiveClicked" />
-                                                <MenuFlyoutItem Text="Create archive" Click="OnCreateArchiveClicked" />
-                                                <MenuFlyoutSeparator />
-                                                <MenuFlyoutItem Text="Find duplicates" Click="OnDuplicateCheckerClicked" />
-                                                <MenuFlyoutItem Text="Disk cleanup" Click="OnDiskCleanupClicked" />
-                                                <MenuFlyoutSeparator />
-                                                <MenuFlyoutItem Text="Open terminal here" Click="OnOpenTerminalClicked" />
-                                            </MenuFlyout>
+                                            <MenuFlyout Opening="OnPrimaryMoreMenuOpening" />
                                         </Button.Flyout>
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
                                     </Button>
@@ -749,7 +761,7 @@
                                         <Style BasedOn="{StaticResource SfFileListItemStyle}" TargetType="ListViewItem" />
                                     </ListView.ItemContainerStyle>
                                     <ListView.ContextFlyout>
-                                        <MenuFlyout Opening="OnFileListContextOpening" />
+                                        <MenuFlyout Opening="OnPrimaryFileListContextOpening" />
                                     </ListView.ContextFlyout>
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="local:FileRow">
@@ -810,6 +822,14 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Orientation="Horizontal" Spacing="2">
+                                    <Button
+                                        x:Name="SecondarySidebarToggleButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Toggle side menu"
+                                        Click="OnToggleSidebar"
+                                        ToolTipService.ToolTip="Hide side menu">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE700;" />
+                                    </Button>
                                     <Button
                                         x:Name="SecondaryBackButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
@@ -883,14 +903,19 @@
                                     </Button>
                                     <Button
                                         Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="View options"
+                                        ToolTipService.ToolTip="View options">
+                                        <Button.Flyout>
+                                            <MenuFlyout Opening="OnViewOptionsMenuOpening" />
+                                        </Button.Flyout>
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A9;" />
+                                    </Button>
+                                    <Button
+                                        Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="More"
                                         ToolTipService.ToolTip="More">
                                         <Button.Flyout>
-                                            <MenuFlyout>
-                                                <MenuFlyoutItem Text="Rename" Click="OnSecondaryRename" />
-                                                <MenuFlyoutItem Text="Move to trash" Click="OnSecondaryDelete" />
-                                                <MenuFlyoutItem Click="OnSetColorLabelClicked" Text="Set color label" />
-                                            </MenuFlyout>
+                                            <MenuFlyout Opening="OnSecondaryMoreMenuOpening" />
                                         </Button.Flyout>
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
                                     </Button>
@@ -924,7 +949,7 @@
                                         <Style BasedOn="{StaticResource SfFileListItemStyle}" TargetType="ListViewItem" />
                                     </ListView.ItemContainerStyle>
                                     <ListView.ContextFlyout>
-                                        <MenuFlyout Opening="OnFileListContextOpening" />
+                                        <MenuFlyout Opening="OnSecondaryFileListContextOpening" />
                                     </ListView.ContextFlyout>
                                     <ListView.ItemTemplate>
                                         <DataTemplate x:DataType="local:FileRow">

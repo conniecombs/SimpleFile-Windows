@@ -4,7 +4,7 @@ using DriveInfo = SimpleFile.Ipc.DriveInfo;
 namespace SimpleFile.Core;
 
 /// <summary>
-/// Drive labels ported from frontend/src/lib/components/layout-shell/SidebarShell.svelte.
+/// Drive labels for the WinUI sidebar.
 /// </summary>
 public static class DrivePresentation
 {

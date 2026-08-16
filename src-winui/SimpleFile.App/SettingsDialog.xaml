@@ -39,6 +39,18 @@
                         <ComboBoxItem Content="Light" Tag="Light" />
                         <ComboBoxItem Content="Dark" Tag="Dark" />
                     </ComboBox>
+                    <ComboBox x:Name="DefaultViewComboBox" Header="Display style" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Details" Tag="details" />
+                        <ComboBoxItem Content="List" Tag="list" />
+                        <ComboBoxItem Content="Tiles" Tag="tiles" />
+                        <ComboBoxItem Content="Content" Tag="content" />
+                    </ComboBox>
+                    <ComboBox x:Name="DefaultIconSizeComboBox" Header="Icon size" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Small icons" Tag="16" />
+                        <ComboBoxItem Content="Medium icons" Tag="32" />
+                        <ComboBoxItem Content="Large icons" Tag="48" />
+                        <ComboBoxItem Content="Extra large icons" Tag="96" />
+                    </ComboBox>
                     <ComboBox x:Name="ColumnPresetComboBox" Header="File list columns" HorizontalAlignment="Stretch">
                         <ComboBoxItem Content="Default" Tag="default" />
                         <ComboBoxItem Content="Details" Tag="details" />
@@ -66,6 +78,29 @@
                     </Grid>
                     <TextBlock x:Name="CustomPathStatusText" Foreground="{StaticResource SfTextMutedBrush}" TextWrapping="Wrap" Visibility="Collapsed" />
                     <ToggleSwitch x:Name="OpenInNewTabSwitch" Header="Open folders in new tab" />
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Side menu" FontWeight="SemiBold" />
+                        <ToggleSwitch x:Name="ShowSideMenuSwitch" Header="Show side menu" />
+                        <ToggleSwitch x:Name="ShowQuickAccessSwitch" Header="Show Quick access" />
+                        <ToggleSwitch x:Name="ShowFolderTreeSwitch" Header="Show Folders" />
+                        <ToggleSwitch x:Name="ShowBookmarksSwitch" Header="Show Bookmarks" />
+                        <ToggleSwitch x:Name="ShowRecentSwitch" Header="Show Recent" />
+                        <ToggleSwitch x:Name="ShowSmartFoldersSwitch" Header="Show Smart folders" />
+                        <Button
+                            x:Name="ClearRecentHistoryButton"
+                            HorizontalAlignment="Left"
+                            Click="OnClearRecentHistoryClicked">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="12" Glyph="&#xE74D;" />
+                                <TextBlock Text="Clear recent history" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock
+                            x:Name="RecentHistoryStatusText"
+                            Foreground="{StaticResource SfTextMutedBrush}"
+                            TextWrapping="Wrap"
+                            Visibility="Collapsed" />
+                    </StackPanel>
                 </StackPanel>
                 
                 <StackPanel x:Name="BehaviorPanel" Spacing="16" Visibility="Collapsed">

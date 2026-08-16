@@ -544,25 +544,38 @@ public sealed partial class MainWindow
 
     private void OnSidebarDividerPressed(object sender, PointerRoutedEventArgs e)
     {
-        _sidebarDragging = true;
-        SidebarDivider.CapturePointer(e.Pointer);
-    }
-
-    private void OnSidebarDividerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (!_sidebarDragging)
+        if (_workspace?.Settings.SidebarVisible != true)
         {
             return;
         }
 
-        var x = e.GetCurrentPoint(RootGrid).Position.X;
-        SidebarColumn.Width = new GridLength(Math.Clamp(x, 150, 600));
+        _sidebarDragging = true;
+        SidebarDivider.CapturePointer(e.Pointer);
+        e.Handled = true;
     }
 
-    private void OnSidebarDividerReleased(object sender, PointerRoutedEventArgs e)
+    private void OnSidebarDividerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (!_sidebarDragging || _workspace is null)
+        {
+            return;
+        }
+
+        _workspace.Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(e.GetCurrentPoint(RootGrid).Position.X);
+        ApplySidebarLayout();
+        e.Handled = true;
+    }
+
+    private async void OnSidebarDividerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        var wasDragging = _sidebarDragging;
         _sidebarDragging = false;
         SidebarDivider.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+        if (wasDragging && _workspace is not null)
+        {
+            await RunUiActionAsync("Resize side menu", () => _workspace.SaveUiSettingsAsync());
+        }
     }
 
     private void OnColumnThumbPressed(object sender, PointerRoutedEventArgs e)
