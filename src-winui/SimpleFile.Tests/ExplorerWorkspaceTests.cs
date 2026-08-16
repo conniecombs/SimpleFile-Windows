@@ -106,6 +106,74 @@ public class ExplorerWorkspaceTests
         Assert.False(workspace.FileOpenUnsupported);
     }
 
+    [Fact]
+    public async Task OpenPath_UnknownDirectoryType_ProbesEntryInfoAndNavigates()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        settingsIpc.EntryInfo[@"C:\Users\test\Desktop"] = new FileEntry
+        {
+            Name = "Desktop",
+            Path = @"C:\Users\test\Desktop",
+            IsDir = true,
+        };
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+
+        await workspace.OpenPathAsync(@"C:\Users\test\Desktop", isDirectory: null);
+
+        Assert.Empty(settingsIpc.OpenedFiles);
+        Assert.Equal(@"C:\Users\test\Desktop", workspace.CurrentPath);
+        Assert.Equal("shot.png", workspace.VisibleEntries.Single().Name);
+    }
+
+    [Fact]
+    public async Task OpenPath_UnknownFileType_ProbesEntryInfoAndOpensFile()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        settingsIpc.EntryInfo[@"C:\Users\test\notes.txt"] = new FileEntry
+        {
+            Name = "notes.txt",
+            Path = @"C:\Users\test\notes.txt",
+            Extension = "txt",
+        };
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+
+        await workspace.OpenPathAsync(@"C:\Users\test\notes.txt", isDirectory: null);
+
+        Assert.Equal([@"C:\Users\test\notes.txt"], settingsIpc.OpenedFiles);
+        Assert.Equal(@"C:\Users\test", workspace.CurrentPath);
+        Assert.Equal(@"C:\Users\test\notes.txt", workspace.SelectedPath);
+        Assert.Equal("Opened notes.txt", workspace.StatusMessage);
+        Assert.Null(workspace.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ApplyGitStatuses_UpdatesPaneEntriesWhenEnabled()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        settingsIpc.GitFileStatuses[@"C:\Users\test"] =
+        [
+            new FileEntry
+            {
+                Name = "notes.txt",
+                Path = @"C:\Users\test\notes.txt",
+                GitStatus = "modified",
+            },
+        ];
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+
+        await workspace.ApplyGitStatusesAsync(PaneId.Primary);
+
+        Assert.Equal(1, settingsIpc.GitStatusCalls);
+        Assert.Equal(
+            "modified",
+            workspace.VisibleEntries.Single(entry => entry.Name == "notes.txt").GitStatus);
+    }
 
     [Fact]
     public async Task NavigateSpecial_HomeAndDesktop()
@@ -208,6 +276,7 @@ public class ExplorerWorkspaceTests
     {
         var backend = FakeExplorerBackend.Typical();
         var settingsIpc = new WorkspaceSettingsIpc();
+        settingsIpc.Settings["startLocation"] = "last";
         var fileOps = new FileOperationService(settingsIpc);
         var first = new ExplorerWorkspace(backend, fileOps);
         await first.InitializeAsync();
@@ -230,6 +299,51 @@ public class ExplorerWorkspaceTests
     }
 
     [Fact]
+    public async Task Initialize_HomeStartLocationIgnoresSavedWorkspaceLayout()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        settingsIpc.Settings["startLocation"] = "last";
+        var fileOps = new FileOperationService(settingsIpc);
+        var first = new ExplorerWorkspace(backend, fileOps);
+        await first.InitializeAsync();
+        await first.OpenNewTabAsync(PaneId.Primary, @"C:\Users\test\Desktop");
+        await first.ToggleDualPaneAsync();
+        await first.NavigatePaneAsync(PaneId.Secondary, @"C:\", HistoryMode.ReplaceCurrent);
+        await first.SaveWorkspaceLayoutAsync();
+
+        settingsIpc.Settings["startLocation"] = "home";
+        var second = new ExplorerWorkspace(backend, fileOps);
+        await second.InitializeAsync();
+
+        Assert.False(second.DualPaneEnabled);
+        Assert.Equal(@"C:\Users\test", second.Primary.Path);
+        Assert.Equal([@"C:\Users\test"], second.Primary.History);
+    }
+
+    [Fact]
+    public async Task Initialize_CustomStartLocationIgnoresSavedWorkspaceLayout()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        settingsIpc.Settings["startLocation"] = "last";
+        var fileOps = new FileOperationService(settingsIpc);
+        var first = new ExplorerWorkspace(backend, fileOps);
+        await first.InitializeAsync();
+        await first.OpenNewTabAsync(PaneId.Primary, @"C:\Users\test\Desktop");
+        await first.SaveWorkspaceLayoutAsync();
+
+        settingsIpc.Settings["startLocation"] = "custom";
+        settingsIpc.Settings["customPath"] = @"C:\";
+        var second = new ExplorerWorkspace(backend, fileOps);
+        await second.InitializeAsync();
+
+        Assert.False(second.DualPaneEnabled);
+        Assert.Equal(@"C:\", second.Primary.Path);
+        Assert.Equal([@"C:\"], second.Primary.History);
+    }
+
+    [Fact]
     public async Task UiSettings_RestoresColumnPresetAndWidths()
     {
         var backend = FakeExplorerBackend.Typical();
@@ -239,6 +353,8 @@ public class ExplorerWorkspaceTests
         await first.InitializeAsync();
         var settings = UiSettings.CreateDefault();
         settings.ColumnPreset = "developer";
+        settings.QuickAccessCollapsed = true;
+        settings.MyPcCollapsed = true;
         first.ApplyUiSettings(settings);
         first.Columns.Resize("path", 360);
         await first.SaveUiSettingsAsync();
@@ -249,6 +365,8 @@ public class ExplorerWorkspaceTests
         Assert.Equal("developer", second.Settings.ColumnPreset);
         Assert.Equal(["name", "size", "date", "extension", "git", "symlink", "path"], second.Columns.VisibleColumns.Select(column => column.Id));
         Assert.Equal(360, second.Columns.WidthOf("path"));
+        Assert.True(second.Settings.QuickAccessCollapsed);
+        Assert.True(second.Settings.MyPcCollapsed);
     }
 
 }
@@ -353,6 +471,10 @@ internal sealed class FakeExplorerBackend : IExplorerBackend
 internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
 {
     public Dictionary<string, string> Settings { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, FileEntry> EntryInfo { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, FileEntry[]> GitFileStatuses { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<string> OpenedFiles { get; } = [];
+    public int GitStatusCalls { get; private set; }
     public bool IsConnected => true;
 
 #pragma warning disable CS0067
@@ -372,7 +494,12 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     }
 
     public Task<GitStatus> GetGitStatusAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task<FileEntry[]> GetGitFileStatusesAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<FileEntry[]> GetGitFileStatusesAsync(string path, CancellationToken ct = default)
+    {
+        GitStatusCalls += 1;
+        return Task.FromResult(GitFileStatuses.TryGetValue(path, out var statuses) ? statuses : []);
+    }
+
     public Task GitPullAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
     public Task GitPushAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
     public Task CancelFolderSizeAsync(CancellationToken ct = default) => throw new NotImplementedException();
@@ -426,8 +553,22 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     public Task<string> MoveEntryAsync(string source, string destination, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<string> CopyEntryResolvedAsync(string source, string destination, string conflictAction, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<string> MoveEntryResolvedAsync(string source, string destination, string conflictAction, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task<FileEntry> GetEntryInfoAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
-    public Task OpenFileAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
+    public Task<FileEntry> GetEntryInfoAsync(string path, CancellationToken ct = default)
+    {
+        if (EntryInfo.TryGetValue(path, out var entry))
+        {
+            return Task.FromResult(entry);
+        }
+
+        throw new IpcException(Protocol.ErrApplication, $"Path does not exist: {path}");
+    }
+
+    public Task OpenFileAsync(string path, CancellationToken ct = default)
+    {
+        OpenedFiles.Add(path);
+        return Task.CompletedTask;
+    }
+
     public Task RevealInFolderAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();
     public Task OpenExternalUrlAsync(string url, CancellationToken ct = default) => throw new NotImplementedException();
     public Task<ArchiveInfo> ListArchiveAsync(string path, CancellationToken ct = default) => throw new NotImplementedException();

@@ -109,8 +109,7 @@ public sealed partial class MainWindow : Window
             _fileChangeSubscription = _backend.Client!.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
             await _workspace.InitializeAsync();
             ApplyTheme(_workspace.Settings.Theme);
-            _quickAccessCollapsed = false;
-            _myPcCollapsed = false;
+            SyncSidebarCollapseStateFromSettings();
             ApplyPreviewVisibility();
             ApplyColumnWidths();
             SyncFromWorkspace();
@@ -511,6 +510,17 @@ public sealed partial class MainWindow : Window
         {
             icon.Glyph = collapsed ? "\uE76C" : "\uE70D";
         }
+    }
+
+    private void SyncSidebarCollapseStateFromSettings()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        _quickAccessCollapsed = _workspace.Settings.QuickAccessCollapsed;
+        _myPcCollapsed = _workspace.Settings.MyPcCollapsed;
     }
 
     private static Style? ChromeStyle(string key)

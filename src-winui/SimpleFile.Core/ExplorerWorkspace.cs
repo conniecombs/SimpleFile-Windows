@@ -129,7 +129,8 @@ public sealed class ExplorerWorkspace
         await LoadTagsAsync().ConfigureAwait(false);
         await LoadUiSettingsAsync(cancellationToken).ConfigureAwait(false);
 
-        if (await TryRestoreWorkspaceLayoutAsync(cancellationToken).ConfigureAwait(false))
+        var startMode = UiSettings.NormalizeStartLocation(Settings.StartLocation);
+        if (startMode == "last" && await TryRestoreWorkspaceLayoutAsync(cancellationToken).ConfigureAwait(false))
         {
             return;
         }
@@ -570,6 +571,19 @@ public sealed class ExplorerWorkspace
                 PendingReconnectPane = target;
                 RaiseChanged();
                 return;
+            }
+        }
+
+        if (shouldNavigate is null && FileOps is not null)
+        {
+            try
+            {
+                var entry = await FileOps.GetEntryInfoAsync(path, cancellationToken).ConfigureAwait(false);
+                shouldNavigate = entry.IsDir;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Unknown-path callers still get the old directory-navigation fallback.
             }
         }
 

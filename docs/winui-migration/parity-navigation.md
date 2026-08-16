@@ -26,6 +26,7 @@ Sources of truth for this slice:
 | --- | --- | --- | --- |
 | Start IPC service, handshake, `get_home_dir`, `list_drives` | Tauri invoke | `BackendSession` + `ExplorerWorkspace.InitializeAsync` | Done |
 | Start at home | `resolveStartupLocation` mode `home` | Navigate to `get_home_dir` | Done |
+| Start at last/custom location | `resolveStartupLocation` modes `last` / `custom` | Settings IPC `startLocation` / `customPath`; `last` restores `workspace-layout` | Done |
 | Sidebar Quick Access: Home / Desktop / Downloads / Documents / Pictures | `navigateSpecial` + `joinPath(home, name)` | Same commands and join rule | Done |
 | Sidebar My PC drive roots | `list_drives`, fallback drive, status badge/description | `DrivePresentation` + drive list | Done |
 | Refresh drives | `simplefile:refresh-drives` | ↻ button | Done |
@@ -37,12 +38,14 @@ Sources of truth for this slice:
 | Sort dirs-first then name (default) | `visibleEntries` / `sortEntries` | `EntryPresentation` | Done |
 | Header sort name / size / date / type | Click header toggles direction | Same | Done |
 | Columns Name, Size, Modified, Type | Default visible columns | Same four, resizable | Done |
+| Git status column | `getGitFileStatuses` after listing | Optional enrichment when Git integration is enabled | Done |
 | Breadcrumb segments | `path.split(/[/\\]/)` + `C:\` for drive | `BreadcrumbBuilder` | Done |
 | Click breadcrumb navigates | `loadDirectoryForPane` | `NavigateToAsync` | Done |
 | Path edit (✎), Enter navigates, Escape cancels | `ContentShell` path bar | Same | Done |
 | Back / Forward history | `recordHistory` + `navigateHistory` with mode `none` | Same | Done |
 | Up uses `getParentPath`; no-op on drive root | `if (parent) loadDirectoryForPane` | Same | Done |
 | Open folder in-app (double-click / Enter) | `openEntryPath` → `loadDirectory` | Same | Done |
+| Open file in default app | `open_file` / `openEntryPath` | `OpenEntryAsync` probes unknown paths, then calls `open_file` | Done |
 | Click file selects (does not open) | `file-list-item-click` | List click selects | Done (single select only) |
 | Network drive offline → retry dialog | `offerNetworkDriveReconnect` | `ContentDialog` Retry/Cancel | Done (simplified copy) |
 | F5 refresh, Alt+Left/Right/Up | Keyboard map (subset) | Keyboard accelerators | Done (subset) |
@@ -61,7 +64,7 @@ Sources of truth for this slice:
 | Ctrl+W | Close active pane’s active tab | Same | Done |
 | Middle-click tab | Close | Same | Done |
 | Pane resize 20–80% | ContentShell divider | Drag divider | Done |
-| Persist tabs / `saveTabs` | `localStorage` | Settings IPC `workspace-layout` |
+| Persist tabs / `saveTabs` | `localStorage` | Settings IPC `workspace-layout` when Start Location is Last | Done |
 | Tab keyboard focus wrap (ArrowLeft/Right on tab) | `moveTabFocus` | ArrowLeft/Right on the focused tab |
 | Tab key switches panes | `pane.switch` when dual | Tab switches panes when focus is not in a text box |
 
@@ -73,17 +76,12 @@ These are intentional. They stay on Svelte until a later PR.
 | --- | --- | --- |
 | Expandable folder tree | `listSubdirectories` / `loadTreeChildren` | IPC MVP returns `-32601` for `list_subdirectories` |
 | `watch_directory` live refresh | Watcher after `loadDirectory` | IPC MVP has no watch command |
-| Open file in default app | `open_file` / `openEntryPath` | IPC MVP has no `open_file`; UI reports “not ported yet” |
-| `get_entry_info` for unknown path types | Used when click source has no `is_dir` | Path bar / breadcrumbs always navigate via `list_directory` |
 | Archive-as-folder | `isArchiveFile` then `navigateTo` | Archive VFS still Tauri-only |
-| Git status overlay on rows | `getGitFileStatuses` after listing | Not in IPC MVP |
 | Thumbnails, folder sizes, item counts | Lazy metrics / thumbs | Out of slice |
 | Grid / photo folder view | `isGridView`, `applyContextualFolderView` | List only |
 | Multi-select, range, type-ahead, marquee | `fileNavigationSelection.ts` | Single select only |
 | Quick filter bar | `filterQuery` | Sort/hide-dot only |
 | Bookmarks, recents, smart folders | Sidebar below Quick Access | Out of slice |
-| Settings / `startLocation` last or custom | `localStorage` settings | Always home |
-| Persist sidebar collapse | `simplefile-sidebar-collapse-state` | Session only |
 | Theme toggle / light theme | `data-theme` | Settings theme + ThemeDictionaries |
 | Preview pane, search, transfers, tags, context menus | Rest of the app | Out of slice |
 | UNC breadcrumb first segment | Svelte accumulates `server` not `\\server` | **Matched on purpose** (same quirk) |
@@ -91,7 +89,6 @@ These are intentional. They stay on Svelte until a later PR.
 | Modified-date exact `Intl` string | `DateTimeFormat` locale options | `DateTimeOffset.ToString("g")` — same instant, locale format may differ slightly |
 | Column resize / presets / extra columns | `fileListColumns.ts` | Dynamic columns with persisted widths and Settings presets |
 | Virtualized huge lists | `FileList.svelte` windowing | `ListView` default virtualization only |
-| Startup `last` tabs/history restore | `resolveStartupLocation` | Always `home` |
 
 ## Blocked on later IPC methods
 
@@ -99,9 +96,6 @@ Do not invent client-side substitutes for these until the service implements the
 
 - `list_subdirectories` — tree expand
 - `watch_directory` / `unwatch_directory` — live pane refresh
-- `open_file` — double-click file
-- `get_entry_info` — type probe
-- `get_git_file_statuses` — git column
 - archive listing path
 
 ## How to verify
@@ -115,7 +109,7 @@ npm run dev:winui
 
 ### Slice 1 (single pane)
 
-Start at home, open a folder, breadcrumb back, path-bar Enter, drive click, Quick Access Desktop, Up at `C:\` does nothing, double-click file shows the not-ported InfoBar.
+Start at home, open a folder, breadcrumb back, path-bar Enter, drive click, Quick Access Desktop, Up at `C:\` does nothing, double-click file opens the default app.
 
 ### Slice 2 (dual pane + tabs)
 

@@ -96,8 +96,8 @@ public sealed partial class SettingsDialog : ContentDialog
         var confirmDelete = await fileOps.GetSettingAsync("confirmDelete").ConfigureAwait(true);
         ConfirmDeleteSwitch.IsOn = confirmDelete != "false";
 
-        var startLoc = await fileOps.GetSettingAsync("startLocation").ConfigureAwait(true) ?? "Home";
-        StartLocationComboBox.SelectedIndex = startLoc == "Custom" ? 2 : (startLoc == "Last" ? 1 : 0);
+        var startLoc = UiSettings.NormalizeStartLocation(await fileOps.GetSettingAsync("startLocation").ConfigureAwait(true));
+        StartLocationComboBox.SelectedIndex = startLoc == "custom" ? 2 : (startLoc == "last" ? 1 : 0);
 
         CustomPathBox.Text = await fileOps.GetSettingAsync("customPath").ConfigureAwait(true) ?? "";
 
