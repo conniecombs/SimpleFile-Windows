@@ -369,6 +369,31 @@ public class ExplorerWorkspaceTests
         Assert.True(second.Settings.MyPcCollapsed);
     }
 
+    [Fact]
+    public async Task UiSettings_RestoresBookmarksAndRecentPaths()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        var fileOps = new FileOperationService(settingsIpc);
+        var first = new ExplorerWorkspace(backend, fileOps);
+        await first.InitializeAsync();
+        first.AddBookmark(@"C:\Users\test\Desktop");
+        await first.NavigateToAsync(@"C:\Users\test\Desktop");
+        await first.NavigateToAsync(@"C:\");
+        await first.SaveUiSettingsAsync();
+
+        Assert.True(settingsIpc.Settings.ContainsKey("places.bookmarks"));
+        Assert.True(settingsIpc.Settings.ContainsKey("places.recents"));
+
+        var second = new ExplorerWorkspace(backend, fileOps);
+        await second.InitializeAsync();
+
+        Assert.Equal([@"C:\Users\test\Desktop"], second.Bookmarks.Select(bookmark => bookmark.Path));
+        Assert.Equal(
+            [@"C:\Users\test", @"C:\", @"C:\Users\test\Desktop"],
+            second.RecentPaths.Take(3));
+    }
+
 }
 internal sealed class FakeExplorerBackend : IExplorerBackend
 {

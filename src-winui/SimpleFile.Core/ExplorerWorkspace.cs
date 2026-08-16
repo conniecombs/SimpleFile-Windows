@@ -11,6 +11,9 @@ namespace SimpleFile.Core;
 /// </summary>
 public sealed class ExplorerWorkspace
 {
+    private const string BookmarksSettingsKey = "places.bookmarks";
+    private const string RecentPathsSettingsKey = "places.recents";
+
     public static readonly IReadOnlyList<(string Name, string Icon, string Command)> QuickAccessLocations =
     [
         ("Home", "\uE80F", "navigateHome"),
@@ -60,7 +63,8 @@ public sealed class ExplorerWorkspace
     public string SortBy { get; private set; } = "name";
     public bool SortAscending { get; private set; } = true;
     public bool ShowHiddenFiles { get; private set; }
-    public string FilterQuery { get; private set; } = "";
+    private string _primaryFilterQuery = "";
+    private string _secondaryFilterQuery = "";
     public string? ErrorMessage { get; private set; }
     public string? StatusMessage { get; private set; }
     public DriveInfo? PendingReconnect { get; private set; }
@@ -107,7 +111,7 @@ public sealed class ExplorerWorkspace
     public IReadOnlyList<string> History => Primary.History;
     public int HistoryIndex => Primary.HistoryIndex;
     public IReadOnlyList<FileEntry> VisibleEntries =>
-        Primary.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQuery);
+        Primary.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQueryFor(PaneId.Primary));
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => Primary.Breadcrumbs;
     public bool IsNavigating => Primary.IsNavigating;
     public bool ListingInProgress => Primary.ListingInProgress;
@@ -119,6 +123,8 @@ public sealed class ExplorerWorkspace
 
     public string? ActivePaneLabel =>
         DualPaneEnabled ? (ActivePane == PaneId.Secondary ? "Right pane" : "Left pane") : null;
+
+    public string FilterQuery => FilterQueryFor(ActivePane);
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -884,7 +890,40 @@ public sealed class ExplorerWorkspace
 
     public void SetFilterQuery(string query)
     {
-        FilterQuery = query;
+        SetFilterQuery(ActivePane, query);
+    }
+
+    public void SetFilterQuery(PaneId pane, string query)
+    {
+        var target = Normalize(pane);
+        var normalized = query ?? "";
+        var existing = FilterQueryFor(target);
+        var state = Pane(target);
+        var selectionCleared = false;
+        if (!string.IsNullOrEmpty(state.SelectedPath))
+        {
+            var visible = state.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, normalized);
+            if (!visible.Any(entry => PathRules.PathsEqual(entry.Path, state.SelectedPath)))
+            {
+                state.SelectedPath = null;
+                selectionCleared = true;
+            }
+        }
+
+        if (target == PaneId.Secondary)
+        {
+            _secondaryFilterQuery = normalized;
+        }
+        else
+        {
+            _primaryFilterQuery = normalized;
+        }
+
+        if (string.Equals(existing, normalized, StringComparison.Ordinal) && !selectionCleared)
+        {
+            return;
+        }
+
         RaiseChanged();
     }
 
@@ -1073,8 +1112,8 @@ public sealed class ExplorerWorkspace
 
     public IReadOnlyList<FileEntry> VisibleEntriesFor(PaneId pane)
     {
-        var filter = Normalize(pane) == PaneId.Secondary ? "" : FilterQuery;
-        var entries = Pane(pane).VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, filter);
+        var target = Normalize(pane);
+        var entries = Pane(target).VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQueryFor(target));
         if (ActiveTagFilter is long tagId)
         {
             var tagged = FileTags
@@ -1085,6 +1124,11 @@ public sealed class ExplorerWorkspace
         }
 
         return entries;
+    }
+
+    public string FilterQueryFor(PaneId pane)
+    {
+        return Normalize(pane) == PaneId.Secondary ? _secondaryFilterQuery : _primaryFilterQuery;
     }
 
     public async Task SaveCurrentSearchAsSmartFolderAsync(string name, SearchOptions options)
@@ -1466,6 +1510,14 @@ public sealed class ExplorerWorkspace
         await FileOps.SetSettingAsync("sidebar.quickAccessCollapsed", Settings.QuickAccessCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("sidebar.myPcCollapsed", Settings.MyPcCollapsed ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("lastPath", Settings.LastPath, cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync(
+            BookmarksSettingsKey,
+            System.Text.Json.JsonSerializer.Serialize(Bookmarks),
+            cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync(
+            RecentPathsSettingsKey,
+            System.Text.Json.JsonSerializer.Serialize(RecentPaths),
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async Task CopyOrMoveToOtherPaneAsync(string[] sources, bool move, string conflictAction = "keep-both", CancellationToken cancellationToken = default)
@@ -1557,6 +1609,8 @@ public sealed class ExplorerWorkspace
             Settings.ColumnWidths = await ReadColumnWidthsAsync(cancellationToken).ConfigureAwait(false);
             Settings.QuickAccessCollapsed = await ReadBoolSettingAsync("sidebar.quickAccessCollapsed", false, cancellationToken).ConfigureAwait(false);
             Settings.MyPcCollapsed = await ReadBoolSettingAsync("sidebar.myPcCollapsed", false, cancellationToken).ConfigureAwait(false);
+            Bookmarks = await ReadBookmarksAsync(cancellationToken).ConfigureAwait(false);
+            RecentPaths = await ReadRecentPathsAsync(cancellationToken).ConfigureAwait(false);
             ShowHiddenFiles = Settings.ShowHidden;
             Columns.ApplyPreset(Settings.ColumnPreset);
             Columns.RestoreWidths(Settings.ColumnWidths);
@@ -1583,6 +1637,79 @@ public sealed class ExplorerWorkspace
         catch
         {
             return new Dictionary<string, double>(StringComparer.Ordinal);
+        }
+    }
+
+    private async Task<List<BookmarkItem>> ReadBookmarksAsync(CancellationToken cancellationToken)
+    {
+        var raw = await FileOps!.GetSettingAsync(BookmarksSettingsKey, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return [];
+        }
+
+        try
+        {
+            var saved = System.Text.Json.JsonSerializer.Deserialize<List<BookmarkItem>>(raw) ?? [];
+            var result = new List<BookmarkItem>();
+            foreach (var bookmark in saved)
+            {
+                var path = (bookmark.Path ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(path)
+                    || result.Any(item => PathRules.PathsEqual(item.Path, path)))
+                {
+                    continue;
+                }
+
+                var name = (bookmark.Name ?? "").Trim();
+                result.Add(new BookmarkItem
+                {
+                    Name = string.IsNullOrWhiteSpace(name) ? PathRules.Basename(path) : name,
+                    Path = path,
+                });
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private async Task<List<string>> ReadRecentPathsAsync(CancellationToken cancellationToken)
+    {
+        var raw = await FileOps!.GetSettingAsync(RecentPathsSettingsKey, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return [];
+        }
+
+        try
+        {
+            var saved = System.Text.Json.JsonSerializer.Deserialize<List<string>>(raw) ?? [];
+            var result = new List<string>();
+            foreach (var path in saved)
+            {
+                var trimmed = (path ?? "").Trim();
+                if (string.IsNullOrWhiteSpace(trimmed)
+                    || result.Any(item => PathRules.PathsEqual(item, trimmed)))
+                {
+                    continue;
+                }
+
+                result.Add(trimmed);
+                if (result.Count >= PlacesStore.RecentLimit)
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+        catch
+        {
+            return [];
         }
     }
 

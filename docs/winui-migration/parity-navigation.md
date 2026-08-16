@@ -31,11 +31,15 @@ Sources of truth for this slice:
 | Sidebar My PC drive roots | `list_drives`, fallback drive, status badge/description | `DrivePresentation` + drive list | Done |
 | Refresh drives | `simplefile:refresh-drives` | ↻ button | Done |
 | Collapse Quick Access / My PC | `localStorage` `simplefile-sidebar-collapse-state` | Settings IPC `sidebar.*Collapsed` | Done |
+| Expandable folder tree | `listSubdirectories` / `loadTreeChildren` | Sidebar Folders list | Done |
+| Bookmarks, recents, smart folders | Sidebar below Quick Access | Sidebar sections + settings-backed places / smart folder IPC | Done |
 | Directory listing via `list_directory` | Channel chunks then full listing | `list_directory.chunk` then result | Done |
 | First chunk paints before enumeration finishes | `primaryListingInProgress` + progressive concat | Same token + progressive list | Done |
 | `RESULT_TOO_LARGE` keeps streamed chunks | Architecture / Gate 5 | Workspace treats as success + status | Done |
+| `watch_directory` live refresh | Watcher after `loadDirectory` | MainWindow watch subscription + in-place refresh | Done |
 | Hide `.` files by default | `showHiddenFiles: false` | Same | Done |
 | Sort dirs-first then name (default) | `visibleEntries` / `sortEntries` | `EntryPresentation` | Done |
+| Quick filter bar | `filterQuery` | Pane-aware filter box + `SetFilterQuery` | Done |
 | Header sort name / size / date / type | Click header toggles direction | Same | Done |
 | Columns Name, Size, Modified, Type | Default visible columns | Same four, resizable | Done |
 | Git status column | `getGitFileStatuses` after listing | Optional enrichment when Git integration is enabled | Done |
@@ -46,7 +50,8 @@ Sources of truth for this slice:
 | Up uses `getParentPath`; no-op on drive root | `if (parent) loadDirectoryForPane` | Same | Done |
 | Open folder in-app (double-click / Enter) | `openEntryPath` → `loadDirectory` | Same | Done |
 | Open file in default app | `open_file` / `openEntryPath` | `OpenEntryAsync` probes unknown paths, then calls `open_file` | Done |
-| Click file selects (does not open) | `file-list-item-click` | List click selects | Done (single select only) |
+| Click file selects (does not open) | `file-list-item-click` | List click selects | Done |
+| Multi-select, range, type-ahead | `fileNavigationSelection.ts` | `ListView` Extended + `MatchTypeAhead` | Done |
 | Network drive offline → retry dialog | `offerNetworkDriveReconnect` | `ContentDialog` Retry/Cancel | Done (simplified copy) |
 | F5 refresh, Alt+Left/Right/Up | Keyboard map (subset) | Keyboard accelerators | Done (subset) |
 | Status: path / item count / errors | Status bar | Bottom bar + InfoBar | Done |
@@ -74,14 +79,10 @@ These are intentional. They stay on Svelte until a later PR.
 
 | Gap | Svelte today | Why WinUI does not match |
 | --- | --- | --- |
-| Expandable folder tree | `listSubdirectories` / `loadTreeChildren` | IPC MVP returns `-32601` for `list_subdirectories` |
-| `watch_directory` live refresh | Watcher after `loadDirectory` | IPC MVP has no watch command |
 | Archive-as-folder | `isArchiveFile` then `navigateTo` | Archive VFS still Tauri-only |
-| Thumbnails, folder sizes, item counts | Lazy metrics / thumbs | Out of slice |
+| Thumbnails | Lazy thumbs | Out of slice |
 | Grid / photo folder view | `isGridView`, `applyContextualFolderView` | List only |
-| Multi-select, range, type-ahead, marquee | `fileNavigationSelection.ts` | Single select only |
-| Quick filter bar | `filterQuery` | Sort/hide-dot only |
-| Bookmarks, recents, smart folders | Sidebar below Quick Access | Out of slice |
+| Rubber-band marquee | `fileNavigationSelection.ts` | Core helper only; no visible drag-selection surface |
 | Theme toggle / light theme | `data-theme` | Settings theme + ThemeDictionaries |
 | Preview pane, search, transfers, tags, context menus | Rest of the app | Out of slice |
 | UNC breadcrumb first segment | Svelte accumulates `server` not `\\server` | **Matched on purpose** (same quirk) |
@@ -94,8 +95,6 @@ These are intentional. They stay on Svelte until a later PR.
 
 Do not invent client-side substitutes for these until the service implements them:
 
-- `list_subdirectories` — tree expand
-- `watch_directory` / `unwatch_directory` — live pane refresh
 - archive listing path
 
 ## How to verify

@@ -219,6 +219,27 @@ public class DualPaneAndTabsTests
     }
 
     [Fact]
+    public async Task QuickFilter_IsPaneLocalAndClearsHiddenSelection()
+    {
+        var workspace = await Started();
+        await workspace.ToggleDualPaneAsync();
+        await workspace.NavigatePaneAsync(PaneId.Secondary, @"C:\Users\test\Desktop");
+
+        workspace.SelectPath(@"C:\Users\test\notes.txt", PaneId.Primary);
+        workspace.SetFilterQuery(PaneId.Primary, "desktop");
+        workspace.SetFilterQuery(PaneId.Secondary, "shot");
+
+        Assert.Null(workspace.Primary.SelectedPath);
+        Assert.Equal(["Desktop"], workspace.VisibleEntriesFor(PaneId.Primary).Select(entry => entry.Name));
+        Assert.Equal(["shot.png"], workspace.VisibleEntriesFor(PaneId.Secondary).Select(entry => entry.Name));
+
+        workspace.ActivatePane(PaneId.Secondary);
+        Assert.Equal("shot", workspace.FilterQuery);
+        workspace.ActivatePane(PaneId.Primary);
+        Assert.Equal("desktop", workspace.FilterQuery);
+    }
+
+    [Fact]
     public async Task SwitchTabBy_Wraps()
     {
         var workspace = await Started();

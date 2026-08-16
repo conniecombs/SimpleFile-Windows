@@ -95,6 +95,11 @@ public sealed partial class MainWindow
 
     private void OnQuickFilterChanged(object sender, TextChangedEventArgs e)
     {
+        if (_applyingWorkspace)
+        {
+            return;
+        }
+
         _workspace?.SetFilterQuery(QuickFilterBox.Text);
     }
 

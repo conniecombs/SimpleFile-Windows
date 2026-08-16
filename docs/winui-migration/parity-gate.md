@@ -224,7 +224,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `list.multi-select` | Ctrl/Shift multi | `ListView` Multiple | — | Ctrl-click range | `MANUAL` |
 | `list.marquee` | Rubber-band | `MarqueeSelection` + ListView multi-select | `ParityFeaturesTests` | Drag-select rows | `PASS` |
 | `list.typeahead` | Type-to-select | `MatchTypeAhead` on list keys | `ParityFeaturesTests` | Type letters in a list | `PASS` |
-| `list.quick-filter` | Filter box | `SetFilterQuery` | Presentation filter tests | Type in filter | `PASS` |
+| `list.quick-filter` | Filter box | `SetFilterQuery` | Presentation + workspace tests | Type in filter | `PASS` |
 | `list.cut-dim` | Cut items dim | `FileRow.IsCut` | — | Cut; see opacity | `MANUAL` |
 | `list.virtualize` | Huge folders | WinUI `ListView` default | — | Folder with 20k files | `MANUAL` |
 | `list.thumbs` | Grid/list thumbs | `generate_thumbnail(s)` + preview | FileOps | Open image folder | `PASS` |

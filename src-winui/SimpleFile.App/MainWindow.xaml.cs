@@ -227,6 +227,7 @@ public sealed partial class MainWindow : Window
             _workspace.DualPaneEnabled && _workspace.ActivePane == PaneId.Secondary ? 2 : 0, 0, 0, 0);
         SidebarTargetSwitch.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
         HighlightSidebarTarget();
+        SyncQuickFilterFromWorkspace();
         ToolTipService.SetToolTip(
             DualPaneButton,
             _workspace.DualPaneEnabled ? "Single pane (F6)" : "Toggle dual pane (F6)");
@@ -521,6 +522,20 @@ public sealed partial class MainWindow : Window
 
         _quickAccessCollapsed = _workspace.Settings.QuickAccessCollapsed;
         _myPcCollapsed = _workspace.Settings.MyPcCollapsed;
+    }
+
+    private void SyncQuickFilterFromWorkspace()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var filter = _workspace.FilterQuery;
+        if (!string.Equals(QuickFilterBox.Text, filter, StringComparison.Ordinal))
+        {
+            QuickFilterBox.Text = filter;
+        }
     }
 
     private static Style? ChromeStyle(string key)
