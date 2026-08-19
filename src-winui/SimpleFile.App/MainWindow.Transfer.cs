@@ -14,6 +14,7 @@ public sealed partial class MainWindow
     private const string InternalDragFormat = "simplefile-internal";
     private string[] _dragPaths = [];
     private bool _sidebarDragging;
+    private bool _previewDragging;
     private bool _columnDragging;
     private string? _columnDragId;
     private double _columnDragStartX;
@@ -612,6 +613,50 @@ public sealed partial class MainWindow
         if (wasDragging && _workspace is not null)
         {
             await RunUiActionAsync("Resize side menu", () => _workspace.SaveUiSettingsAsync());
+        }
+    }
+
+    private void OnPreviewDividerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_workspace?.Settings.PreviewVisible != true)
+        {
+            return;
+        }
+
+        _previewDragging = true;
+        PreviewDivider.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void OnPreviewDividerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_previewDragging || _workspace is null)
+        {
+            return;
+        }
+
+        var hostWidth = ExplorerContentGrid.ActualWidth;
+        if (hostWidth <= 0)
+        {
+            return;
+        }
+
+        _workspace.Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(
+            hostWidth - e.GetCurrentPoint(ExplorerContentGrid).Position.X);
+        ApplyPreviewVisibility();
+        e.Handled = true;
+    }
+
+    private async void OnPreviewDividerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        var wasDragging = _previewDragging;
+        _previewDragging = false;
+        PreviewDivider.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+        var workspace = _workspace;
+        if (wasDragging && workspace is not null)
+        {
+            await RunUiActionAsync("Resize preview pane", () => workspace.SaveUiSettingsAsync());
         }
     }
 

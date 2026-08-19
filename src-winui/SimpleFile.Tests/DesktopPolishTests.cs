@@ -114,6 +114,74 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void ToolbarOverflowPlanner_HidesLowestPriorityFirstAndStaysStable()
+    {
+        var widths = new Dictionary<string, double>(StringComparer.Ordinal)
+        {
+            [ToolbarOverflowPlanner.Filter] = 108,
+            [ToolbarOverflowPlanner.Search] = 204,
+            [ToolbarOverflowPlanner.Settings] = 32,
+            [ToolbarOverflowPlanner.DualPane] = 32,
+            [ToolbarOverflowPlanner.ViewOptions] = 32,
+            [ToolbarOverflowPlanner.NewFile] = 32,
+            [ToolbarOverflowPlanner.NewFolder] = 32,
+        };
+        var reserved = 360;
+
+        var wide = ToolbarOverflowPlanner.OverflowIds(1200, reserved, widths, ToolbarOverflowPlanner.PrimaryHideOrder);
+        Assert.Empty(wide);
+
+        var medium = ToolbarOverflowPlanner.OverflowIds(700, reserved, widths, ToolbarOverflowPlanner.PrimaryHideOrder);
+        Assert.Contains(ToolbarOverflowPlanner.Filter, medium);
+        Assert.Contains(ToolbarOverflowPlanner.Search, medium);
+        Assert.DoesNotContain(ToolbarOverflowPlanner.NewFolder, medium);
+
+        var narrow = ToolbarOverflowPlanner.OverflowIds(370, reserved, widths, ToolbarOverflowPlanner.PrimaryHideOrder);
+        Assert.True(narrow.IsSupersetOf(medium));
+        Assert.Contains(ToolbarOverflowPlanner.NewFolder, narrow);
+
+        var again = ToolbarOverflowPlanner.OverflowIds(370, reserved, widths, ToolbarOverflowPlanner.PrimaryHideOrder);
+        Assert.True(narrow.SetEquals(again));
+    }
+
+    [Fact]
+    public void PaneMoreMenu_PrependsOverflowedToolbarCommands()
+    {
+        var overflowed = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            OverflowedToolbarIds =
+            [
+                ToolbarOverflowPlanner.Search,
+                ToolbarOverflowPlanner.Filter,
+                ToolbarOverflowPlanner.NewFolder,
+                ToolbarOverflowPlanner.NewFile,
+                ToolbarOverflowPlanner.DualPane,
+                ToolbarOverflowPlanner.ViewOptions,
+                ToolbarOverflowPlanner.Settings,
+            ],
+        });
+
+        Assert.Equal("overflow-search", overflowed[0].Id);
+        Assert.Equal("overflow-filter", overflowed[1].Id);
+        Assert.Equal("overflow-new-folder", overflowed[2].Id);
+        Assert.Equal("overflow-new-file", overflowed[3].Id);
+        Assert.Equal("overflow-dual-pane", overflowed[4].Id);
+        Assert.Equal("overflow-view", overflowed[5].Id);
+        Assert.Equal("overflow-settings", overflowed[6].Id);
+        Assert.Contains(overflowed[5].Children, child => child.Id == "view:details");
+        Assert.Contains(overflowed, entry => entry.Id == "ctx-duplicates");
+        Assert.DoesNotContain(overflowed, entry => entry.Id == "ctx-close-dual-pane");
+
+        var dualOpen = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            DualPaneEnabled = true,
+            OverflowedToolbarIds = [ToolbarOverflowPlanner.DualPane],
+        });
+        Assert.DoesNotContain(dualOpen, entry => entry.Id == "overflow-dual-pane");
+        Assert.Contains(dualOpen, entry => entry.Id == "ctx-close-dual-pane");
+    }
+
+    [Fact]
     public void ColumnLayout_ClampsResizeAndAppliesPresets()
     {
         var columns = new ColumnLayout();
@@ -279,6 +347,14 @@ public class DesktopPolishTests
         Assert.Equal(UiSettings.SidebarMinWidth, UiSettings.NormalizeSidebarWidth(120));
         Assert.Equal(312, UiSettings.NormalizeSidebarWidth("312"));
         Assert.Equal(UiSettings.SidebarMaxWidth, UiSettings.NormalizeSidebarWidth(900));
+        Assert.Equal(UiSettings.PreviewDefaultWidth, UiSettings.NormalizePreviewWidth(double.NaN));
+        Assert.Equal(UiSettings.PreviewMinWidth, UiSettings.NormalizePreviewWidth(80));
+        Assert.Equal(420, UiSettings.NormalizePreviewWidth("420"));
+        Assert.Equal(UiSettings.PreviewMaxWidth, UiSettings.NormalizePreviewWidth(2000));
+        Assert.Equal(UiSettings.DualPaneDefaultPercent, UiSettings.NormalizeDualPanePrimaryPercent(double.PositiveInfinity));
+        Assert.Equal(UiSettings.DualPaneMinPercent, UiSettings.NormalizeDualPanePrimaryPercent(5));
+        Assert.Equal(62, UiSettings.NormalizeDualPanePrimaryPercent("62"));
+        Assert.Equal(UiSettings.DualPaneMaxPercent, UiSettings.NormalizeDualPanePrimaryPercent(99));
     }
 
     [Fact]

@@ -5,6 +5,12 @@ public sealed class UiSettings
     public const double SidebarDefaultWidth = 232;
     public const double SidebarMinWidth = 180;
     public const double SidebarMaxWidth = 520;
+    public const double PreviewDefaultWidth = 296;
+    public const double PreviewMinWidth = 200;
+    public const double PreviewMaxWidth = 720;
+    public const double DualPaneDefaultPercent = 50;
+    public const double DualPaneMinPercent = 20;
+    public const double DualPaneMaxPercent = 80;
 
     public string Theme { get; set; } = "system";
     public string DefaultView { get; set; } = "details";
@@ -27,6 +33,8 @@ public sealed class UiSettings
     public string CustomPath { get; set; } = "";
     public string LastPath { get; set; } = "";
     public bool PreviewVisible { get; set; } = true;
+    public double PreviewWidth { get; set; } = PreviewDefaultWidth;
+    public double DualPanePrimaryPercent { get; set; } = DualPaneDefaultPercent;
     public bool QuickAccessCollapsed { get; set; }
     public bool MyPcCollapsed { get; set; }
     public int PhotoFolderImageThreshold { get; set; } = 70;
@@ -129,5 +137,39 @@ public sealed class UiSettings
         return double.TryParse(width, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
             ? NormalizeSidebarWidth(parsed)
             : SidebarDefaultWidth;
+    }
+
+    public static double NormalizePreviewWidth(double width)
+    {
+        if (double.IsNaN(width) || double.IsInfinity(width))
+        {
+            return PreviewDefaultWidth;
+        }
+
+        return Math.Clamp(width, PreviewMinWidth, PreviewMaxWidth);
+    }
+
+    public static double NormalizePreviewWidth(string? width)
+    {
+        return double.TryParse(width, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? NormalizePreviewWidth(parsed)
+            : PreviewDefaultWidth;
+    }
+
+    public static double NormalizeDualPanePrimaryPercent(double percent)
+    {
+        if (double.IsNaN(percent) || double.IsInfinity(percent))
+        {
+            return DualPaneDefaultPercent;
+        }
+
+        return Math.Clamp(percent, DualPaneMinPercent, DualPaneMaxPercent);
+    }
+
+    public static double NormalizeDualPanePrimaryPercent(string? percent)
+    {
+        return double.TryParse(percent, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? NormalizeDualPanePrimaryPercent(parsed)
+            : DualPaneDefaultPercent;
     }
 }

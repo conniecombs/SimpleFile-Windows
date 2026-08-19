@@ -33,8 +33,109 @@ public sealed partial class MainWindow
     private void OnFocusSearchAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
     {
         e.Handled = true;
-        SearchBox.Focus(FocusState.Programmatic);
-        SearchBox.SelectAll();
+        FocusSearchUi();
+    }
+
+    private void FocusSearchUi()
+    {
+        if (PrimarySearchHost.Visibility == Visibility.Visible)
+        {
+            SearchBox.Focus(FocusState.Programmatic);
+            SearchBox.SelectAll();
+            return;
+        }
+
+        ShowOverflowInputFlyout(
+            PrimaryMoreButton,
+            "Search",
+            SearchBox.Text,
+            async text =>
+            {
+                SearchBox.Text = text;
+                await StartSearchAsync();
+            },
+            commitOnClose: false);
+    }
+
+    private void FocusFilterUi()
+    {
+        if (QuickFilterBox.Visibility == Visibility.Visible)
+        {
+            QuickFilterBox.Focus(FocusState.Programmatic);
+            QuickFilterBox.SelectAll();
+            return;
+        }
+
+        ShowOverflowInputFlyout(
+            PrimaryMoreButton,
+            "Filter",
+            QuickFilterBox.Text,
+            text =>
+            {
+                if (!string.Equals(QuickFilterBox.Text, text, StringComparison.Ordinal))
+                {
+                    QuickFilterBox.Text = text;
+                }
+
+                _workspace?.SetFilterQuery(text);
+                return Task.CompletedTask;
+            },
+            commitOnClose: true);
+    }
+
+    private void ShowOverflowInputFlyout(
+        FrameworkElement anchor,
+        string placeholder,
+        string? current,
+        Func<string, Task> commit,
+        bool commitOnClose)
+    {
+        var input = new TextBox
+        {
+            MinWidth = 240,
+            PlaceholderText = placeholder,
+            Text = current ?? "",
+            Style = SearchBox.Style,
+        };
+        var flyout = new Flyout { Content = input };
+        var committed = false;
+
+        async Task CommitAsync()
+        {
+            if (committed)
+            {
+                return;
+            }
+
+            committed = true;
+            await commit(input.Text);
+        }
+
+        input.KeyDown += async (_, args) =>
+        {
+            if (args.Key == VirtualKey.Enter)
+            {
+                args.Handled = true;
+                flyout.Hide();
+                await CommitAsync();
+            }
+            else if (args.Key == VirtualKey.Escape)
+            {
+                args.Handled = true;
+                flyout.Hide();
+            }
+        };
+        input.Loaded += (_, _) =>
+        {
+            input.Focus(FocusState.Programmatic);
+            input.SelectAll();
+        };
+        if (commitOnClose)
+        {
+            flyout.Closed += async (_, _) => await CommitAsync();
+        }
+
+        flyout.ShowAt(anchor);
     }
 
     private void OnSelectAllAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
@@ -103,22 +204,46 @@ public sealed partial class MainWindow
         _workspace?.SetFilterQuery(QuickFilterBox.Text);
     }
 
-    private void OnTogglePreview(object sender, RoutedEventArgs e)
+    private async void OnTogglePreview(object sender, RoutedEventArgs e)
     {
-        if (_workspace is null)
+        var workspace = _workspace;
+        if (workspace is null)
         {
             return;
         }
 
-        _workspace.Settings.PreviewVisible = !_workspace.Settings.PreviewVisible;
+        workspace.Settings.PreviewVisible = !workspace.Settings.PreviewVisible;
         ApplyPreviewVisibility();
+        await RunUiActionAsync("Preview pane", () => workspace.SaveUiSettingsAsync());
     }
 
     private void ApplyPreviewVisibility()
     {
         var visible = _workspace?.Settings.PreviewVisible != false;
+        var width = UiSettings.NormalizePreviewWidth(
+            _workspace?.Settings.PreviewWidth ?? UiSettings.PreviewDefaultWidth);
+        if (_workspace is not null)
+        {
+            _workspace.Settings.PreviewWidth = width;
+        }
+
         PreviewPane.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        PreviewColumn.Width = visible ? new GridLength(296) : new GridLength(0);
+        PreviewDivider.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible)
+        {
+            PreviewColumn.MinWidth = UiSettings.PreviewMinWidth;
+            PreviewColumn.MaxWidth = UiSettings.PreviewMaxWidth;
+            PreviewColumn.Width = new GridLength(width);
+            PreviewDividerColumn.Width = new GridLength(5);
+        }
+        else
+        {
+            PreviewColumn.MinWidth = 0;
+            PreviewColumn.MaxWidth = 0;
+            PreviewColumn.Width = new GridLength(0);
+            PreviewDividerColumn.Width = new GridLength(0);
+        }
+
         ToolTipService.SetToolTip(PreviewToggleButton, visible ? "Hide preview pane" : "Show preview pane");
     }
 
@@ -572,8 +697,9 @@ public sealed partial class MainWindow
 
         var targetPane = ActivatePaneForMenu(pane);
         var selected = SelectedRowsForPane(targetPane);
+        var overflow = targetPane == PaneId.Secondary ? _secondaryToolbarOverflow : _primaryToolbarOverflow;
 
-        PopulateMenuFlyout(flyout, ContextMenuBuilder.BuildPaneMoreMenu(BuildContextMenuRequest(selected)));
+        PopulateMenuFlyout(flyout, ContextMenuBuilder.BuildPaneMoreMenu(BuildContextMenuRequest(selected, overflow)));
     }
 
     private PaneId ActivatePaneForMenu(PaneId pane)
@@ -589,7 +715,9 @@ public sealed partial class MainWindow
         return list.SelectedItems.OfType<FileRow>().ToArray();
     }
 
-    private ContextMenuRequest BuildContextMenuRequest(IReadOnlyList<FileRow> selected)
+    private ContextMenuRequest BuildContextMenuRequest(
+        IReadOnlyList<FileRow> selected,
+        IReadOnlyCollection<string>? overflowedToolbarIds = null)
     {
         return new ContextMenuRequest
         {
@@ -603,6 +731,7 @@ public sealed partial class MainWindow
             SelectedIsArchive = selected.Count == 1 && !selected[0].IsDir && ArchivePaths.IsArchiveFile(selected[0].Path),
             ArchiveExtractFolderName = selected.Count == 1 ? ArchivePaths.ExtractFolderName(selected[0].Name) : null,
             UseTrash = _workspace?.Settings.UseTrash != false,
+            OverflowedToolbarIds = overflowedToolbarIds ?? [],
         };
     }
 
@@ -676,8 +805,34 @@ public sealed partial class MainWindow
 
     private async Task RunContextCommandAsync(string id)
     {
+        if (id.StartsWith("view:", StringComparison.Ordinal)
+            || id.StartsWith("icon:", StringComparison.Ordinal)
+            || id == "pane:dual")
+        {
+            await ApplyViewOptionAsync(id);
+            return;
+        }
+
         switch (id)
         {
+            case "overflow-search":
+                FocusSearchUi();
+                break;
+            case "overflow-filter":
+                FocusFilterUi();
+                break;
+            case "overflow-new-folder":
+                await PromptAndCreateFolder(_workspace?.ActivePane ?? PaneId.Primary);
+                break;
+            case "overflow-new-file":
+                await PromptAndCreateFile(_workspace?.ActivePane ?? PaneId.Primary);
+                break;
+            case "overflow-dual-pane":
+                await ToggleDualPaneFromUiAsync();
+                break;
+            case "overflow-settings":
+                await ShowSettingsAsync();
+                break;
             case "ctx-open":
                 await OpenSelectedFile(ActiveFileList, _workspace?.ActivePane ?? PaneId.Primary);
                 break;

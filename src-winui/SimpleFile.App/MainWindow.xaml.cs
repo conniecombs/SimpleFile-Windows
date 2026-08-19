@@ -20,9 +20,6 @@ namespace SimpleFile.App;
 
 public sealed partial class MainWindow : Window
 {
-    private const double PaneMinPercent = 20;
-    private const double PaneMaxPercent = 80;
-
     private BackendSession? _backend;
     private ExplorerWorkspace? _workspace;
     private int _backendReconnectToken;
@@ -33,7 +30,9 @@ public sealed partial class MainWindow : Window
     private bool _reconnectDialogOpen;
     private CancellationTokenSource? _networkReconnectCts;
     private bool _dividerDragging;
-    private double _primaryPercent = 50;
+    private bool _applyingToolbarOverflow;
+    private readonly HashSet<string> _primaryToolbarOverflow = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _secondaryToolbarOverflow = new(StringComparer.Ordinal);
     private IDisposable? _fileChangeSubscription;
     private string? _watchTargetPath;
     private string? _watchedPath;
@@ -366,7 +365,13 @@ public sealed partial class MainWindow : Window
         DividerColumn.Width = dual ? new GridLength(6) : new GridLength(0);
         if (dual)
         {
-            var primary = Math.Clamp(_primaryPercent, PaneMinPercent, PaneMaxPercent);
+            var primary = UiSettings.NormalizeDualPanePrimaryPercent(
+                _workspace?.Settings.DualPanePrimaryPercent ?? UiSettings.DualPaneDefaultPercent);
+            if (_workspace is not null)
+            {
+                _workspace.Settings.DualPanePrimaryPercent = primary;
+            }
+
             PrimaryColumn.Width = new GridLength(primary, GridUnitType.Star);
             SecondaryColumn.Width = new GridLength(100 - primary, GridUnitType.Star);
         }
@@ -375,6 +380,163 @@ public sealed partial class MainWindow : Window
             PrimaryColumn.Width = new GridLength(1, GridUnitType.Star);
             SecondaryColumn.Width = new GridLength(0);
         }
+
+        ApplyToolbarOverflow();
+    }
+
+    private void OnPrimaryToolbarSizeChanged(object sender, SizeChangedEventArgs e) =>
+        ApplyPrimaryToolbarOverflow();
+
+    private void OnSecondaryToolbarSizeChanged(object sender, SizeChangedEventArgs e) =>
+        ApplySecondaryToolbarOverflow();
+
+    private void ApplyToolbarOverflow()
+    {
+        ApplyPrimaryToolbarOverflow();
+        ApplySecondaryToolbarOverflow();
+    }
+
+    private void ApplyPrimaryToolbarOverflow()
+    {
+        if (_applyingToolbarOverflow || PrimaryToolbar.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        var reserved = MeasuredWidth(PrimaryNavHost)
+            + MeasuredWidth(PrimaryEditPathButton)
+            + MeasuredWidth(PrimaryMoreButton)
+            + ToolbarOverflowPlanner.PathMinWidth
+            + (PrimaryToolbar.Padding.Left + PrimaryToolbar.Padding.Right)
+            + (3 * ToolbarOverflowPlanner.ColumnSpacing);
+
+        var widths = new Dictionary<string, double>(StringComparer.Ordinal)
+        {
+            [ToolbarOverflowPlanner.Filter] = 108,
+            [ToolbarOverflowPlanner.Search] = 196 + ToolbarOverflowPlanner.ColumnSpacing,
+            [ToolbarOverflowPlanner.Settings] = 32,
+            [ToolbarOverflowPlanner.DualPane] = 32,
+            [ToolbarOverflowPlanner.ViewOptions] = 32,
+            [ToolbarOverflowPlanner.NewFile] = 32,
+            [ToolbarOverflowPlanner.NewFolder] = 32,
+        };
+
+        var overflowed = ToolbarOverflowPlanner.OverflowIds(
+            PrimaryToolbar.ActualWidth,
+            reserved,
+            widths,
+            ToolbarOverflowPlanner.PrimaryHideOrder);
+
+        ApplyOverflowSet(_primaryToolbarOverflow, overflowed, ApplyPrimaryOverflowVisibility);
+    }
+
+    private void ApplySecondaryToolbarOverflow()
+    {
+        if (_applyingToolbarOverflow || SecondaryToolbar.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        var reserved = MeasuredWidth(SecondaryNavHost)
+            + MeasuredWidth(SecondaryEditPathButton)
+            + MeasuredWidth(SecondaryMoreButton)
+            + ToolbarOverflowPlanner.PathMinWidth
+            + (SecondaryToolbar.Padding.Left + SecondaryToolbar.Padding.Right)
+            + (3 * ToolbarOverflowPlanner.ColumnSpacing);
+
+        var widths = new Dictionary<string, double>(StringComparer.Ordinal)
+        {
+            [ToolbarOverflowPlanner.DualPane] = 32,
+            [ToolbarOverflowPlanner.ViewOptions] = 32,
+            [ToolbarOverflowPlanner.NewFile] = 32,
+            [ToolbarOverflowPlanner.NewFolder] = 32,
+        };
+
+        var overflowed = ToolbarOverflowPlanner.OverflowIds(
+            SecondaryToolbar.ActualWidth,
+            reserved,
+            widths,
+            ToolbarOverflowPlanner.SecondaryHideOrder);
+
+        ApplyOverflowSet(_secondaryToolbarOverflow, overflowed, ApplySecondaryOverflowVisibility);
+    }
+
+    private void ApplyOverflowSet(
+        HashSet<string> target,
+        HashSet<string> overflowed,
+        Action<IReadOnlySet<string>> applyVisibility)
+    {
+        if (target.SetEquals(overflowed))
+        {
+            return;
+        }
+
+        _applyingToolbarOverflow = true;
+        try
+        {
+            target.Clear();
+            foreach (var id in overflowed)
+            {
+                target.Add(id);
+            }
+
+            applyVisibility(target);
+        }
+        finally
+        {
+            _applyingToolbarOverflow = false;
+        }
+    }
+
+    private void ApplyPrimaryOverflowVisibility(IReadOnlySet<string> overflowed)
+    {
+        SetOverflowVisible(QuickFilterBox, !overflowed.Contains(ToolbarOverflowPlanner.Filter));
+        var searchVisible = !overflowed.Contains(ToolbarOverflowPlanner.Search);
+        SetOverflowVisible(PrimarySearchHost, searchVisible);
+        PrimarySearchColumn.Width = searchVisible ? GridLength.Auto : new GridLength(0);
+        SetOverflowVisible(PrimarySettingsButton, !overflowed.Contains(ToolbarOverflowPlanner.Settings));
+        SetOverflowVisible(DualPaneButton, !overflowed.Contains(ToolbarOverflowPlanner.DualPane));
+        SetOverflowVisible(PrimaryViewButton, !overflowed.Contains(ToolbarOverflowPlanner.ViewOptions));
+        SetOverflowVisible(PrimaryNewFileButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFile));
+        SetOverflowVisible(PrimaryNewFolderButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFolder));
+        var actionsVisible = PrimaryNewFolderButton.Visibility == Visibility.Visible
+            || PrimaryNewFileButton.Visibility == Visibility.Visible
+            || DualPaneButton.Visibility == Visibility.Visible
+            || PrimaryViewButton.Visibility == Visibility.Visible
+            || PrimarySettingsButton.Visibility == Visibility.Visible
+            || QuickFilterBox.Visibility == Visibility.Visible;
+        SetOverflowVisible(PrimaryActionsHost, actionsVisible);
+        PrimaryActionsColumn.Width = actionsVisible ? GridLength.Auto : new GridLength(0);
+    }
+
+    private void ApplySecondaryOverflowVisibility(IReadOnlySet<string> overflowed)
+    {
+        SetOverflowVisible(CloseDualPaneButton, !overflowed.Contains(ToolbarOverflowPlanner.DualPane));
+        SetOverflowVisible(SecondaryViewButton, !overflowed.Contains(ToolbarOverflowPlanner.ViewOptions));
+        SetOverflowVisible(SecondaryNewFileButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFile));
+        SetOverflowVisible(SecondaryNewFolderButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFolder));
+        var actionsVisible = SecondaryNewFolderButton.Visibility == Visibility.Visible
+            || SecondaryNewFileButton.Visibility == Visibility.Visible
+            || CloseDualPaneButton.Visibility == Visibility.Visible
+            || SecondaryViewButton.Visibility == Visibility.Visible;
+        SetOverflowVisible(SecondaryActionsHost, actionsVisible);
+        SecondaryActionsColumn.Width = actionsVisible ? GridLength.Auto : new GridLength(0);
+    }
+
+    private static void SetOverflowVisible(FrameworkElement element, bool visible)
+    {
+        element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static double MeasuredWidth(FrameworkElement element)
+    {
+        var width = element.ActualWidth;
+        if (width <= 0)
+        {
+            width = element.DesiredSize.Width;
+        }
+
+        return width + element.Margin.Left + element.Margin.Right;
     }
 
     private void UpdateDualPaneButton(bool dualPaneEnabled)
@@ -2199,13 +2361,19 @@ public sealed partial class MainWindow : Window
 
     private void OnDividerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (_workspace?.DualPaneEnabled != true)
+        {
+            return;
+        }
+
         _dividerDragging = true;
         PaneDivider.CapturePointer(e.Pointer);
+        e.Handled = true;
     }
 
     private void OnDividerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (!_dividerDragging)
+        if (!_dividerDragging || _workspace is null)
         {
             return;
         }
@@ -2216,14 +2384,23 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _primaryPercent = Math.Clamp(point.X / PanesGrid.ActualWidth * 100, PaneMinPercent, PaneMaxPercent);
+        _workspace.Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(
+            point.X / PanesGrid.ActualWidth * 100);
         ApplyDualPaneLayout();
+        e.Handled = true;
     }
 
-    private void OnDividerReleased(object sender, PointerRoutedEventArgs e)
+    private async void OnDividerReleased(object sender, PointerRoutedEventArgs e)
     {
+        var wasDragging = _dividerDragging;
         _dividerDragging = false;
         PaneDivider.ReleasePointerCapture(e.Pointer);
+        e.Handled = true;
+        var workspace = _workspace;
+        if (wasDragging && workspace is not null)
+        {
+            await RunUiActionAsync("Resize panes", () => workspace.SaveUiSettingsAsync());
+        }
     }
 
     private async void OnRefreshAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)

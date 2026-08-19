@@ -523,6 +523,8 @@ public class ExplorerWorkspaceTests
         settings.ShowSmartFolders = false;
         settings.SidebarVisible = false;
         settings.SidebarWidth = 344;
+        settings.PreviewWidth = 420;
+        settings.DualPanePrimaryPercent = 35;
         settings.QuickAccessCollapsed = true;
         settings.MyPcCollapsed = true;
         first.ApplyUiSettings(settings);
@@ -546,6 +548,8 @@ public class ExplorerWorkspaceTests
         Assert.False(second.Settings.ShowSmartFolders);
         Assert.False(second.Settings.SidebarVisible);
         Assert.Equal(344, second.Settings.SidebarWidth);
+        Assert.Equal(420, second.Settings.PreviewWidth);
+        Assert.Equal(35, second.Settings.DualPanePrimaryPercent);
         Assert.True(second.Settings.QuickAccessCollapsed);
         Assert.True(second.Settings.MyPcCollapsed);
         Assert.Equal("content", settingsIpc.Settings["defaultView"]);
@@ -557,6 +561,8 @@ public class ExplorerWorkspaceTests
         Assert.Equal("false", settingsIpc.Settings["sidebar.showSmartFolders"]);
         Assert.Equal("false", settingsIpc.Settings["sidebar.visible"]);
         Assert.Equal("344", settingsIpc.Settings["sidebar.width"]);
+        Assert.Equal("420", settingsIpc.Settings["preview.width"]);
+        Assert.Equal("35", settingsIpc.Settings["dualPane.primaryPercent"]);
     }
 
     [Fact]

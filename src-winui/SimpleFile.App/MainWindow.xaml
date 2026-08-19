@@ -495,10 +495,9 @@
                 </ScrollViewer>
             </Grid>
 
-            <Border
+            <local:PaneResizeGrip
                 x:Name="SidebarDivider"
                 Grid.Column="1"
-                Background="Transparent"
                 AutomationProperties.Name="Resize sidebar"
                 PointerMoved="OnSidebarDividerMoved"
                 PointerPressed="OnSidebarDividerPressed"
@@ -507,7 +506,7 @@
                     Width="1"
                     HorizontalAlignment="Center"
                     Fill="{ThemeResource SfBorderBrush}" />
-            </Border>
+            </local:PaneResizeGrip>
 
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions>
@@ -523,10 +522,11 @@
                     IsOpen="False"
                     Severity="Informational" />
 
-                <Grid Grid.Row="1">
+                <Grid x:Name="ExplorerContentGrid" Grid.Row="1">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition x:Name="PreviewColumn" Width="296" />
+                        <ColumnDefinition Width="*" MinWidth="240" />
+                        <ColumnDefinition x:Name="PreviewDividerColumn" Width="5" />
+                        <ColumnDefinition x:Name="PreviewColumn" Width="296" MinWidth="200" MaxWidth="720" />
                     </Grid.ColumnDefinitions>
 
                     <Grid x:Name="PanesGrid" Grid.Column="0">
@@ -552,15 +552,21 @@
                                     <StackPanel x:Name="PrimaryTabHost" Orientation="Horizontal" Spacing="2" />
                                 </ScrollViewer>
                             </Grid>
-                            <Grid Grid.Row="1" Padding="10,6,10,8" ColumnSpacing="8">
+                            <Grid
+                                x:Name="PrimaryToolbar"
+                                Grid.Row="1"
+                                Padding="10,6,10,8"
+                                ColumnSpacing="8"
+                                SizeChanged="OnPrimaryToolbarSizeChanged">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" MinWidth="140" />
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition x:Name="PrimarySearchColumn" Width="Auto" />
+                                    <ColumnDefinition x:Name="PrimaryActionsColumn" Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                <StackPanel x:Name="PrimaryNavHost" Orientation="Horizontal" Spacing="2">
                                     <Button
                                         x:Name="PrimarySidebarToggleButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
@@ -620,6 +626,7 @@
                                         LostFocus="OnPrimaryPathLostFocus" />
                                 </Grid>
                                 <Button
+                                    x:Name="PrimaryEditPathButton"
                                     Grid.Column="2"
                                     Style="{StaticResource SfToolbarButtonStyle}"
                                     Click="OnEditPrimaryPath"
@@ -627,6 +634,7 @@
                                     <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="13" Glyph="&#xE70F;" />
                                 </Button>
                                 <Grid
+                                    x:Name="PrimarySearchHost"
                                     Grid.Column="3"
                                     Width="196">
                                     <TextBox
@@ -672,7 +680,11 @@
                                             Glyph="&#xE711;" />
                                     </Button>
                                 </Grid>
-                                <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="2">
+                                <StackPanel
+                                    x:Name="PrimaryActionsHost"
+                                    Grid.Column="4"
+                                    Orientation="Horizontal"
+                                    Spacing="2">
                                     <TextBox
                                         x:Name="QuickFilterBox"
                                         Width="96"
@@ -683,6 +695,7 @@
                                         PlaceholderText="Filter"
                                         TextChanged="OnQuickFilterChanged" />
                                     <Button
+                                        x:Name="PrimaryNewFolderButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="New folder"
                                         Click="OnPrimaryNewFolder"
@@ -690,6 +703,7 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8F4;" />
                                     </Button>
                                     <Button
+                                        x:Name="PrimaryNewFileButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="New file"
                                         Click="OnPrimaryNewFile"
@@ -705,6 +719,7 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A7;" />
                                     </Button>
                                     <Button
+                                        x:Name="PrimaryViewButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="View options"
                                         ToolTipService.ToolTip="View options">
@@ -714,22 +729,25 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A9;" />
                                     </Button>
                                     <Button
+                                        x:Name="PrimarySettingsButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="Settings"
                                         Click="OnSettingsClicked"
                                         ToolTipService.ToolTip="Settings (Ctrl+Shift+S)">
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE713;" />
                                     </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        AutomationProperties.Name="More"
-                                        ToolTipService.ToolTip="More">
-                                        <Button.Flyout>
-                                            <MenuFlyout Opening="OnPrimaryMoreMenuOpening" />
-                                        </Button.Flyout>
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
-                                    </Button>
                                 </StackPanel>
+                                <Button
+                                    x:Name="PrimaryMoreButton"
+                                    Grid.Column="5"
+                                    Style="{StaticResource SfToolbarButtonStyle}"
+                                    AutomationProperties.Name="More"
+                                    ToolTipService.ToolTip="More">
+                                    <Button.Flyout>
+                                        <MenuFlyout Opening="OnPrimaryMoreMenuOpening" />
+                                    </Button.Flyout>
+                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
+                                </Button>
                             </Grid>
                             <Grid
                                 x:Name="PrimaryColumnHeader"
@@ -796,10 +814,10 @@
                             </Grid>
                         </Grid>
 
-                        <Border
+                        <local:PaneResizeGrip
                             x:Name="PaneDivider"
                             Grid.Column="1"
-                            Background="Transparent"
+                            AutomationProperties.Name="Resize left and right panes"
                             PointerMoved="OnDividerMoved"
                             PointerPressed="OnDividerPressed"
                             PointerReleased="OnDividerReleased"
@@ -808,7 +826,7 @@
                                 Width="1"
                                 HorizontalAlignment="Center"
                                 Fill="{ThemeResource SfBorderBrush}" />
-                        </Border>
+                        </local:PaneResizeGrip>
 
                         <Grid
                             x:Name="SecondaryPaneRoot"
@@ -830,14 +848,20 @@
                                     <StackPanel x:Name="SecondaryTabHost" Orientation="Horizontal" Spacing="4" />
                                 </ScrollViewer>
                             </Grid>
-                            <Grid Grid.Row="1" Padding="10,6,10,8" ColumnSpacing="8">
+                            <Grid
+                                x:Name="SecondaryToolbar"
+                                Grid.Row="1"
+                                Padding="10,6,10,8"
+                                ColumnSpacing="8"
+                                SizeChanged="OnSecondaryToolbarSizeChanged">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" MinWidth="140" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition x:Name="SecondaryActionsColumn" Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                <StackPanel x:Name="SecondaryNavHost" Orientation="Horizontal" Spacing="2">
                                     <Button
                                         x:Name="SecondarySidebarToggleButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
@@ -896,14 +920,20 @@
                                         LostFocus="OnSecondaryPathLostFocus" />
                                 </Grid>
                                 <Button
+                                    x:Name="SecondaryEditPathButton"
                                     Grid.Column="2"
                                     Style="{StaticResource SfToolbarButtonStyle}"
                                     Click="OnEditSecondaryPath"
                                     ToolTipService.ToolTip="Edit path">
                                     <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="13" Glyph="&#xE70F;" />
                                 </Button>
-                                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2">
+                                <StackPanel
+                                    x:Name="SecondaryActionsHost"
+                                    Grid.Column="3"
+                                    Orientation="Horizontal"
+                                    Spacing="2">
                                     <Button
+                                        x:Name="SecondaryNewFolderButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="New folder"
                                         Click="OnSecondaryNewFolder"
@@ -911,6 +941,7 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8F4;" />
                                     </Button>
                                     <Button
+                                        x:Name="SecondaryNewFileButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="New file"
                                         Click="OnSecondaryNewFile"
@@ -926,6 +957,7 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="12" Glyph="&#xE711;" />
                                     </Button>
                                     <Button
+                                        x:Name="SecondaryViewButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="View options"
                                         ToolTipService.ToolTip="View options">
@@ -934,16 +966,18 @@
                                         </Button.Flyout>
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A9;" />
                                     </Button>
-                                    <Button
-                                        Style="{StaticResource SfToolbarButtonStyle}"
-                                        AutomationProperties.Name="More"
-                                        ToolTipService.ToolTip="More">
-                                        <Button.Flyout>
-                                            <MenuFlyout Opening="OnSecondaryMoreMenuOpening" />
-                                        </Button.Flyout>
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
-                                    </Button>
                                 </StackPanel>
+                                <Button
+                                    x:Name="SecondaryMoreButton"
+                                    Grid.Column="4"
+                                    Style="{StaticResource SfToolbarButtonStyle}"
+                                    AutomationProperties.Name="More"
+                                    ToolTipService.ToolTip="More">
+                                    <Button.Flyout>
+                                        <MenuFlyout Opening="OnSecondaryMoreMenuOpening" />
+                                    </Button.Flyout>
+                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE712;" />
+                                </Button>
                             </Grid>
                             <Grid
                                 x:Name="SecondaryColumnHeader"
@@ -1011,13 +1045,26 @@
                         </Grid>
                     </Grid>
 
+                    <local:PaneResizeGrip
+                        x:Name="PreviewDivider"
+                        Grid.Column="1"
+                        AutomationProperties.Name="Resize preview pane"
+                        PointerMoved="OnPreviewDividerMoved"
+                        PointerPressed="OnPreviewDividerPressed"
+                        PointerReleased="OnPreviewDividerReleased">
+                        <Rectangle
+                            Width="1"
+                            HorizontalAlignment="Center"
+                            Fill="{ThemeResource SfBorderBrush}" />
+                    </local:PaneResizeGrip>
+
                     <Border
                         x:Name="PreviewPane"
-                        Grid.Column="1"
+                        Grid.Column="2"
                         Padding="14"
                         Background="{ThemeResource SfBgSecondaryBrush}"
                         BorderBrush="{ThemeResource SfBorderBrush}"
-                        BorderThickness="1,0,0,0">
+                        BorderThickness="0">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />

@@ -168,6 +168,8 @@ public sealed class ExplorerWorkspace
         Settings.DefaultView = UiSettings.NormalizeDefaultView(settings.DefaultView);
         Settings.DefaultIconSize = UiSettings.NormalizeIconSize(settings.DefaultIconSize);
         Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(settings.SidebarWidth);
+        Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(settings.PreviewWidth);
+        Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(settings.DualPanePrimaryPercent);
         ShowHiddenFiles = settings.ShowHidden;
         Columns.ApplyPreset(string.IsNullOrWhiteSpace(settings.ColumnPreset) ? "default" : settings.ColumnPreset);
         Columns.RestoreWidths(settings.ColumnWidths);
@@ -1552,6 +1554,8 @@ public sealed class ExplorerWorkspace
         Settings.DefaultView = UiSettings.NormalizeDefaultView(Settings.DefaultView);
         Settings.DefaultIconSize = UiSettings.NormalizeIconSize(Settings.DefaultIconSize);
         Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(Settings.SidebarWidth);
+        Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(Settings.PreviewWidth);
+        Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(Settings.DualPanePrimaryPercent);
         Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(Settings.ColumnPreset);
         Settings.ColumnWidths = Columns.SnapshotWidths();
         await FileOps.SetSettingAsync("theme", Settings.Theme, cancellationToken).ConfigureAwait(false);
@@ -1566,6 +1570,8 @@ public sealed class ExplorerWorkspace
         await FileOps.SetSettingAsync("enableGitIntegration", Settings.EnableGitIntegration ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("showFolderSizes", Settings.ShowFolderSizes ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("previewVisible", Settings.PreviewVisible ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("preview.width", Settings.PreviewWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("dualPane.primaryPercent", Settings.DualPanePrimaryPercent.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("columnPreset", Settings.ColumnPreset, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync(
             "columnWidths",
@@ -1686,6 +1692,10 @@ public sealed class ExplorerWorkspace
             Settings.EnableGitIntegration = await ReadBoolSettingAsync("enableGitIntegration", true, cancellationToken).ConfigureAwait(false);
             Settings.ShowFolderSizes = await ReadBoolSettingAsync("showFolderSizes", false, cancellationToken).ConfigureAwait(false);
             Settings.PreviewVisible = await ReadBoolSettingAsync("previewVisible", true, cancellationToken).ConfigureAwait(false);
+            Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(
+                await ReadDoubleSettingAsync("preview.width", UiSettings.PreviewDefaultWidth, cancellationToken).ConfigureAwait(false));
+            Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(
+                await ReadDoubleSettingAsync("dualPane.primaryPercent", UiSettings.DualPaneDefaultPercent, cancellationToken).ConfigureAwait(false));
             Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(
                 await FileOps.GetSettingAsync("columnPreset", cancellationToken).ConfigureAwait(false));
             Settings.ColumnWidths = await ReadColumnWidthsAsync(cancellationToken).ConfigureAwait(false);

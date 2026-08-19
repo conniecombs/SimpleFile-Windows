@@ -30,6 +30,7 @@ public sealed class ContextMenuRequest
     public bool SelectedIsArchive { get; init; }
     public string? ArchiveExtractFolderName { get; init; }
     public bool UseTrash { get; init; } = true;
+    public IReadOnlyCollection<string> OverflowedToolbarIds { get; init; } = [];
 }
 
 /// <summary>
@@ -101,8 +102,15 @@ public static class ContextMenuBuilder
         var singleSelection = request.SelectionCount == 1;
         var deleteLabel = request.UseTrash ? "Move to trash" : "Delete";
 
-        var entries = new List<ContextMenuEntry>
+        var entries = new List<ContextMenuEntry>();
+        entries.AddRange(BuildToolbarOverflowItems(request));
+        if (entries.Count > 0)
         {
+            entries.Add(Divider());
+        }
+
+        entries.AddRange(
+        [
             Item("ctx-close-dual-pane", "Close right pane", !request.DualPaneEnabled, "F6", "\uE711"),
             Divider(),
             Item("ctx-rename", "Rename", !singleSelection, "F2", "\uE8AC"),
@@ -118,9 +126,76 @@ public static class ContextMenuBuilder
             Item("ctx-cleanup", "Disk cleanup here...", false, null, "\uE75C"),
             Divider(),
             Item("ctx-terminal", "Open terminal here", false, "F4", "\uE756"),
-        };
+        ]);
 
         return VisibleEntries(entries);
+    }
+
+    public static IReadOnlyList<ContextMenuEntry> BuildToolbarOverflowItems(ContextMenuRequest request)
+    {
+        var overflowed = request.OverflowedToolbarIds;
+        if (overflowed.Count == 0)
+        {
+            return [];
+        }
+
+        bool Has(string id) =>
+            overflowed.Contains(id);
+
+        var items = new List<ContextMenuEntry>();
+        if (Has(ToolbarOverflowPlanner.Search))
+        {
+            items.Add(Item("overflow-search", "Search", shortcut: "Ctrl+F", iconGlyph: "\uE721"));
+        }
+
+        if (Has(ToolbarOverflowPlanner.Filter))
+        {
+            items.Add(Item("overflow-filter", "Filter", iconGlyph: "\uE71C"));
+        }
+
+        if (Has(ToolbarOverflowPlanner.NewFolder))
+        {
+            items.Add(Item("overflow-new-folder", "New folder", shortcut: "Ctrl+Shift+N", iconGlyph: "\uE8F4"));
+        }
+
+        if (Has(ToolbarOverflowPlanner.NewFile))
+        {
+            items.Add(Item("overflow-new-file", "New file", shortcut: "Ctrl+N", iconGlyph: "\uE8A5"));
+        }
+
+        if (Has(ToolbarOverflowPlanner.DualPane) && !request.DualPaneEnabled)
+        {
+            items.Add(Item("overflow-dual-pane", "Open right pane", shortcut: "F6", iconGlyph: "\uE8A7"));
+        }
+
+        if (Has(ToolbarOverflowPlanner.ViewOptions))
+        {
+            items.Add(new ContextMenuEntry
+            {
+                Id = "overflow-view",
+                Label = "View options",
+                IconGlyph = "\uE8A9",
+                Children =
+                [
+                    Item("view:details", "Details", iconGlyph: "\uE8FD"),
+                    Item("view:list", "List", iconGlyph: "\uEA37"),
+                    Item("view:tiles", "Tiles", iconGlyph: "\uECA5"),
+                    Item("view:content", "Content", iconGlyph: "\uE8A5"),
+                    Divider(),
+                    Item("icon:16", "Small icons"),
+                    Item("icon:32", "Medium icons"),
+                    Item("icon:48", "Large icons"),
+                    Item("icon:96", "Extra large icons"),
+                ],
+            });
+        }
+
+        if (Has(ToolbarOverflowPlanner.Settings))
+        {
+            items.Add(Item("overflow-settings", "Settings", shortcut: "Ctrl+Shift+S", iconGlyph: "\uE713"));
+        }
+
+        return items;
     }
 
     public static IReadOnlyList<ContextMenuEntry> VisibleEntries(IEnumerable<ContextMenuEntry> source)
