@@ -525,6 +525,7 @@ public class ExplorerWorkspaceTests
         settings.SidebarWidth = 344;
         settings.PreviewWidth = 420;
         settings.DualPanePrimaryPercent = 35;
+        settings.DualPanePrimaryWidth = 410;
         settings.QuickAccessCollapsed = true;
         settings.MyPcCollapsed = true;
         first.ApplyUiSettings(settings);
@@ -550,6 +551,7 @@ public class ExplorerWorkspaceTests
         Assert.Equal(344, second.Settings.SidebarWidth);
         Assert.Equal(420, second.Settings.PreviewWidth);
         Assert.Equal(35, second.Settings.DualPanePrimaryPercent);
+        Assert.Equal(410, second.Settings.DualPanePrimaryWidth);
         Assert.True(second.Settings.QuickAccessCollapsed);
         Assert.True(second.Settings.MyPcCollapsed);
         Assert.Equal("content", settingsIpc.Settings["defaultView"]);

@@ -30,6 +30,7 @@ public sealed partial class MainWindow : Window
     private bool _reconnectDialogOpen;
     private CancellationTokenSource? _networkReconnectCts;
     private bool _dividerDragging;
+    private bool _dividerMoved;
     private bool _applyingToolbarOverflow;
     private readonly HashSet<string> _primaryToolbarOverflow = new(StringComparer.Ordinal);
     private readonly HashSet<string> _secondaryToolbarOverflow = new(StringComparer.Ordinal);
@@ -362,26 +363,60 @@ public sealed partial class MainWindow : Window
         var dual = _workspace?.DualPaneEnabled == true;
         SecondaryPaneRoot.Visibility = dual ? Visibility.Visible : Visibility.Collapsed;
         PaneDivider.Visibility = dual ? Visibility.Visible : Visibility.Collapsed;
-        DividerColumn.Width = dual ? new GridLength(6) : new GridLength(0);
+        DividerColumn.Width = dual ? new GridLength(UiSettings.DualPaneDividerWidth) : new GridLength(0);
         if (dual)
         {
-            var primary = UiSettings.NormalizeDualPanePrimaryPercent(
-                _workspace?.Settings.DualPanePrimaryPercent ?? UiSettings.DualPaneDefaultPercent);
+            var available = PanesGrid.ActualWidth;
+            var width = UiSettings.ResolveDualPanePrimaryWidth(
+                _workspace?.Settings.DualPanePrimaryWidth ?? 0,
+                _workspace?.Settings.DualPanePrimaryPercent ?? UiSettings.DualPaneDefaultPercent,
+                available);
             if (_workspace is not null)
             {
-                _workspace.Settings.DualPanePrimaryPercent = primary;
+                if (width > 0)
+                {
+                    _workspace.Settings.DualPanePrimaryWidth = width;
+                }
+
+                if (available > 0)
+                {
+                    _workspace.Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(
+                        width / available * 100);
+                }
             }
 
-            PrimaryColumn.Width = new GridLength(primary, GridUnitType.Star);
-            SecondaryColumn.Width = new GridLength(100 - primary, GridUnitType.Star);
+            PrimaryColumn.MinWidth = UiSettings.FilePaneMinWidth;
+            SecondaryColumn.MinWidth = UiSettings.FilePaneMinWidth;
+            if (width > 0)
+            {
+                PrimaryColumn.Width = new GridLength(width);
+                SecondaryColumn.Width = new GridLength(1, GridUnitType.Star);
+            }
+            else
+            {
+                PrimaryColumn.Width = new GridLength(1, GridUnitType.Star);
+                SecondaryColumn.Width = new GridLength(1, GridUnitType.Star);
+            }
         }
         else
         {
+            PrimaryColumn.MinWidth = 0;
+            SecondaryColumn.MinWidth = 0;
             PrimaryColumn.Width = new GridLength(1, GridUnitType.Star);
             SecondaryColumn.Width = new GridLength(0);
         }
 
         ApplyToolbarOverflow();
+    }
+
+    private void OnPanesGridSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_dividerDragging || _workspace?.DualPaneEnabled != true)
+        {
+            return;
+        }
+
+        ApplyDualPaneLayout();
     }
 
     private void OnPrimaryToolbarSizeChanged(object sender, SizeChangedEventArgs e) =>
@@ -495,13 +530,17 @@ public sealed partial class MainWindow : Window
         SetOverflowVisible(PrimarySearchHost, searchVisible);
         PrimarySearchColumn.Width = searchVisible ? GridLength.Auto : new GridLength(0);
         SetOverflowVisible(PrimarySettingsButton, !overflowed.Contains(ToolbarOverflowPlanner.Settings));
-        SetOverflowVisible(DualPaneButton, !overflowed.Contains(ToolbarOverflowPlanner.DualPane));
+        var dual = _workspace?.DualPaneEnabled == true;
+        var dualOverflowed = overflowed.Contains(ToolbarOverflowPlanner.DualPane);
+        SetOverflowVisible(DualPaneButton, !dual && !dualOverflowed);
+        SetOverflowVisible(ClosePrimaryPaneButton, dual && !dualOverflowed);
         SetOverflowVisible(PrimaryViewButton, !overflowed.Contains(ToolbarOverflowPlanner.ViewOptions));
         SetOverflowVisible(PrimaryNewFileButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFile));
         SetOverflowVisible(PrimaryNewFolderButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFolder));
         var actionsVisible = PrimaryNewFolderButton.Visibility == Visibility.Visible
             || PrimaryNewFileButton.Visibility == Visibility.Visible
             || DualPaneButton.Visibility == Visibility.Visible
+            || ClosePrimaryPaneButton.Visibility == Visibility.Visible
             || PrimaryViewButton.Visibility == Visibility.Visible
             || PrimarySettingsButton.Visibility == Visibility.Visible
             || QuickFilterBox.Visibility == Visibility.Visible;
@@ -749,7 +788,7 @@ public sealed partial class MainWindow : Window
             SidebarColumn.MinWidth = UiSettings.SidebarMinWidth;
             SidebarColumn.MaxWidth = UiSettings.SidebarMaxWidth;
             SidebarColumn.Width = new GridLength(settings.SidebarWidth);
-            SidebarDividerColumn.Width = new GridLength(5);
+            SidebarDividerColumn.Width = new GridLength(UiSettings.DualPaneDividerWidth);
             SidebarRoot.Visibility = Visibility.Visible;
             SidebarDivider.Visibility = Visibility.Visible;
         }
@@ -1070,7 +1109,12 @@ public sealed partial class MainWindow : Window
 
     private async void OnCloseDualPane(object sender, RoutedEventArgs e)
     {
-        await RunUiActionAsync("Dual pane", CloseDualPaneFromUiAsync);
+        await RunUiActionAsync("Close right pane", () => CloseFilePaneFromUiAsync(PaneId.Secondary));
+    }
+
+    private async void OnClosePrimaryPane(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync("Close left pane", () => CloseFilePaneFromUiAsync(PaneId.Primary));
     }
 
     private async Task ToggleDualPaneFromUiAsync()
@@ -1087,13 +1131,19 @@ public sealed partial class MainWindow : Window
 
     private async Task CloseDualPaneFromUiAsync()
     {
+        await CloseFilePaneFromUiAsync(PaneId.Secondary);
+    }
+
+    private async Task CloseFilePaneFromUiAsync(PaneId pane)
+    {
         if (_workspace?.DualPaneEnabled != true)
         {
             return;
         }
 
-        await _workspace.ToggleDualPaneAsync();
-        StatusText.Text = "Right pane closed";
+        var closingLeft = _workspace.Normalize(pane) == PaneId.Primary;
+        await _workspace.CloseFilePaneAsync(pane);
+        StatusText.Text = closingLeft ? "Left pane closed" : "Right pane closed";
     }
 
     private async void OnToggleSidebar(object sender, RoutedEventArgs e) =>
@@ -2367,6 +2417,7 @@ public sealed partial class MainWindow : Window
         }
 
         _dividerDragging = true;
+        _dividerMoved = false;
         PaneDivider.CapturePointer(e.Pointer);
         e.Handled = true;
     }
@@ -2378,14 +2429,23 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var point = e.GetCurrentPoint(PanesGrid).Position;
-        if (PanesGrid.ActualWidth <= 0)
+        var available = PanesGrid.ActualWidth;
+        if (available <= 0)
         {
             return;
         }
 
-        _workspace.Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(
-            point.X / PanesGrid.ActualWidth * 100);
+        var width = UiSettings.ResolveDualPanePrimaryWidth(
+            e.GetCurrentPoint(PanesGrid).Position.X,
+            _workspace.Settings.DualPanePrimaryPercent,
+            available);
+        if (Math.Abs(width - _workspace.Settings.DualPanePrimaryWidth) > 1)
+        {
+            _dividerMoved = true;
+        }
+
+        _workspace.Settings.DualPanePrimaryWidth = width;
+        _workspace.Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(width / available * 100);
         ApplyDualPaneLayout();
         e.Handled = true;
     }
@@ -2397,10 +2457,24 @@ public sealed partial class MainWindow : Window
         PaneDivider.ReleasePointerCapture(e.Pointer);
         e.Handled = true;
         var workspace = _workspace;
-        if (wasDragging && workspace is not null)
+        if (wasDragging && _dividerMoved && workspace is not null)
         {
             await RunUiActionAsync("Resize panes", () => workspace.SaveUiSettingsAsync());
         }
+    }
+
+    private async void OnDividerDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (_workspace?.DualPaneEnabled != true || PanesGrid.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _workspace.Settings.DualPanePrimaryWidth = 0;
+        _workspace.Settings.DualPanePrimaryPercent = UiSettings.DualPaneDefaultPercent;
+        ApplyDualPaneLayout();
+        await RunUiActionAsync("Reset pane split", () => _workspace.SaveUiSettingsAsync());
     }
 
     private async void OnRefreshAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)

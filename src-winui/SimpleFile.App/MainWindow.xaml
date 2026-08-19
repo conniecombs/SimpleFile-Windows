@@ -82,7 +82,7 @@
         <Grid Grid.Row="1" Background="{ThemeResource SfBgPrimaryBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="SidebarColumn" Width="232" MinWidth="180" MaxWidth="520" />
-                <ColumnDefinition x:Name="SidebarDividerColumn" Width="5" />
+                <ColumnDefinition x:Name="SidebarDividerColumn" Width="8" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
@@ -96,37 +96,52 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <Border
-                    x:Name="SidebarTargetSwitch"
-                    Margin="10,8,10,0"
-                    Padding="2"
-                    Background="{ThemeResource SfBgTertiaryBrush}"
-                    BorderBrush="{ThemeResource SfBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Visibility="Collapsed">
-                    <Grid ColumnSpacing="2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button
-                            x:Name="SidebarLeftButton"
-                            Style="{StaticResource SfGhostButtonStyle}"
-                            HorizontalAlignment="Stretch"
-                            Click="OnSidebarLeft"
-                            Content="Left"
-                            ToolTipService.ToolTip="Navigate left pane" />
-                        <Button
-                            x:Name="SidebarRightButton"
-                            Grid.Column="1"
-                            Style="{StaticResource SfGhostButtonStyle}"
-                            HorizontalAlignment="Stretch"
-                            Click="OnSidebarRight"
-                            Content="Right"
-                            ToolTipService.ToolTip="Navigate right pane" />
-                    </Grid>
-                </Border>
+                <Grid Margin="8,8,8,0" ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Border
+                        x:Name="SidebarTargetSwitch"
+                        Padding="2"
+                        Background="{ThemeResource SfBgTertiaryBrush}"
+                        BorderBrush="{ThemeResource SfBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Visibility="Collapsed">
+                        <Grid ColumnSpacing="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                x:Name="SidebarLeftButton"
+                                Style="{StaticResource SfGhostButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Click="OnSidebarLeft"
+                                Content="Left"
+                                ToolTipService.ToolTip="Navigate left pane" />
+                            <Button
+                                x:Name="SidebarRightButton"
+                                Grid.Column="1"
+                                Style="{StaticResource SfGhostButtonStyle}"
+                                HorizontalAlignment="Stretch"
+                                Click="OnSidebarRight"
+                                Content="Right"
+                                ToolTipService.ToolTip="Navigate right pane" />
+                        </Grid>
+                    </Border>
+                    <Button
+                        x:Name="SidebarCloseButton"
+                        Grid.Column="1"
+                        Style="{StaticResource SfSidebarIconButtonStyle}"
+                        VerticalAlignment="Top"
+                        AutomationProperties.Name="Hide side menu"
+                        Click="OnToggleSidebar"
+                        ToolTipService.ToolTip="Hide side menu">
+                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="11" Glyph="&#xE711;" />
+                    </Button>
+                </Grid>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                     <StackPanel Padding="10,8,10,14" Spacing="10">
                         <StackPanel x:Name="QuickAccessSection" Spacing="2">
@@ -499,6 +514,7 @@
                 x:Name="SidebarDivider"
                 Grid.Column="1"
                 AutomationProperties.Name="Resize sidebar"
+                DoubleTapped="OnSidebarDividerDoubleTapped"
                 PointerMoved="OnSidebarDividerMoved"
                 PointerPressed="OnSidebarDividerPressed"
                 PointerReleased="OnSidebarDividerReleased">
@@ -525,11 +541,11 @@
                 <Grid x:Name="ExplorerContentGrid" Grid.Row="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MinWidth="240" />
-                        <ColumnDefinition x:Name="PreviewDividerColumn" Width="5" />
+                        <ColumnDefinition x:Name="PreviewDividerColumn" Width="8" />
                         <ColumnDefinition x:Name="PreviewColumn" Width="296" MinWidth="200" MaxWidth="720" />
                     </Grid.ColumnDefinitions>
 
-                    <Grid x:Name="PanesGrid" Grid.Column="0">
+                    <Grid x:Name="PanesGrid" Grid.Column="0" SizeChanged="OnPanesGridSizeChanged">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition x:Name="PrimaryColumn" Width="*" />
                             <ColumnDefinition x:Name="DividerColumn" Width="0" />
@@ -719,6 +735,15 @@
                                         <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A7;" />
                                     </Button>
                                     <Button
+                                        x:Name="ClosePrimaryPaneButton"
+                                        Style="{StaticResource SfToolbarButtonStyle}"
+                                        AutomationProperties.Name="Close left pane"
+                                        Click="OnClosePrimaryPane"
+                                        ToolTipService.ToolTip="Close left pane"
+                                        Visibility="Collapsed">
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="12" Glyph="&#xE711;" />
+                                    </Button>
+                                    <Button
                                         x:Name="PrimaryViewButton"
                                         Style="{StaticResource SfToolbarButtonStyle}"
                                         AutomationProperties.Name="View options"
@@ -818,6 +843,7 @@
                             x:Name="PaneDivider"
                             Grid.Column="1"
                             AutomationProperties.Name="Resize left and right panes"
+                            DoubleTapped="OnDividerDoubleTapped"
                             PointerMoved="OnDividerMoved"
                             PointerPressed="OnDividerPressed"
                             PointerReleased="OnDividerReleased"
@@ -1049,6 +1075,7 @@
                         x:Name="PreviewDivider"
                         Grid.Column="1"
                         AutomationProperties.Name="Resize preview pane"
+                        DoubleTapped="OnPreviewDividerDoubleTapped"
                         PointerMoved="OnPreviewDividerMoved"
                         PointerPressed="OnPreviewDividerPressed"
                         PointerReleased="OnPreviewDividerReleased">

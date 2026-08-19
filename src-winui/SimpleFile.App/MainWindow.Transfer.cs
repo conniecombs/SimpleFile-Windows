@@ -15,6 +15,8 @@ public sealed partial class MainWindow
     private string[] _dragPaths = [];
     private bool _sidebarDragging;
     private bool _previewDragging;
+    private bool _sidebarMoved;
+    private bool _previewMoved;
     private bool _columnDragging;
     private string? _columnDragId;
     private double _columnDragStartX;
@@ -588,6 +590,7 @@ public sealed partial class MainWindow
         }
 
         _sidebarDragging = true;
+        _sidebarMoved = false;
         SidebarDivider.CapturePointer(e.Pointer);
         e.Handled = true;
     }
@@ -599,7 +602,13 @@ public sealed partial class MainWindow
             return;
         }
 
-        _workspace.Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(e.GetCurrentPoint(RootGrid).Position.X);
+        var width = UiSettings.NormalizeSidebarWidth(e.GetCurrentPoint(RootGrid).Position.X);
+        if (Math.Abs(width - _workspace.Settings.SidebarWidth) > 1)
+        {
+            _sidebarMoved = true;
+        }
+
+        _workspace.Settings.SidebarWidth = width;
         ApplySidebarLayout();
         e.Handled = true;
     }
@@ -610,10 +619,21 @@ public sealed partial class MainWindow
         _sidebarDragging = false;
         SidebarDivider.ReleasePointerCapture(e.Pointer);
         e.Handled = true;
-        if (wasDragging && _workspace is not null)
+        if (wasDragging && _sidebarMoved && _workspace is not null)
         {
             await RunUiActionAsync("Resize side menu", () => _workspace.SaveUiSettingsAsync());
         }
+    }
+
+    private async void OnSidebarDividerDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_workspace?.Settings.SidebarVisible != true)
+        {
+            return;
+        }
+
+        await ToggleSidebarAsync();
     }
 
     private void OnPreviewDividerPressed(object sender, PointerRoutedEventArgs e)
@@ -624,6 +644,7 @@ public sealed partial class MainWindow
         }
 
         _previewDragging = true;
+        _previewMoved = false;
         PreviewDivider.CapturePointer(e.Pointer);
         e.Handled = true;
     }
@@ -641,8 +662,14 @@ public sealed partial class MainWindow
             return;
         }
 
-        _workspace.Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(
+        var width = UiSettings.NormalizePreviewWidth(
             hostWidth - e.GetCurrentPoint(ExplorerContentGrid).Position.X);
+        if (Math.Abs(width - _workspace.Settings.PreviewWidth) > 1)
+        {
+            _previewMoved = true;
+        }
+
+        _workspace.Settings.PreviewWidth = width;
         ApplyPreviewVisibility();
         e.Handled = true;
     }
@@ -654,10 +681,21 @@ public sealed partial class MainWindow
         PreviewDivider.ReleasePointerCapture(e.Pointer);
         e.Handled = true;
         var workspace = _workspace;
-        if (wasDragging && workspace is not null)
+        if (wasDragging && _previewMoved && workspace is not null)
         {
             await RunUiActionAsync("Resize preview pane", () => workspace.SaveUiSettingsAsync());
         }
+    }
+
+    private void OnPreviewDividerDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (_workspace?.Settings.PreviewVisible != true)
+        {
+            return;
+        }
+
+        OnTogglePreview(sender, e);
     }
 
     private void OnColumnThumbPressed(object sender, PointerRoutedEventArgs e)

@@ -234,7 +234,7 @@ public sealed partial class MainWindow
             PreviewColumn.MinWidth = UiSettings.PreviewMinWidth;
             PreviewColumn.MaxWidth = UiSettings.PreviewMaxWidth;
             PreviewColumn.Width = new GridLength(width);
-            PreviewDividerColumn.Width = new GridLength(5);
+            PreviewDividerColumn.Width = new GridLength(UiSettings.DualPaneDividerWidth);
         }
         else
         {
@@ -429,6 +429,9 @@ public sealed partial class MainWindow
                 break;
             case "dual-pane":
                 await ToggleDualPaneFromUiAsync();
+                break;
+            case "close-left-pane":
+                await CloseFilePaneFromUiAsync(PaneId.Primary);
                 break;
             case "view-details":
                 await ApplyViewOptionAsync("view:details");
@@ -724,6 +727,7 @@ public sealed partial class MainWindow
             SelectionCount = selected.Count,
             HasClipboard = _workspace?.Clipboard.HasItems == true,
             DualPaneEnabled = _workspace?.DualPaneEnabled == true,
+            MenuPane = _workspace?.ActivePane ?? PaneId.Primary,
             OtherPaneHasPath = _workspace?.OtherPanePath() is not null,
             SelectedIsDirectory = selected.Count == 1 && selected[0].IsDir,
             HasFolderSelection = selected.Any(row => row.IsDir),
@@ -888,7 +892,10 @@ public sealed partial class MainWindow
                 await CopyOrMoveToOtherPaneAsync(move: true);
                 break;
             case "ctx-close-dual-pane":
-                await CloseDualPaneFromUiAsync();
+                await CloseFilePaneFromUiAsync(PaneId.Secondary);
+                break;
+            case "ctx-close-left-pane":
+                await CloseFilePaneFromUiAsync(PaneId.Primary);
                 break;
             case "ctx-pack":
                 await PromptPackIntoFolderAsync();

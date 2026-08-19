@@ -152,6 +152,52 @@ public class DualPaneAndTabsTests
     }
 
     [Fact]
+    public async Task CloseRightPane_KeepsPrimaryAndSecondaryPath()
+    {
+        var workspace = await Started();
+        await workspace.ToggleDualPaneAsync();
+        await workspace.NavigatePaneAsync(PaneId.Secondary, @"C:\");
+        await workspace.CloseFilePaneAsync(PaneId.Secondary);
+
+        Assert.False(workspace.DualPaneEnabled);
+        Assert.Equal(PaneId.Primary, workspace.ActivePane);
+        Assert.Equal(@"C:\Users\test", workspace.Primary.Path);
+        Assert.Equal(@"C:\", workspace.Secondary.Path);
+    }
+
+    [Fact]
+    public async Task CloseLeftPane_PromotesRightPane()
+    {
+        var workspace = await Started();
+        await workspace.ToggleDualPaneAsync();
+        await workspace.NavigatePaneAsync(PaneId.Secondary, @"C:\");
+        workspace.SetFilterQuery(PaneId.Primary, "notes");
+        workspace.SetFilterQuery(PaneId.Secondary, "desktop");
+        await workspace.CloseFilePaneAsync(PaneId.Primary);
+
+        Assert.False(workspace.DualPaneEnabled);
+        Assert.Equal(PaneId.Primary, workspace.ActivePane);
+        Assert.Equal(@"C:\", workspace.Primary.Path);
+        Assert.Equal(@"C:\Users\test", workspace.Secondary.Path);
+        Assert.Equal("desktop", workspace.FilterQuery);
+        Assert.Contains(workspace.Primary.Tabs, tab => tab.Path == @"C:\");
+
+        await workspace.ToggleDualPaneAsync();
+        Assert.Equal("notes", workspace.FilterQueryFor(PaneId.Secondary));
+    }
+
+    [Fact]
+    public async Task CloseLeftPane_NoopsWhenSinglePane()
+    {
+        var workspace = await Started();
+        await workspace.NavigateToAsync(@"C:\Users\test\Desktop");
+        await workspace.CloseFilePaneAsync(PaneId.Primary);
+
+        Assert.False(workspace.DualPaneEnabled);
+        Assert.Equal(@"C:\Users\test\Desktop", workspace.Primary.Path);
+    }
+
+    [Fact]
     public async Task FocusSecondary_EnablesDualPane()
     {
         var workspace = await Started();

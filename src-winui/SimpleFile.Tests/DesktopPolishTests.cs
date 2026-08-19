@@ -97,7 +97,16 @@ public class DesktopPolishTests
         {
             DualPaneEnabled = true,
         });
+        Assert.Contains(dualPane, entry => entry.Id == "ctx-close-left-pane" && entry.Label == "Close left pane");
         Assert.Contains(dualPane, entry => entry.Id == "ctx-close-dual-pane" && entry.Label == "Close right pane" && entry.Shortcut == "F6");
+
+        var rightMenu = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            DualPaneEnabled = true,
+            MenuPane = PaneId.Secondary,
+        });
+        Assert.DoesNotContain(rightMenu, entry => entry.Id == "ctx-close-left-pane");
+        Assert.Contains(rightMenu, entry => entry.Id == "ctx-close-dual-pane");
 
         var archive = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
         {
@@ -355,6 +364,15 @@ public class DesktopPolishTests
         Assert.Equal(UiSettings.DualPaneMinPercent, UiSettings.NormalizeDualPanePrimaryPercent(5));
         Assert.Equal(62, UiSettings.NormalizeDualPanePrimaryPercent("62"));
         Assert.Equal(UiSettings.DualPaneMaxPercent, UiSettings.NormalizeDualPanePrimaryPercent(99));
+        Assert.Equal(0, UiSettings.NormalizeDualPanePrimaryWidth(0));
+        Assert.Equal(0, UiSettings.NormalizeDualPanePrimaryWidth(double.NaN));
+        Assert.Equal(UiSettings.FilePaneMinWidth, UiSettings.NormalizeDualPanePrimaryWidth(40));
+        Assert.Equal(420, UiSettings.NormalizeDualPanePrimaryWidth("420"));
+        Assert.Equal(400, UiSettings.ResolveDualPanePrimaryWidth(400, 50, 1000));
+        Assert.Equal(500, UiSettings.ResolveDualPanePrimaryWidth(0, 50, 1000));
+        Assert.Equal(UiSettings.FilePaneMinWidth, UiSettings.ResolveDualPanePrimaryWidth(10, 50, 1000));
+        Assert.Equal(1000 - UiSettings.FilePaneMinWidth - UiSettings.DualPaneDividerWidth,
+            UiSettings.ResolveDualPanePrimaryWidth(9000, 50, 1000));
     }
 
     [Fact]

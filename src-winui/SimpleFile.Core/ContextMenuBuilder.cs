@@ -23,6 +23,7 @@ public sealed class ContextMenuRequest
     public int SelectionCount { get; init; }
     public bool HasClipboard { get; init; }
     public bool DualPaneEnabled { get; init; }
+    public PaneId MenuPane { get; init; } = PaneId.Primary;
     public bool OtherPaneHasPath { get; init; }
     public bool SelectedIsDirectory { get; init; }
     public bool HasFolderSelection { get; init; }
@@ -111,6 +112,7 @@ public static class ContextMenuBuilder
 
         entries.AddRange(
         [
+            Item("ctx-close-left-pane", "Close left pane", !request.DualPaneEnabled || request.MenuPane != PaneId.Primary, null, "\uE711"),
             Item("ctx-close-dual-pane", "Close right pane", !request.DualPaneEnabled, "F6", "\uE711"),
             Divider(),
             Item("ctx-rename", "Rename", !singleSelection, "F2", "\uE8AC"),

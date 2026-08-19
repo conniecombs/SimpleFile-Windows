@@ -170,6 +170,7 @@ public sealed class ExplorerWorkspace
         Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(settings.SidebarWidth);
         Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(settings.PreviewWidth);
         Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(settings.DualPanePrimaryPercent);
+        Settings.DualPanePrimaryWidth = UiSettings.NormalizeDualPanePrimaryWidth(settings.DualPanePrimaryWidth);
         ShowHiddenFiles = settings.ShowHidden;
         Columns.ApplyPreset(string.IsNullOrWhiteSpace(settings.ColumnPreset) ? "default" : settings.ColumnPreset);
         Columns.RestoreWidths(settings.ColumnWidths);
@@ -734,6 +735,30 @@ public sealed class ExplorerWorkspace
         }
 
         ActivatePane(PaneId.Primary);
+    }
+
+    public Task CloseFilePaneAsync(PaneId pane, CancellationToken cancellationToken = default)
+    {
+        if (!DualPaneEnabled)
+        {
+            return Task.CompletedTask;
+        }
+
+        if (Normalize(pane) == PaneId.Primary)
+        {
+            SwapFilePanes();
+        }
+
+        DualPaneEnabled = false;
+        ActivePane = PaneId.Primary;
+        RaiseChanged();
+        return Task.CompletedTask;
+    }
+
+    public void SwapFilePanes()
+    {
+        Primary.SwapContents(Secondary);
+        (_primaryFilterQuery, _secondaryFilterQuery) = (_secondaryFilterQuery, _primaryFilterQuery);
     }
 
     public void ActivatePane(PaneId pane)
@@ -1556,6 +1581,7 @@ public sealed class ExplorerWorkspace
         Settings.SidebarWidth = UiSettings.NormalizeSidebarWidth(Settings.SidebarWidth);
         Settings.PreviewWidth = UiSettings.NormalizePreviewWidth(Settings.PreviewWidth);
         Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(Settings.DualPanePrimaryPercent);
+        Settings.DualPanePrimaryWidth = UiSettings.NormalizeDualPanePrimaryWidth(Settings.DualPanePrimaryWidth);
         Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(Settings.ColumnPreset);
         Settings.ColumnWidths = Columns.SnapshotWidths();
         await FileOps.SetSettingAsync("theme", Settings.Theme, cancellationToken).ConfigureAwait(false);
@@ -1572,6 +1598,7 @@ public sealed class ExplorerWorkspace
         await FileOps.SetSettingAsync("previewVisible", Settings.PreviewVisible ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("preview.width", Settings.PreviewWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("dualPane.primaryPercent", Settings.DualPanePrimaryPercent.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("dualPane.primaryWidth", Settings.DualPanePrimaryWidth.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("columnPreset", Settings.ColumnPreset, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync(
             "columnWidths",
@@ -1696,6 +1723,8 @@ public sealed class ExplorerWorkspace
                 await ReadDoubleSettingAsync("preview.width", UiSettings.PreviewDefaultWidth, cancellationToken).ConfigureAwait(false));
             Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(
                 await ReadDoubleSettingAsync("dualPane.primaryPercent", UiSettings.DualPaneDefaultPercent, cancellationToken).ConfigureAwait(false));
+            Settings.DualPanePrimaryWidth = UiSettings.NormalizeDualPanePrimaryWidth(
+                await ReadDoubleSettingAsync("dualPane.primaryWidth", 0, cancellationToken).ConfigureAwait(false));
             Settings.ColumnPreset = UiSettings.NormalizeColumnPreset(
                 await FileOps.GetSettingAsync("columnPreset", cancellationToken).ConfigureAwait(false));
             Settings.ColumnWidths = await ReadColumnWidthsAsync(cancellationToken).ConfigureAwait(false);

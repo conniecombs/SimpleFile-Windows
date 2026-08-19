@@ -120,4 +120,34 @@ public sealed class ExplorerPane
             : History.Count - 1;
         ActiveTabId = tab.Id;
     }
+
+    public void SwapContents(ExplorerPane other)
+    {
+        (Path, other.Path) = (other.Path, Path);
+        (Entries, other.Entries) = (other.Entries, Entries);
+        var history = History.ToList();
+        var historyIndex = HistoryIndex;
+        History.Clear();
+        History.AddRange(other.History);
+        HistoryIndex = other.HistoryIndex;
+        other.History.Clear();
+        other.History.AddRange(history);
+        other.HistoryIndex = historyIndex;
+
+        var tabs = Tabs.Select(tab => tab.Clone()).ToList();
+        var activeTabId = ActiveTabId;
+        Tabs.Clear();
+        Tabs.AddRange(other.Tabs.Select(tab => tab.Clone()));
+        ActiveTabId = other.ActiveTabId;
+        other.Tabs.Clear();
+        other.Tabs.AddRange(tabs);
+        other.ActiveTabId = activeTabId;
+
+        (SelectedPath, other.SelectedPath) = (other.SelectedPath, SelectedPath);
+        (PathIsNetwork, other.PathIsNetwork) = (other.PathIsNetwork, PathIsNetwork);
+        IsNavigating = false;
+        other.IsNavigating = false;
+        ListingInProgress = false;
+        other.ListingInProgress = false;
+    }
 }
