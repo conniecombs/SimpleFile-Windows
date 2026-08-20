@@ -1,12 +1,12 @@
 use crate::models::{FileEntry, GitStatus};
 use crate::settings_store::get_db_setting;
-use crate::utils::{get_file_entry, hidden_command, validate_existing_path};
+use crate::utils::{get_file_entry, hidden_command, validate_existing_path_no_resolve};
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::Command;
 
 pub fn get_git_status(path: String) -> Result<GitStatus, String> {
-    let path = validate_existing_path(&path)?;
+    let path = validate_existing_path_no_resolve(&path)?;
 
     if !is_git_repo(&path) {
         return Ok(GitStatus {
@@ -72,7 +72,7 @@ pub fn get_git_status(path: String) -> Result<GitStatus, String> {
 }
 
 pub fn get_git_file_statuses(path: String) -> Result<Vec<FileEntry>, String> {
-    let path = validate_existing_path(&path)?;
+    let path = validate_existing_path_no_resolve(&path)?;
     let output = match git_output(&path, &["status", "--porcelain"]) {
         Ok(output) => output,
         Err(_) => return Ok(Vec::new()),
@@ -215,7 +215,7 @@ fn run_git_remote_command(
     subcommand: &str,
     token: Option<&str>,
 ) -> Result<String, String> {
-    let path = validate_existing_path(path)?;
+    let path = validate_existing_path_no_resolve(path)?;
     let mut command = hidden_command("git");
     command.args(git_remote_args(&path, subcommand, token));
     command_output(command)

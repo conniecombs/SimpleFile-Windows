@@ -92,10 +92,10 @@ internal static class ShellIconLoader
         var requestedSize = NormalizeIconSize(iconSize);
         return Cache.GetOrAdd($"path:{requestedSize}:{path}", _ =>
         {
-            var treatAsDirectory = path.EndsWith('\\') || path.EndsWith('/') || Directory.Exists(path);
-            return LoadFromSystemImageList(path, treatAsDirectory, requestedSize, useAttributes: false)
-                ?? Load(path, treatAsDirectory, requestedSize, useAttributes: false)
-                ?? LoadFromSystemImageList(path, treatAsDirectory, requestedSize, useAttributes: true)
+            // Avoid Directory.Exists() which triggers network I/O. Instead, infer
+            // from path shape or fall back to treating as a file.
+            var treatAsDirectory = path.EndsWith('\\') || path.EndsWith('/');
+            return LoadFromSystemImageList(path, treatAsDirectory, requestedSize, useAttributes: true)
                 ?? Load(path, treatAsDirectory, requestedSize, useAttributes: true)
                 ?? CreateFallbackIcon(path, treatAsDirectory, requestedSize);
         });
@@ -123,7 +123,7 @@ internal static class ShellIconLoader
 
     private static bool ShouldUseActualFileIcon(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
         {
             return false;
         }

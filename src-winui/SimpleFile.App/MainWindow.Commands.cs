@@ -1044,7 +1044,61 @@ public sealed partial class MainWindow
         body.Children.Add(new TextBlock { Text = row.Path, TextWrapping = TextWrapping.Wrap, Opacity = 0.8 });
         body.Children.Add(new TextBlock { Text = $"{row.TypeText}  {row.SizeText}  {row.ModifiedText}" });
         var hasVisualPreview = false;
-        if (fileOps is not null && !row.IsDir)
+
+        if (fileOps is not null && row.IsDir)
+        {
+            // Folder summary stats: show item count and total size.
+            var utilityCts = BeginUtilityOperation();
+            try
+            {
+                var sizeTask = fileOps.CalculateFolderSizeAsync(row.Path, utilityCts.Token);
+                var countTask = fileOps.CountFolderItemsAsync(row.Path, utilityCts.Token);
+                var subdirsTask = fileOps.ListSubdirectoriesAsync(row.Path, utilityCts.Token);
+                await Task.WhenAll(sizeTask, countTask, subdirsTask).ConfigureAwait(false);
+
+                if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                var totalSize = sizeTask.Result;
+                var totalItems = countTask.Result;
+                var subdirs = subdirsTask.Result;
+
+                var statsPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 0) };
+                statsPanel.Children.Add(new TextBlock
+                {
+                    Text = "Folder Contents",
+                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                    Opacity = 0.7,
+                    FontSize = 12,
+                });
+                statsPanel.Children.Add(QuickLookMetadataRow(
+                    "Subfolders",
+                    $"{subdirs.Length:N0} {(subdirs.Length == 1 ? "folder" : "folders")}"));
+                statsPanel.Children.Add(QuickLookMetadataRow(
+                    "Total Items",
+                    $"{totalItems:N0} {(totalItems == 1 ? "item" : "items")}"));
+                statsPanel.Children.Add(QuickLookMetadataRow(
+                    "Total Size",
+                    EntryPresentation.FormatFileSize(totalSize)));
+                body.Children.Add(statsPanel);
+                hasVisualPreview = true;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                body.Children.Add(new TextBlock { Text = exception.Message });
+            }
+            finally
+            {
+                FinishUtilityOperation(utilityCts);
+            }
+        }
+        else if (fileOps is not null && !row.IsDir)
         {
             var utilityCts = BeginUtilityOperation();
             try
@@ -1077,6 +1131,63 @@ public sealed partial class MainWindow
                     body.Children.Add(CreateFileTypePreviewIcon(row, 96));
                     body.Children.Add(new TextBlock { Text = IconPreviewMessage(preview), TextWrapping = TextWrapping.Wrap });
                     hasVisualPreview = true;
+                }
+
+                // Rich file metadata: show structured properties when available.
+                try
+                {
+                    var metadata = await fileOps.GetFileMetadataAsync(row.Path, utilityCts.Token);
+                    if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
+                    {
+                        return;
+                    }
+
+                    if (metadata.Fields.Count > 0)
+                    {
+                        var metaPanel = new StackPanel { Spacing = 4, Margin = new Thickness(0, 8, 0, 0) };
+                        var heading = metadata.Summary ?? metadata.Kind switch
+                        {
+                            "image" => "Image Details",
+                            "audio" => "Audio Details",
+                            "video" => "Video Details",
+                            "pdf" => "PDF Details",
+                            "office" => "Document Details",
+                            _ => "Details",
+                        };
+                        metaPanel.Children.Add(new TextBlock
+                        {
+                            Text = heading,
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            Opacity = 0.7,
+                            FontSize = 12,
+                        });
+
+                        var maxFields = Math.Min(metadata.Fields.Count, 12);
+                        for (var i = 0; i < maxFields; i++)
+                        {
+                            var field = metadata.Fields[i];
+                            if (field.Length >= 2)
+                            {
+                                metaPanel.Children.Add(QuickLookMetadataRow(field[0], field[1]));
+                            }
+                        }
+
+                        if (metadata.Fields.Count > maxFields)
+                        {
+                            metaPanel.Children.Add(new TextBlock
+                            {
+                                Text = $"+ {metadata.Fields.Count - maxFields} more fields…",
+                                Opacity = 0.6,
+                                FontSize = 12,
+                            });
+                        }
+
+                        body.Children.Add(metaPanel);
+                    }
+                }
+                catch
+                {
+                    // Best-effort: metadata extraction may fail for some file types.
                 }
             }
             catch (OperationCanceledException)
@@ -1111,6 +1222,33 @@ public sealed partial class MainWindow
             XamlRoot = Content.XamlRoot,
         };
         await dialog.ShowAsync();
+    }
+
+    private static Grid QuickLookMetadataRow(string label, string value)
+    {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        var labelBlock = new TextBlock
+        {
+            Text = label,
+            Opacity = 0.7,
+            FontSize = 13,
+        };
+        Grid.SetColumn(labelBlock, 0);
+        grid.Children.Add(labelBlock);
+
+        var valueBlock = new TextBlock
+        {
+            Text = value,
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 13,
+        };
+        Grid.SetColumn(valueBlock, 1);
+        grid.Children.Add(valueBlock);
+
+        return grid;
     }
 
     private static async Task<bool> TryAddQuickLookImageAsync(

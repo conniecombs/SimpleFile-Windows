@@ -2756,6 +2756,15 @@ public sealed partial class MainWindow : Window
         var needsGit = _workspace.Columns.IsVisible("git") && _workspace.Settings.EnableGitIntegration;
         var needsItems = _workspace.Columns.IsVisible("items");
         var needsSizes = _workspace.Settings.ShowFolderSizes;
+
+        // Suppress expensive enrichment on network paths. Git operations and
+        // recursive folder size/item count walks are catastrophically slow over SMB.
+        if (_workspace.Active.PathIsNetwork)
+        {
+            needsGit = false;
+            needsSizes = false;
+            needsItems = false;
+        }
         if (!needsGit && !needsItems && !needsSizes)
         {
             return;
