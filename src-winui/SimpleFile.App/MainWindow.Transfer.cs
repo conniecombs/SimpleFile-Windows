@@ -453,48 +453,44 @@ public sealed partial class MainWindow
     {
         var workspace = _workspace;
         var fileOps = workspace?.FileOps;
+        var backend = _backend;
         var selected = ActiveSelectedRows;
-        if (workspace is null || fileOps is null || selected.Count == 0)
+        if (workspace is null || fileOps is null || backend is null || selected.Count == 0)
         {
             return;
         }
 
-        var prefix = new TextBox { Header = "Prefix", PlaceholderText = "optional" };
-        var suffix = new TextBox { Header = "Suffix", PlaceholderText = "optional" };
-        var start = new NumberBox { Header = "Start number (0 = off)", Value = 0, Minimum = 0, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
-        var body = new StackPanel { Spacing = 8, Children = { prefix, suffix, start } };
-        var dialog = new ContentDialog
+        var selectedEntries = selected.Select(row => new FileEntry
         {
-            Title = "Advanced Rename",
-            Content = body,
-            PrimaryButtonText = "Rename",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot,
-        };
+            Name = row.Name,
+            Path = row.Path,
+            IsDir = row.IsDir,
+            Size = row.Size,
+            Extension = row.Extension,
+        }).ToArray();
+
+        var dialog = new AdvancedRenameDialog(
+            selectedEntries,
+            workspace.Active.Path,
+            (path, cancellationToken) => backend.ListDirectoryAsync(path, onChunk: null, cancellationToken));
+
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
         {
             return;
         }
-        if (!ReferenceEquals(_workspace, workspace))
+
+        var requests = dialog.RenameRequests;
+        if (requests.Length == 0)
         {
+            ShowMessage("Advanced rename", "No names would change.", InfoBarSeverity.Informational);
             return;
         }
 
-        var number = (int)start.Value;
-        var useNumber = number > 0;
-        var requests = selected.Select((row, index) =>
+        if (!ReferenceEquals(_workspace, workspace)
+            || !await ConfirmAdvancedRenameAsync(dialog.ChangedRows, requests.Length))
         {
-            var ext = Path.GetExtension(row.Name);
-            var stem = Path.GetFileNameWithoutExtension(row.Name);
-            var next = $"{prefix.Text}{stem}{suffix.Text}";
-            if (useNumber)
-            {
-                next = $"{prefix.Text}{stem}{suffix.Text}{number + index}";
-            }
-
-            return new RenameRequest { Path = row.Path, NewName = next + ext };
-        }).ToArray();
+            return;
+        }
 
         var utilityCts = BeginUtilityOperation();
         try
@@ -504,6 +500,10 @@ public sealed partial class MainWindow
             {
                 await workspace.RefreshAsync(utilityCts.Token);
             }
+
+            StatusText.Text = requests.Length == 1
+                ? "Renamed 1 item"
+                : $"Renamed {requests.Length} items";
         }
         catch (OperationCanceledException)
         {
@@ -516,6 +516,52 @@ public sealed partial class MainWindow
         {
             FinishUtilityOperation(utilityCts);
         }
+    }
+
+    private async Task<bool> ConfirmAdvancedRenameAsync(
+        IReadOnlyList<AdvancedRenamePreviewRow> changedRows,
+        int requestCount)
+    {
+        var body = new StackPanel { Spacing = 10, Width = 460 };
+        body.Children.Add(new TextBlock
+        {
+            Text = requestCount == 1 ? "1 item will be renamed." : $"{requestCount} items will be renamed.",
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        var previewRows = changedRows.Take(8).ToArray();
+        var list = new StackPanel { Spacing = 4 };
+        foreach (var row in previewRows)
+        {
+            list.Children.Add(new TextBlock
+            {
+                Text = $"{row.OldName} -> {row.NewName}",
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+        }
+
+        body.Children.Add(list);
+
+        var extra = requestCount - previewRows.Length;
+        if (extra > 0)
+        {
+            body.Children.Add(new TextBlock
+            {
+                Text = extra == 1 ? "And 1 more rename." : $"And {extra} more renames.",
+            });
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = requestCount == 1 ? "Rename 1 Item" : $"Rename {requestCount} Items",
+            Content = body,
+            PrimaryButtonText = "Rename",
+            CloseButtonText = "Back",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        return await confirm.ShowAsync() == ContentDialogResult.Primary;
     }
 
     private async Task UndoLastAsync()

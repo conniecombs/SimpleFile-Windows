@@ -34,15 +34,6 @@ public sealed class OperationRecord
     public bool Move { get; set; }
 }
 
-public sealed class AdvancedRenamePlan
-{
-    public string Find { get; set; } = "";
-    public string Replace { get; set; } = "";
-    public string Prefix { get; set; } = "";
-    public string Suffix { get; set; } = "";
-    public int StartNumber { get; set; }
-}
-
 public static class PlacesStore
 {
     public const int RecentLimit = 12;
@@ -174,38 +165,6 @@ public static class MarqueeSelection
         var top = Math.Min(y, y + height);
         var bottom = Math.Max(y, y + height);
         return itemBottom >= top && itemTop <= bottom && width != 0;
-    }
-}
-
-public static class AdvancedRename
-{
-    public static string Apply(string name, AdvancedRenamePlan plan, int index)
-    {
-        var ext = "";
-        var stem = name;
-        var dot = name.LastIndexOf('.');
-        if (dot > 0)
-        {
-            ext = name[dot..];
-            stem = name[..dot];
-        }
-
-        if (!string.IsNullOrEmpty(plan.Find))
-        {
-            stem = stem.Replace(plan.Find, plan.Replace ?? "", StringComparison.OrdinalIgnoreCase);
-        }
-
-        var numbered = plan.StartNumber > 0 ? $"{plan.StartNumber + index}" : "";
-        return $"{plan.Prefix}{stem}{plan.Suffix}{numbered}{ext}";
-    }
-
-    public static RenameRequest[] Build(IReadOnlyList<FileEntry> entries, AdvancedRenamePlan plan)
-    {
-        return entries.Select((entry, index) => new RenameRequest
-        {
-            Path = entry.Path,
-            NewName = Apply(entry.Name, plan, index),
-        }).ToArray();
     }
 }
 
