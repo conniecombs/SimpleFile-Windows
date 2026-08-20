@@ -74,13 +74,13 @@ fn entry_metadata(path: &Path) -> (bool, bool, u64, String) {
 }
 
 struct FilterCandidate<'a> {
-    path: &'a Path,
     is_dir: bool,
     is_file: bool,
     size: u64,
     extension: &'a str,
     after_dt: &'a Option<DateTime<Local>>,
     before_dt: &'a Option<DateTime<Local>>,
+    modified_time: Option<std::time::SystemTime>,
 }
 
 fn passes_filters(candidate: &FilterCandidate<'_>, options: &SearchOptions) -> bool {
@@ -108,23 +108,19 @@ fn passes_filters(candidate: &FilterCandidate<'_>, options: &SearchOptions) -> b
     }
 
     if let Some(ref after) = candidate.after_dt {
-        if let Ok(metadata) = fs::metadata(candidate.path) {
-            if let Ok(modified) = metadata.modified() {
-                let modified: DateTime<Local> = modified.into();
-                if modified < *after {
-                    return false;
-                }
+        if let Some(mod_time) = candidate.modified_time {
+            let modified: DateTime<Local> = mod_time.into();
+            if modified < *after {
+                return false;
             }
         }
     }
 
     if let Some(ref before) = candidate.before_dt {
-        if let Ok(metadata) = fs::metadata(candidate.path) {
-            if let Ok(modified) = metadata.modified() {
-                let modified: DateTime<Local> = modified.into();
-                if modified > *before {
-                    return false;
-                }
+        if let Some(mod_time) = candidate.modified_time {
+            let modified: DateTime<Local> = mod_time.into();
+            if modified > *before {
+                return false;
             }
         }
     }
@@ -218,14 +214,13 @@ pub fn search_files_blocking(
                 continue;
             }
 
-            let (is_dir, is_file, size, modified) = match entry.metadata() {
+            let (is_dir, is_file, size, modified, modified_time) = match entry.metadata() {
                 Ok(metadata) => {
                     let file_type = metadata.file_type();
                     let is_dir = file_type.is_dir();
                     let is_file = file_type.is_file();
-                    let modified = metadata
-                        .modified()
-                        .ok()
+                    let modified_time = metadata.modified().ok();
+                    let modified = modified_time
                         .map(|time| {
                             DateTime::<Local>::from(time)
                                 .format("%Y-%m-%d %H:%M")
@@ -237,9 +232,13 @@ pub fn search_files_blocking(
                         is_file,
                         if is_dir { 0 } else { metadata.len() },
                         modified,
+                        modified_time,
                     )
                 }
-                Err(_) => entry_metadata(&path),
+                Err(_) => {
+                    let (is_dir, is_file, size, modified) = entry_metadata(&path);
+                    (is_dir, is_file, size, modified, None)
+                }
             };
 
             let extension = if is_dir {
@@ -255,13 +254,13 @@ pub fn search_files_blocking(
             }
 
             let candidate = FilterCandidate {
-                path: &path,
                 is_dir,
                 is_file,
                 size,
                 extension: &extension,
                 after_dt: &after_dt,
                 before_dt: &before_dt,
+                modified_time,
             };
             if !passes_filters(&candidate, &options) {
                 continue;

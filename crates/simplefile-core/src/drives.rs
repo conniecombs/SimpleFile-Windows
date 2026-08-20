@@ -198,10 +198,20 @@ fn windows_drive_display_name(
 }
 
 fn list_drives_blocking() -> Result<Vec<DriveInfo>, String> {
-    let mut drives = Vec::new();
-
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
+
+    struct PendingDrive {
+        letter: u8,
+        drive_path: String,
+        wide_path: Vec<u16>,
+        dt: u32,
+        drive_type: String,
+        fallback_name: &'static str,
+        remote_path: Option<String>,
+    }
+
+    let mut pending: Vec<PendingDrive> = Vec::new();
 
     for letter in b'A'..=b'Z' {
         let drive_path = format!("{}:\\", letter as char);
@@ -210,74 +220,112 @@ fn list_drives_blocking() -> Result<Vec<DriveInfo>, String> {
             .chain(std::iter::once(0))
             .collect();
 
-        unsafe {
-            let dt = winapi::um::fileapi::GetDriveTypeW(wide_path.as_ptr());
-            if dt <= 1 {
-                continue;
-            }
+        let dt = unsafe { winapi::um::fileapi::GetDriveTypeW(wide_path.as_ptr()) };
+        if dt <= 1 {
+            continue;
+        }
 
-            let drive_type = match dt {
-                2 => "Removable",
-                3 => "Fixed",
-                4 => "Network",
-                5 => "CD-ROM",
-                6 => "RAM Disk",
-                _ => "Unknown",
-            }
-            .to_string();
+        let drive_type = match dt {
+            2 => "Removable",
+            3 => "Fixed",
+            4 => "Network",
+            5 => "CD-ROM",
+            6 => "RAM Disk",
+            _ => "Unknown",
+        }
+        .to_string();
 
-            let fallback_name = match dt {
-                2 => "Removable Drive",
-                3 => "Local Disk",
-                4 => "Network Drive",
-                5 => "Optical Drive",
-                6 => "RAM Disk",
-                _ => "Drive",
-            };
-            let remote_path = if dt == 4 {
-                mapped_network_remote_path(&drive_path)
-            } else {
-                None
-            };
-            let (drive_status, status_detail) = if dt == 4 {
-                network_drive_status(&wide_path, remote_path.as_deref())
-            } else {
-                ("available".to_string(), None)
-            };
-            let display_name =
-                windows_drive_display_name(dt, &wide_path, remote_path.as_deref(), fallback_name);
+        let fallback_name = match dt {
+            2 => "Removable Drive",
+            3 => "Local Disk",
+            4 => "Network Drive",
+            5 => "Optical Drive",
+            6 => "RAM Disk",
+            _ => "Drive",
+        };
+        let remote_path = if dt == 4 {
+            mapped_network_remote_path(&drive_path)
+        } else {
+            None
+        };
 
-            let (total_space, free_space) = if dt == 3 || (dt == 4 && drive_status == "available") {
-                let mut free_bytes_available: u64 = 0;
-                let mut total_bytes: u64 = 0;
-                let mut total_free_bytes: u64 = 0;
+        pending.push(PendingDrive {
+            letter,
+            drive_path,
+            wide_path,
+            dt,
+            drive_type,
+            fallback_name,
+            remote_path,
+        });
+    }
 
-                if winapi::um::fileapi::GetDiskFreeSpaceExW(
-                    wide_path.as_ptr(),
-                    &mut free_bytes_available as *mut u64 as *mut _,
-                    &mut total_bytes as *mut u64 as *mut _,
-                    &mut total_free_bytes as *mut u64 as *mut _,
-                ) != 0
-                {
-                    (total_bytes, free_bytes_available)
+    // Probe all network drives in parallel.
+    let probe_results: Vec<Option<(String, Option<String>)>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = pending
+            .iter()
+            .map(|drive| {
+                if drive.dt == 4 {
+                    let wide = drive.wide_path.clone();
+                    let remote = drive.remote_path.as_deref().map(|s| s.to_string());
+                    Some(scope.spawn(move || network_drive_status(&wide, remote.as_deref())))
                 } else {
-                    (0, 0)
+                    None
+                }
+            })
+            .collect();
+
+        handles
+            .into_iter()
+            .map(|handle| handle.map(|h| h.join().unwrap()))
+            .collect()
+    });
+
+    let mut drives = Vec::new();
+    for (drive, probe) in pending.iter().zip(probe_results.into_iter()) {
+        let (drive_status, status_detail) =
+            probe.unwrap_or_else(|| ("available".to_string(), None));
+
+        let display_name = windows_drive_display_name(
+            drive.dt,
+            &drive.wide_path,
+            drive.remote_path.as_deref(),
+            drive.fallback_name,
+        );
+
+        let (total_space, free_space) =
+            if drive.dt == 3 || (drive.dt == 4 && drive_status == "available") {
+                unsafe {
+                    let mut free_bytes_available: u64 = 0;
+                    let mut total_bytes: u64 = 0;
+                    let mut total_free_bytes: u64 = 0;
+
+                    if winapi::um::fileapi::GetDiskFreeSpaceExW(
+                        drive.wide_path.as_ptr(),
+                        &mut free_bytes_available as *mut u64 as *mut _,
+                        &mut total_bytes as *mut u64 as *mut _,
+                        &mut total_free_bytes as *mut u64 as *mut _,
+                    ) != 0
+                    {
+                        (total_bytes, free_bytes_available)
+                    } else {
+                        (0, 0)
+                    }
                 }
             } else {
                 (0, 0)
             };
 
-            drives.push(DriveInfo {
-                name: format!("{} ({}:)", display_name, letter as char),
-                path: drive_path,
-                drive_type,
-                total_space,
-                free_space,
-                remote_path,
-                drive_status,
-                status_detail,
-            });
-        }
+        drives.push(DriveInfo {
+            name: format!("{} ({}:)", display_name, drive.letter as char),
+            path: drive.drive_path.clone(),
+            drive_type: drive.drive_type.clone(),
+            total_space,
+            free_space,
+            remote_path: drive.remote_path.clone(),
+            drive_status,
+            status_detail,
+        });
     }
 
     Ok(drives)

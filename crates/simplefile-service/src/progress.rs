@@ -648,18 +648,19 @@ fn estimate_path_bytes(path: &Path, cancel: &Arc<AtomicBool>) -> Result<u64, Str
             check_cancelled(cancel)?;
             let entry = entry.map_err(|error| format!("Failed to read entry: {error}"))?;
             let entry_path = entry.path();
-            let entry_meta = match fs::symlink_metadata(&entry_path) {
-                Ok(meta) => meta,
+            let entry_type = match entry.file_type() {
+                Ok(ft) => ft,
                 Err(_) => continue,
             };
-            let entry_type = entry_meta.file_type();
             if entry_type.is_symlink() {
                 continue;
             }
             if entry_type.is_dir() {
                 stack.push(entry_path);
             } else if entry_type.is_file() {
-                total = total.saturating_add(entry_meta.len());
+                if let Ok(meta) = entry.metadata() {
+                    total = total.saturating_add(meta.len());
+                }
             }
             visited = visited.saturating_add(1);
             if visited.is_multiple_of(256) {

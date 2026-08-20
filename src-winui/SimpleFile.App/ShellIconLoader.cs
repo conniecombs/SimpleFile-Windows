@@ -4,6 +4,7 @@ using System.Drawing.Imaging;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace SimpleFile.App;
@@ -36,11 +37,49 @@ internal static class ShellIconLoader
                 : System.IO.Path.GetExtension(path) is { Length: > 0 } extension
                     ? extension
                     : "file";
+        var cacheKey = $"entry:{requestedSize}:{key}";
+
+        // Always return a fast, extension-based icon first (no network I/O).
+        var fallbackKey = isDirectory
+            ? $"entry:{requestedSize}:dir"
+            : System.IO.Path.GetExtension(path) is { Length: > 0 } ext
+                ? $"entry:{requestedSize}:{ext}"
+                : $"entry:{requestedSize}:file";
+
         return Cache.GetOrAdd(
-            $"entry:{requestedSize}:{key}",
-            _ => LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: !fileSpecific)
-                ?? Load(path, isDirectory, requestedSize, useAttributes: !fileSpecific)
-                ?? CreateFallbackIcon(path, isDirectory, requestedSize));
+            cacheKey,
+            k =>
+            {
+                // Use SHGFI_USEFILEATTRIBUTES (useAttributes: true) for the initial call.
+                // This never touches the filesystem and returns instantly.
+                var icon = LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: true)
+                    ?? Load(path, isDirectory, requestedSize, useAttributes: true)
+                    ?? CreateFallbackIcon(path, isDirectory, requestedSize);
+
+                // For file-specific icons, queue async extraction in the background.
+                // The cache entry will be updated when the real icon arrives.
+                if (fileSpecific)
+                {
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            var realIcon = LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: false)
+                                ?? Load(path, isDirectory, requestedSize, useAttributes: false);
+                            if (realIcon is not null)
+                            {
+                                Cache[cacheKey] = realIcon;
+                            }
+                        }
+                        catch
+                        {
+                            // Best-effort; keep the extension-based icon.
+                        }
+                    });
+                }
+
+                return icon;
+            });
     }
 
     public static BitmapImage? ForPath(string path, int iconSize = 16)

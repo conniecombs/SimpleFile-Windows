@@ -492,9 +492,33 @@ public sealed class ExplorerWorkspace
 
         var token = state.NextNavigationToken();
         var selected = state.SelectedPath;
+        List<FileEntry> progressive = [];
+
+        lock (_gate)
+        {
+            state.ListingInProgress = true;
+        }
+
         try
         {
-            var listing = await _backend.ListDirectoryAsync(path, onChunk: null, cancellationToken)
+            var listing = await _backend.ListDirectoryAsync(
+                    path,
+                    chunk =>
+                    {
+                        if (token != state.NavigationToken || !PathRules.PathsEqual(state.Path, path))
+                        {
+                            return;
+                        }
+
+                        lock (_gate)
+                        {
+                            progressive.AddRange(chunk.Entries);
+                            state.Entries = [.. progressive];
+                        }
+
+                        RaiseChanged();
+                    },
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             lock (_gate)
@@ -532,6 +556,18 @@ public sealed class ExplorerWorkspace
             }
 
             RaiseChanged();
+        }
+        finally
+        {
+            if (token == state.NavigationToken)
+            {
+                lock (_gate)
+                {
+                    state.ListingInProgress = false;
+                }
+
+                RaiseChanged();
+            }
         }
     }
 
@@ -1181,7 +1217,11 @@ public sealed class ExplorerWorkspace
     public IReadOnlyList<FileEntry> VisibleEntriesFor(PaneId pane)
     {
         var target = Normalize(pane);
-        var entries = Pane(target).VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQueryFor(target));
+        var state = Pane(target);
+        var entries = state.ListingInProgress
+            ? EntryPresentation.VisibleEntriesPreSorted(state.Entries, FilterQueryFor(target), ShowHiddenFiles)
+            : state.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQueryFor(target));
+
         if (ActiveTagFilter is long tagId)
         {
             var tagged = FileTags

@@ -132,21 +132,36 @@ pub fn generate_thumbnail(path: String, size: Option<u32>) -> Result<String, Str
 }
 
 pub fn generate_thumbnails(paths: Vec<String>, size: Option<u32>) -> Vec<ThumbnailResult> {
-    paths
-        .into_iter()
-        .map(|path| match generate_thumbnail(path.clone(), size) {
-            Ok(data) => ThumbnailResult {
-                path,
-                data: Some(data),
-                error: None,
-            },
-            Err(e) => ThumbnailResult {
-                path,
-                data: None,
-                error: Some(e),
-            },
-        })
-        .collect()
+    const MAX_PARALLEL: usize = 4;
+    let chunks: Vec<Vec<String>> = paths
+        .chunks(MAX_PARALLEL.max(1))
+        .map(|chunk| chunk.to_vec())
+        .collect();
+    let mut results = Vec::with_capacity(paths.len());
+    for chunk in chunks {
+        let batch: Vec<ThumbnailResult> = std::thread::scope(|scope| {
+            let handles: Vec<_> = chunk
+                .into_iter()
+                .map(|path| {
+                    scope.spawn(move || match generate_thumbnail(path.clone(), size) {
+                        Ok(data) => ThumbnailResult {
+                            path,
+                            data: Some(data),
+                            error: None,
+                        },
+                        Err(e) => ThumbnailResult {
+                            path,
+                            data: None,
+                            error: Some(e),
+                        },
+                    })
+                })
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        results.extend(batch);
+    }
+    results
 }
 
 fn classify_known_extension(extension: &str) -> Option<(&'static str, String)> {

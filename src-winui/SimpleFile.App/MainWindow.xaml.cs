@@ -2734,6 +2734,13 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Skip filesystem watching on network paths — ReadDirectoryChangesW
+        // is unreliable on many NAS devices and adds background SMB traffic.
+        if (_workspace.Active.PathIsNetwork)
+        {
+            return;
+        }
+
         _watchTargetPath = path;
         var token = Interlocked.Increment(ref _watchRequestToken);
         _ = WatchDirectoryAsync(path, token);
