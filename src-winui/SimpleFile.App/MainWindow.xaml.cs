@@ -2837,7 +2837,7 @@ public sealed partial class MainWindow : Window
 
                 if (needsGit)
                 {
-                    await workspace.ApplyGitStatusesAsync(pane, cancellationToken).ConfigureAwait(false);
+                    await workspace.ApplyGitStatusesAsync(pane, cancellationToken).ConfigureAwait(true);
                 }
 
                 if (cancellationToken.IsCancellationRequested || token != _columnEnrichmentToken)
@@ -2847,7 +2847,7 @@ public sealed partial class MainWindow : Window
 
                 if (needsSizes || needsItems)
                 {
-                    await workspace.FillFolderMetricsAsync(pane, needsSizes, needsItems, cancellationToken).ConfigureAwait(false);
+                    await workspace.FillFolderMetricsAsync(pane, needsSizes, needsItems, cancellationToken).ConfigureAwait(true);
                 }
             }
         }

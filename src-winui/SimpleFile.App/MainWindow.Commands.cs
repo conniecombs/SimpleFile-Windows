@@ -1054,7 +1054,7 @@ public sealed partial class MainWindow
                 var sizeTask = fileOps.CalculateFolderSizeAsync(row.Path, utilityCts.Token);
                 var countTask = fileOps.CountFolderItemsAsync(row.Path, utilityCts.Token);
                 var subdirsTask = fileOps.ListSubdirectoriesAsync(row.Path, utilityCts.Token);
-                await Task.WhenAll(sizeTask, countTask, subdirsTask).ConfigureAwait(false);
+                await Task.WhenAll(sizeTask, countTask, subdirsTask).ConfigureAwait(true);
 
                 if (!ReferenceEquals(_workspace, workspace) || utilityCts.IsCancellationRequested)
                 {

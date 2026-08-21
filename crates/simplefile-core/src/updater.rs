@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports)]
 use crate::models::{AppAboutInfo, UpdateInfo};
 use crate::utils::hidden_command;
 use serde::Deserialize;
@@ -55,34 +56,20 @@ pub fn install_update() -> Result<(), String> {
     install_update_with_progress(|_, _| {})
 }
 
-pub fn install_update_with_progress<F>(mut progress: F) -> Result<(), String>
+pub fn install_update_with_progress<F>(mut _progress: F) -> Result<(), String>
 where
     F: FnMut(u64, u64),
 {
-    let manifest = load_manifest()?;
-    if !is_newer_version(&manifest.version, env!("CARGO_PKG_VERSION")) {
-        return Err("No update available".to_string());
-    }
-
-    let platform = current_platform_key();
-    let url = manifest
-        .platforms
-        .get(platform)
-        .or_else(|| manifest.platforms.get("windows-x86_64"))
-        .map(|platform| platform.url.as_str())
-        .ok_or_else(|| format!("Update manifest does not include a {platform} asset"))?;
-
-    let installer = update_installer_path(url)?;
-    progress(0, 0);
-    download_file(url, &installer)?;
-    let downloaded = std::fs::metadata(&installer)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0);
-    progress(downloaded, downloaded);
-    Command::new(&installer)
-        .spawn()
-        .map_err(|error| format!("Failed to launch update installer: {error}"))?;
-    Ok(())
+    // Disabled: the updater previously downloaded and executed an unverified
+    // binary from the manifest URL.  Until Ed25519 signature verification of
+    // the downloaded installer is implemented (against an embedded public key),
+    // in-app installation is blocked.  Users are directed to the GitHub
+    // releases page where they can verify the download themselves.
+    Err(concat!(
+        "Automatic update installation is currently disabled because the downloaded ",
+        "installer cannot yet be cryptographically verified. Please download the ",
+        "latest release from the GitHub releases page."
+    ).to_string())
 }
 
 fn load_manifest() -> Result<LatestManifest, String> {

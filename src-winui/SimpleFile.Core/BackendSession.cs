@@ -177,9 +177,10 @@ public sealed class BackendSession : IExplorerBackend, IAsyncDisposable
         var start = new ProcessStartInfo
         {
             FileName = ServicePath,
-            Arguments = $"--pipe-name {PipeName} --auth-token {_authToken} --parent-pid {Environment.ProcessId}",
+            Arguments = $"--pipe-name {PipeName} --parent-pid {Environment.ProcessId}",
             UseShellExecute = false,
             CreateNoWindow = true,
+            RedirectStandardInput = true,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
         };
@@ -188,10 +189,13 @@ public sealed class BackendSession : IExplorerBackend, IAsyncDisposable
             ?? throw new InvalidOperationException("Failed to start simplefile-service.");
         _service.EnableRaisingEvents = true;
         _service.OutputDataReceived += (_, _) => { };
-        _service.ErrorDataReceived += (_, _) => { };
+        _service.ErrorDataReceived += OnServiceStderr;
         _service.BeginOutputReadLine();
         _service.BeginErrorReadLine();
         _job?.TryAssign(_service);
+        
+        _service.StandardInput.WriteLine(_authToken);
+        _service.StandardInput.Close();
 
         try
         {
@@ -285,4 +289,56 @@ public sealed class BackendSession : IExplorerBackend, IAsyncDisposable
 
     [DllImport("kernel32.dll")]
     private static extern bool ProcessIdToSessionId(uint dwProcessId, out uint pSessionId);
+
+    private static void OnServiceStderr(object sender, DataReceivedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(e.Data))
+        {
+            return;
+        }
+
+        try
+        {
+            var logPath = ServiceLogPath();
+            RotateLogIfNeeded(logPath);
+            File.AppendAllText(logPath, $"[{DateTime.Now:O}] {e.Data}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Best-effort: stderr logging must never crash the host.
+        }
+    }
+
+    private static string ServiceLogPath()
+    {
+        var directory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SimpleFile");
+        Directory.CreateDirectory(directory);
+        return Path.Combine(directory, "service.log");
+    }
+
+    private static void RotateLogIfNeeded(string logPath)
+    {
+        try
+        {
+            var info = new FileInfo(logPath);
+            if (!info.Exists || info.Length < 1_048_576) // 1 MB
+            {
+                return;
+            }
+
+            var backup = logPath + ".1";
+            if (File.Exists(backup))
+            {
+                File.Delete(backup);
+            }
+
+            File.Move(logPath, backup);
+        }
+        catch
+        {
+            // Best-effort rotation.
+        }
+    }
 }

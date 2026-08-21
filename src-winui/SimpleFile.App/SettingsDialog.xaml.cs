@@ -394,7 +394,25 @@ public sealed partial class SettingsDialog : ContentDialog
         }
         catch (Exception exception)
         {
-            UpdateStatusText.Text = exception.Message;
+            // The updater is currently disabled until signature verification
+            // is implemented.  Offer to open the releases page instead.
+            if (exception.Message.Contains("cryptographically verified", StringComparison.OrdinalIgnoreCase))
+            {
+                UpdateStatusText.Text = "Opening the releases page in your browser\u2026";
+                try
+                {
+                    await _fileOps.OpenExternalUrlAsync(RepositoryUrl + "/releases").ConfigureAwait(true);
+                    UpdateStatusText.Text = "Please download the latest release from the GitHub page.";
+                }
+                catch
+                {
+                    UpdateStatusText.Text = "Please visit " + RepositoryUrl + "/releases to download the update.";
+                }
+            }
+            else
+            {
+                UpdateStatusText.Text = exception.Message;
+            }
             InstallUpdateButton.IsEnabled = true;
         }
     }

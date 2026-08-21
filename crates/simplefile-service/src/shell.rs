@@ -1,6 +1,5 @@
 //! Shell integration: open files and reveal in Explorer.
 
-use std::os::windows::process::CommandExt;
 use std::process::Command;
 
 /// Open a file with its default associated application.
@@ -14,12 +13,7 @@ pub fn open_file(path: &str) -> Result<(), String> {
         return Err("Cannot open a directory as a file".to_string());
     }
 
-    Command::new("cmd")
-        .args(["/C", "start", "", &path_buf.to_string_lossy()])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn()
-        .map_err(|e| format!("Failed to open file: {e}"))?;
-    Ok(())
+    opener::open(&path_buf).map_err(|e| format!("Failed to open file: {e}"))
 }
 
 /// Reveal a file or folder in Windows Explorer, selecting it.
@@ -44,10 +38,5 @@ pub fn open_external_url(url: &str) -> Result<(), String> {
         return Err("Unsupported URL scheme".to_string());
     }
 
-    Command::new("cmd")
-        .args(["/C", "start", "", url])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .spawn()
-        .map_err(|e| format!("Failed to open browser: {e}"))?;
-    Ok(())
+    opener::open(url).map_err(|e| format!("Failed to open browser: {e}"))
 }

@@ -81,6 +81,21 @@ pub(crate) enum Dispatch {
     InstallUpdate {
         id: Option<Value>,
     },
+    CalculateFolderSize {
+        id: Option<Value>,
+        path: String,
+        cancel: Arc<AtomicBool>,
+    },
+    CountFolderItems {
+        id: Option<Value>,
+        path: String,
+        cancel: Arc<AtomicBool>,
+    },
+    GetFolderMetrics {
+        id: Option<Value>,
+        path: String,
+        cancel: Arc<AtomicBool>,
+    },
     Shutdown(JsonRpcResponse),
 }
 
@@ -765,41 +780,44 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             },
             Err(r) => Dispatch::Reply(r),
         },
+        // Deprecated: use get_folder_metrics for a combined single-traversal query.
         "calculate_folder_size" => match parse_params::<PathParams>(request) {
             Ok(p) => {
-                state.folder_size_cancel.store(false, Ordering::Relaxed);
-                match simplefile_core::file_ops::calculate_folder_size(
-                    &p.path,
-                    &state.folder_size_cancel,
-                ) {
-                    Some(size) => {
-                        Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(size)))
-                    }
-                    None => Dispatch::Reply(JsonRpcResponse::application_error(
-                        request.id.clone(),
-                        "cancelled".to_string(),
-                    )),
+                let cancel = Arc::new(AtomicBool::new(false));
+                state.folder_size_cancel = cancel.clone();
+                Dispatch::CalculateFolderSize {
+                    id: request.id.clone(),
+                    path: p.path,
+                    cancel,
                 }
             }
             Err(r) => Dispatch::Reply(r),
         },
+        // Deprecated: use get_folder_metrics for a combined single-traversal query.
         "count_folder_items" => match parse_params::<PathParams>(request) {
             Ok(p) => {
-                state
-                    .folder_item_count_cancel
-                    .store(false, Ordering::Relaxed);
-                state.count_items_cancel.store(false, Ordering::Relaxed);
-                match simplefile_core::file_ops::count_folder_items(
-                    &p.path,
-                    &state.folder_item_count_cancel,
-                ) {
-                    Some(count) => {
-                        Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(count)))
-                    }
-                    None => Dispatch::Reply(JsonRpcResponse::application_error(
-                        request.id.clone(),
-                        "cancelled".to_string(),
-                    )),
+                let cancel = Arc::new(AtomicBool::new(false));
+                state.folder_item_count_cancel = cancel.clone();
+                state.count_items_cancel = cancel.clone();
+                Dispatch::CountFolderItems {
+                    id: request.id.clone(),
+                    path: p.path,
+                    cancel,
+                }
+            }
+            Err(r) => Dispatch::Reply(r),
+        },
+        "get_folder_metrics" => match parse_params::<PathParams>(request) {
+            Ok(p) => {
+                let cancel = Arc::new(AtomicBool::new(false));
+                // Share the cancel flag so any of the old cancel methods also work.
+                state.folder_size_cancel = cancel.clone();
+                state.folder_item_count_cancel = cancel.clone();
+                state.count_items_cancel = cancel.clone();
+                Dispatch::GetFolderMetrics {
+                    id: request.id.clone(),
+                    path: p.path,
+                    cancel,
                 }
             }
             Err(r) => Dispatch::Reply(r),
@@ -819,6 +837,12 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             state
                 .folder_item_count_cancel
                 .store(true, Ordering::Relaxed);
+            Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
+        }
+        "cancel_folder_metrics" => {
+            state.folder_size_cancel.store(true, Ordering::Relaxed);
+            state.folder_item_count_cancel.store(true, Ordering::Relaxed);
+            state.count_items_cancel.store(true, Ordering::Relaxed);
             Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
         }
         "copy_with_progress" => match parse_params::<ProgressCopyMoveParams>(request) {

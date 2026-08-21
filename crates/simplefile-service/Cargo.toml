@@ -19,11 +19,16 @@ path = "src/main.rs"
 chrono = "0.4"
 glob = "0.3"
 notify = { version = "8", features = ["serde"] }
+opener = "0.7"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 simplefile-core = { path = "../simplefile-core" }
 simplefile-ipc = { path = "../simplefile-ipc" }
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+windows-sys = { version = "0.59", features = ["Win32_System_Threading", "Win32_Foundation"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Threading", "Win32_Foundation"] }

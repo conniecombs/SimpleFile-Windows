@@ -1,5 +1,5 @@
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 use simplefile_ipc::frame::{decode_length, encode_frame, FrameError};
 use simplefile_ipc::rpc::{JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 use simplefile_ipc::{
@@ -180,6 +180,15 @@ where
             Dispatch::InstallUpdate { id } => {
                 spawn_install_update(writer.clone(), events.clone(), id);
             }
+            Dispatch::CalculateFolderSize { id, path, cancel } => {
+                spawn_folder_size(writer.clone(), id, path, cancel);
+            }
+            Dispatch::CountFolderItems { id, path, cancel } => {
+                spawn_folder_item_count(writer.clone(), id, path, cancel);
+            }
+            Dispatch::GetFolderMetrics { id, path, cancel } => {
+                spawn_folder_metrics(writer.clone(), id, path, cancel);
+            }
             Dispatch::Shutdown(response) => {
                 crate::watcher::unwatch_directory(&mut watcher_state);
                 write_json(&writer, &response).await?;
@@ -209,6 +218,114 @@ fn spawn_install_update<W>(
             Ok(Err(message)) => JsonRpcResponse::application_error(id, message),
             Err(error) => {
                 JsonRpcResponse::application_error(id, format!("update task failed: {error}"))
+            }
+        };
+        let _ = write_json(&writer, &response).await;
+    });
+}
+
+fn spawn_folder_size<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    id: Option<Value>,
+    path: String,
+    cancel: Arc<AtomicBool>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let join = tokio::task::spawn_blocking(move || {
+            simplefile_core::file_ops::calculate_folder_size(&path, &cancel)
+        });
+
+        let response = match join.await {
+            Ok(Some(size)) => JsonRpcResponse::result(id, json!(size)),
+            Ok(None) => JsonRpcResponse::application_error(id, "cancelled".to_string()),
+            Err(error) => {
+                JsonRpcResponse::application_error(id, format!("folder size task failed: {error}"))
+            }
+        };
+        let _ = write_json(&writer, &response).await;
+    });
+}
+
+fn spawn_folder_item_count<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    id: Option<Value>,
+    path: String,
+    cancel: Arc<AtomicBool>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let join = tokio::task::spawn_blocking(move || {
+            simplefile_core::file_ops::count_folder_items(&path, &cancel)
+        });
+
+        let response = match join.await {
+            Ok(Some(count)) => JsonRpcResponse::result(id, json!(count)),
+            Ok(None) => JsonRpcResponse::application_error(id, "cancelled".to_string()),
+            Err(error) => JsonRpcResponse::application_error(
+                id,
+                format!("folder item count task failed: {error}"),
+            ),
+        };
+        let _ = write_json(&writer, &response).await;
+    });
+}
+
+fn spawn_folder_metrics<W>(
+    writer: std::sync::Arc<tokio::sync::Mutex<W>>,
+    id: Option<Value>,
+    path: String,
+    cancel: Arc<AtomicBool>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    tokio::spawn(async move {
+        let cancel2 = cancel.clone();
+        let cancel3 = cancel.clone();
+        let path2 = path.clone();
+        let path3 = path.clone();
+
+        // Run size, count, and subdirectory listing concurrently in the
+        // blocking threadpool rather than serially on the main loop.
+        let size_handle = tokio::task::spawn_blocking(move || {
+            simplefile_core::file_ops::calculate_folder_size(&path, &cancel)
+        });
+        let count_handle = tokio::task::spawn_blocking(move || {
+            simplefile_core::file_ops::count_folder_items(&path2, &cancel2)
+        });
+        let subdirs_handle = tokio::task::spawn_blocking(move || {
+            if cancel3.load(Ordering::Relaxed) {
+                Err("cancelled".to_string())
+            } else {
+                simplefile_core::file_ops::list_subdirectories(&path3)
+            }
+        });
+
+        let (size_result, count_result, subdirs_result) =
+            tokio::join!(size_handle, count_handle, subdirs_handle);
+
+        let response = match (size_result, count_result, subdirs_result) {
+            (Ok(Some(size)), Ok(Some(count)), Ok(Ok(subdirs))) => {
+                JsonRpcResponse::result(
+                    id,
+                    json!({
+                        "size": size,
+                        "itemCount": count,
+                        "subdirectories": subdirs,
+                    }),
+                )
+            }
+            (Ok(None), _, _) | (_, Ok(None), _) => {
+                JsonRpcResponse::application_error(id, "cancelled".to_string())
+            }
+            (_, _, Ok(Err(message))) => JsonRpcResponse::application_error(id, message),
+            (Err(error), _, _) | (_, Err(error), _) | (_, _, Err(error)) => {
+                JsonRpcResponse::application_error(
+                    id,
+                    format!("folder metrics task failed: {error}"),
+                )
             }
         };
         let _ = write_json(&writer, &response).await;
