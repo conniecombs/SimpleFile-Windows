@@ -41,6 +41,7 @@ public sealed partial class AdvancedRenameDialog : Window
         _listDirectoryAsync = listDirectoryAsync;
         InitializeComponent();
         Title = "Advanced Rename";
+        AppIcon.ApplyTo(this);
         SystemBackdrop = new MicaBackdrop();
         AppWindow.Resize(new SizeInt32(1120, 740));
         if (AppWindow.Presenter is OverlappedPresenter presenter)

@@ -12,6 +12,7 @@ public sealed partial class TransferProgressWindow : Window
     {
         InitializeComponent();
         Title = "File transfer";
+        AppIcon.ApplyTo(this);
         AppWindow.Resize(new SizeInt32(620, 360));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {

@@ -64,11 +64,12 @@
                     VerticalAlignment="Center"
                     Orientation="Horizontal"
                     Spacing="8">
-                    <FontIcon
-                        FontFamily="{StaticResource SfIconFont}"
-                        FontSize="14"
-                        Foreground="{ThemeResource SfTextPrimaryBrush}"
-                        Glyph="&#xE8B7;" />
+                    <Image
+                        Width="18"
+                        Height="18"
+                        AutomationProperties.Name="SimpleFile icon"
+                        Source="ms-appx:///SimpleFile.png"
+                        Stretch="Uniform" />
                     <TextBlock
                         VerticalAlignment="Center"
                         FontSize="12"

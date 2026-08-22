@@ -31,9 +31,11 @@ for (const relativePath of [
 }
 
 for (const relativePath of [
+  'base_icon.png',
   'packaging/winui/icon.ico',
   'packaging/winui/simplefile-winui.nsi',
   'packaging/winui/Product.wxs',
+  'scripts/generate-winui-icon.py',
 ]) {
   assertExists(relativePath);
 }

@@ -80,6 +80,7 @@ public sealed partial class MainWindow : Window
         }
 
         Title = "SimpleFile";
+        AppIcon.ApplyTo(this);
         SystemBackdrop = new MicaBackdrop();
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);

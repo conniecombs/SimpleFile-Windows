@@ -391,7 +391,7 @@ SimpleFile-Windows/
 ├── build_notes/                  Internal hardening / migration notes
 ├── .github/workflows/            CI, release, installer smoke, Dependabot
 ├── package.json                  Root orchestration scripts
-├── base_icon.png                 Source icon artwork
+├── base_icon.png                 Generated D3 SimpleFile icon artwork
 └── LICENSE                       Proprietary license
 ```
 
@@ -486,6 +486,8 @@ The `check` pipeline also enforces project invariants:
 | --- | --- |
 | `packaging/winui/simplefile-winui.nsi` | Per-user NSIS setup |
 | `packaging/winui/Product.wxs` | Per-user WiX MSI |
+| `packaging/winui/icon.ico` | Embedded app, installer, and shortcut icon |
+| `scripts/generate-winui-icon.py` | Regenerates `base_icon.png` and `packaging/winui/icon.ico` |
 | `src-winui/Directory.Build.props` | WinUI version |
 | `crates/simplefile-service/Cargo.toml` | Service version |
 

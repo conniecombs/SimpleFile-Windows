@@ -33,6 +33,7 @@ const requiredFiles = [
   'scripts/smoke-winui-startup.ps1',
   'scripts/smoke-winui-msi.ps1',
   'scripts/smoke-winui-nsis.ps1',
+  'scripts/generate-winui-icon.py',
   'scripts/check-winui-parity-gate.mjs',
   'docs/winui-migration/parity-gate.md',
   'src-winui/SimpleFile.App/SimpleFile.App.csproj',
@@ -112,6 +113,9 @@ for (const snippet of npmSnippets) {
 
 requireSnippet(appCsproj, 'SimpleFile.App.csproj', 'CopyWindowsAppSdkMergedPri');
 requireSnippet(appCsproj, 'SimpleFile.App.csproj', 'PublishUnpackagedXamlPayload');
+requireSnippet(appCsproj, 'SimpleFile.App.csproj', '<ApplicationIcon>..\\..\\packaging\\winui\\icon.ico</ApplicationIcon>');
+requireSnippet(appCsproj, 'SimpleFile.App.csproj', 'SimpleFile.png');
+requireSnippet(appCsproj, 'SimpleFile.App.csproj', 'SimpleFile.ico');
 
 const workflowSnippets = [
   ['ci.yml', ciYml, 'setup-dotnet'],
