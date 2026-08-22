@@ -81,7 +81,7 @@ public sealed partial class FileRowView : UserControl
         ApplyColumns();
         if (_iconImage is not null)
         {
-            var iconSize = FileListViewHost.IconSize;
+            var iconSize = FileListViewHost.IconSizeFor(Row.Pane);
             _iconImage.Width = iconSize;
             _iconImage.Height = iconSize;
             _iconImage.Source = ShellIconLoader.ForEntry(Row.Path, Row.IsDir, iconSize);
@@ -93,7 +93,7 @@ public sealed partial class FileRowView : UserControl
             ToolTipService.SetToolTip(_nameText, Row.Name);
         }
 
-        var isTileView = FileListViewHost.View == "tiles";
+        var isTileView = FileListViewHost.ViewFor(Row.Pane) == "tiles";
 
         if (_metadataText is not null)
         {
@@ -125,8 +125,9 @@ public sealed partial class FileRowView : UserControl
     {
         var columns = ColumnLayoutHost.Shared;
         var visible = columns.VisibleColumns;
-        var view = FileListViewHost.View;
-        var iconSize = FileListViewHost.IconSize;
+        var pane = Row?.Pane ?? PaneId.Primary;
+        var view = FileListViewHost.ViewFor(pane);
+        var iconSize = FileListViewHost.IconSizeFor(pane);
         var columnKey = view == "details"
             ? string.Join('\u001f', visible.Select(column => column.Id))
             : "";
@@ -482,21 +483,42 @@ public static class FileListViewHost
 {
     public static event EventHandler? Changed;
 
-    public static string View { get; private set; } = UiSettings.NormalizeDefaultView(null);
+    private static string _primaryView = UiSettings.NormalizeDefaultView(null);
+    private static string _secondaryView = UiSettings.NormalizeDefaultView(null);
+    private static int _primaryIconSize = UiSettings.NormalizeIconSize((int?)null);
+    private static int _secondaryIconSize = UiSettings.NormalizeIconSize((int?)null);
 
-    public static int IconSize { get; private set; } = UiSettings.NormalizeIconSize((int?)null);
+    public static string ViewFor(PaneId pane) =>
+        pane == PaneId.Secondary ? _secondaryView : _primaryView;
 
-    public static void Apply(string? view, int iconSize)
+    public static int IconSizeFor(PaneId pane) =>
+        pane == PaneId.Secondary ? _secondaryIconSize : _primaryIconSize;
+
+    public static void Apply(PaneId pane, string? view, int iconSize)
     {
         var nextView = UiSettings.NormalizeDefaultView(view);
         var nextIconSize = UiSettings.NormalizeIconSize(iconSize);
-        if (string.Equals(View, nextView, StringComparison.Ordinal) && IconSize == nextIconSize)
+        if (pane == PaneId.Secondary)
         {
-            return;
+            if (string.Equals(_secondaryView, nextView, StringComparison.Ordinal) && _secondaryIconSize == nextIconSize)
+            {
+                return;
+            }
+
+            _secondaryView = nextView;
+            _secondaryIconSize = nextIconSize;
+        }
+        else
+        {
+            if (string.Equals(_primaryView, nextView, StringComparison.Ordinal) && _primaryIconSize == nextIconSize)
+            {
+                return;
+            }
+
+            _primaryView = nextView;
+            _primaryIconSize = nextIconSize;
         }
 
-        View = nextView;
-        IconSize = nextIconSize;
         Changed?.Invoke(null, EventArgs.Empty);
     }
 }

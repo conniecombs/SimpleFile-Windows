@@ -603,8 +603,9 @@ public sealed partial class MainWindow
             return;
         }
 
-        var currentView = UiSettings.NormalizeDefaultView(_workspace.Settings.DefaultView);
-        var currentIconSize = UiSettings.NormalizeIconSize(_workspace.Settings.DefaultIconSize);
+        var pane = ActiveUiPane;
+        var currentView = _workspace.ViewFor(pane);
+        var currentIconSize = _workspace.IconSizeFor(pane);
 
         flyout.Items.Clear();
 
@@ -641,6 +642,19 @@ public sealed partial class MainWindow
         }
 
         flyout.Items.Add(sizeMenu);
+
+        if (_workspace.DualPaneEnabled)
+        {
+            flyout.Items.Add(new MenuFlyoutSeparator());
+            var applyBothItem = new MenuFlyoutItem
+            {
+                Text = "Apply view options to both panes",
+                Tag = "pane:apply-view-to-both",
+                Icon = CreateMenuIcon("\uE8A7"),
+            };
+            applyBothItem.Click += OnViewOptionClicked;
+            flyout.Items.Add(applyBothItem);
+        }
     }
 
     private void AddViewStyleItem(
@@ -695,20 +709,27 @@ public sealed partial class MainWindow
 
         if (tag.StartsWith("view:", StringComparison.Ordinal))
         {
-            _workspace.SetFileListView(tag["view:".Length..]);
+            _workspace.SetFileListView(ActiveUiPane, tag["view:".Length..]);
+            await _workspace.SaveWorkspaceLayoutAsync();
         }
         else if (tag.StartsWith("icon:", StringComparison.Ordinal)
             && int.TryParse(tag["icon:".Length..], out var iconSize))
         {
-            _workspace.SetFileListIconSize(iconSize);
+            _workspace.SetFileListIconSize(ActiveUiPane, iconSize);
+            await _workspace.SaveWorkspaceLayoutAsync();
+        }
+        else if (tag == "pane:apply-view-to-both")
+        {
+            _workspace.ApplyViewOptionsToBothPanes(ActiveUiPane);
+            await _workspace.SaveWorkspaceLayoutAsync();
         }
         else if (tag == "pane:dual")
         {
             await ToggleDualPaneFromUiAsync();
+            await _workspace.SaveWorkspaceLayoutAsync();
         }
 
         ApplyFileListViewPresentation();
-        await _workspace.SaveUiSettingsAsync();
     }
 
     private void PopulateFileListContextFlyout(MenuFlyout? flyout, PaneId pane)

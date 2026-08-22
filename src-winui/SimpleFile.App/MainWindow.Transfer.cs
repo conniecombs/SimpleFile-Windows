@@ -864,7 +864,7 @@ public sealed partial class MainWindow
     private void ApplyColumnWidths()
     {
         var columns = _workspace?.Columns ?? ColumnLayoutHost.Shared;
-        ApplyColumnHeader(PrimaryColumnHeader, columns, ref _primaryColumnHeaderKey);
-        ApplyColumnHeader(SecondaryColumnHeader, columns, ref _secondaryColumnHeaderKey);
+        ApplyColumnHeader(PrimaryColumnHeader, columns, PaneId.Primary, ref _primaryColumnHeaderKey);
+        ApplyColumnHeader(SecondaryColumnHeader, columns, PaneId.Secondary, ref _secondaryColumnHeaderKey);
     }
 }

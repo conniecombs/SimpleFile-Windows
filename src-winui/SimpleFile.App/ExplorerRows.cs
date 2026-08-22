@@ -25,6 +25,7 @@ public sealed class FileRow
     public string ParentText { get; set; } = "";
     public string TagColor { get; set; } = "";
     public string TagName { get; set; } = "";
+    public PaneId Pane { get; set; } = PaneId.Primary;
     public string AutomationName => IsDir ? $"Folder {Name}" : $"File {Name}";
 
     public string ColumnText(string columnId)
@@ -45,7 +46,7 @@ public sealed class FileRow
         };
     }
 
-    public static FileRow From(FileEntry entry, bool isCut = false, Tag? tag = null)
+    public static FileRow From(FileEntry entry, bool isCut = false, Tag? tag = null, PaneId pane = PaneId.Primary)
     {
         return new FileRow
         {
@@ -67,6 +68,7 @@ public sealed class FileRow
             ParentText = EntryPresentation.ColumnText(entry, "parent"),
             TagColor = tag?.Color ?? "",
             TagName = tag?.Name ?? "",
+            Pane = pane,
         };
     }
 }

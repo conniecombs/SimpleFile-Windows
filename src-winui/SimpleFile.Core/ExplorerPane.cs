@@ -25,6 +25,10 @@ public sealed class ExplorerPane
     public bool IsNavigating { get; set; }
     public bool ListingInProgress { get; set; }
     public bool PathIsNetwork { get; set; }
+    public string View { get; set; } = "details";
+    public int IconSize { get; set; } = 16;
+    public string SortBy { get; set; } = "name";
+    public bool SortAscending { get; set; } = true;
     private int _navigationToken;
 
     public int NextNavigationToken() => Interlocked.Increment(ref _navigationToken);
@@ -40,6 +44,50 @@ public sealed class ExplorerPane
     public IReadOnlyList<FileEntry> VisibleEntries(string sortBy, bool sortAscending, bool showHidden, string filterQuery)
     {
         return EntryPresentation.VisibleEntries(Entries, filterQuery, showHidden, sortBy, sortAscending);
+    }
+
+    public IReadOnlyList<FileEntry> VisibleEntries(bool showHidden, string filterQuery)
+    {
+        return VisibleEntries(SortBy, SortAscending, showHidden, filterQuery);
+    }
+
+    public void ApplyViewDefaults(UiSettings settings)
+    {
+        View = UiSettings.NormalizeDefaultView(settings.DefaultView);
+        IconSize = UiSettings.NormalizeIconSize(settings.DefaultIconSize);
+        SortBy = "name";
+        SortAscending = true;
+    }
+
+    public void SetView(string view)
+    {
+        View = UiSettings.NormalizeDefaultView(view);
+    }
+
+    public void SetIconSize(int iconSize)
+    {
+        IconSize = UiSettings.NormalizeIconSize(iconSize);
+    }
+
+    public void SetSort(string sortBy)
+    {
+        if (string.Equals(SortBy, sortBy, StringComparison.OrdinalIgnoreCase))
+        {
+            SortAscending = !SortAscending;
+        }
+        else
+        {
+            SortBy = sortBy;
+            SortAscending = true;
+        }
+    }
+
+    public void CopyViewOptionsFrom(ExplorerPane source)
+    {
+        View = source.View;
+        IconSize = source.IconSize;
+        SortBy = source.SortBy;
+        SortAscending = source.SortAscending;
     }
 
     public void RecordHistory(string path, HistoryMode mode)
@@ -174,6 +222,11 @@ public sealed class ExplorerPane
         other.Tabs.Clear();
         other.Tabs.AddRange(tabs);
         other.ActiveTabId = activeTabId;
+
+        (View, other.View) = (other.View, View);
+        (IconSize, other.IconSize) = (other.IconSize, IconSize);
+        (SortBy, other.SortBy) = (other.SortBy, SortBy);
+        (SortAscending, other.SortAscending) = (other.SortAscending, SortAscending);
 
         (SelectedPath, other.SelectedPath) = (other.SelectedPath, SelectedPath);
         (PathIsNetwork, other.PathIsNetwork) = (other.PathIsNetwork, PathIsNetwork);

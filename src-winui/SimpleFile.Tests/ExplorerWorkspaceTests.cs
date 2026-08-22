@@ -444,7 +444,13 @@ public class ExplorerWorkspaceTests
         await first.OpenNewTabAsync(PaneId.Primary, @"C:\Users\test\Desktop");
         await first.ToggleDualPaneAsync();
         await first.NavigatePaneAsync(PaneId.Secondary, @"C:\", HistoryMode.ReplaceCurrent);
-        first.SetSort("size");
+        first.SetFileListView(PaneId.Primary, "content");
+        first.SetFileListIconSize(PaneId.Primary, 48);
+        first.SetSort(PaneId.Primary, "size");
+        first.SetFileListView(PaneId.Secondary, "tiles");
+        first.SetFileListIconSize(PaneId.Secondary, 96);
+        first.SetSort(PaneId.Secondary, "date");
+        first.SetSort(PaneId.Secondary, "date");
         await first.SaveWorkspaceLayoutAsync();
 
         var second = new ExplorerWorkspace(backend, fileOps);
@@ -453,7 +459,16 @@ public class ExplorerWorkspaceTests
         Assert.True(second.DualPaneEnabled);
         Assert.Equal(@"C:\Users\test\Desktop", second.Primary.Path);
         Assert.Equal(@"C:\", second.Secondary.Path);
-        Assert.Equal("size", second.SortBy);
+        Assert.Equal("content", second.ViewFor(PaneId.Primary));
+        Assert.Equal(48, second.IconSizeFor(PaneId.Primary));
+        Assert.Equal("size", second.SortByFor(PaneId.Primary));
+        Assert.True(second.SortAscendingFor(PaneId.Primary));
+        Assert.Equal("tiles", second.ViewFor(PaneId.Secondary));
+        Assert.Equal(96, second.IconSizeFor(PaneId.Secondary));
+        Assert.Equal("date", second.SortByFor(PaneId.Secondary));
+        Assert.False(second.SortAscendingFor(PaneId.Secondary));
+        Assert.Equal(PaneId.Secondary, second.ActivePane);
+        Assert.Equal("date", second.SortBy);
         Assert.True(second.Primary.Tabs.Count >= 1);
         var activePrimaryTab = second.Primary.Tabs.First(tab => tab.Id == second.Primary.ActiveTabId);
         Assert.Equal(second.Primary.Path, activePrimaryTab.Path);
@@ -529,8 +544,6 @@ public class ExplorerWorkspaceTests
         settings.QuickAccessCollapsed = true;
         settings.MyPcCollapsed = true;
         first.ApplyUiSettings(settings);
-        first.SetFileListView("content");
-        first.SetFileListIconSize(48);
         first.Columns.Resize("path", 360);
         await first.SaveUiSettingsAsync();
 
@@ -538,8 +551,10 @@ public class ExplorerWorkspaceTests
         await second.InitializeAsync();
 
         Assert.Equal("developer", second.Settings.ColumnPreset);
-        Assert.Equal("content", second.Settings.DefaultView);
-        Assert.Equal(48, second.Settings.DefaultIconSize);
+        Assert.Equal("tiles", second.Settings.DefaultView);
+        Assert.Equal(96, second.Settings.DefaultIconSize);
+        Assert.Equal("tiles", second.ViewFor(PaneId.Primary));
+        Assert.Equal(96, second.IconSizeFor(PaneId.Primary));
         Assert.Equal(["name", "size", "date", "extension", "git", "symlink", "path"], second.Columns.VisibleColumns.Select(column => column.Id));
         Assert.Equal(360, second.Columns.WidthOf("path"));
         Assert.False(second.Settings.ShowQuickAccess);
@@ -554,8 +569,8 @@ public class ExplorerWorkspaceTests
         Assert.Equal(410, second.Settings.DualPanePrimaryWidth);
         Assert.True(second.Settings.QuickAccessCollapsed);
         Assert.True(second.Settings.MyPcCollapsed);
-        Assert.Equal("content", settingsIpc.Settings["defaultView"]);
-        Assert.Equal("48", settingsIpc.Settings["defaultIconSize"]);
+        Assert.Equal("tiles", settingsIpc.Settings["defaultView"]);
+        Assert.Equal("96", settingsIpc.Settings["defaultIconSize"]);
         Assert.Equal("false", settingsIpc.Settings["sidebar.showQuickAccess"]);
         Assert.Equal("true", settingsIpc.Settings["sidebar.showFolders"]);
         Assert.Equal("false", settingsIpc.Settings["sidebar.showBookmarks"]);
@@ -596,6 +611,75 @@ public class ExplorerWorkspaceTests
 
         Assert.Empty(second.RecentPaths);
         Assert.Equal("[]", settingsIpc.Settings["places.recents"]);
+    }
+
+    [Fact]
+    public async Task PaneViewOptions_ArePaneLocalAndCanApplyToBothPanes()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        var fileOps = new FileOperationService(settingsIpc);
+        var workspace = new ExplorerWorkspace(backend, fileOps);
+        await workspace.InitializeAsync();
+
+        var settings = UiSettings.CreateDefault();
+        settings.DefaultView = "tiles";
+        settings.DefaultIconSize = 96;
+        workspace.ApplyUiSettings(settings);
+        await workspace.ToggleDualPaneAsync();
+
+        workspace.SetFileListView(PaneId.Primary, "content");
+        workspace.SetFileListIconSize(PaneId.Primary, 48);
+        workspace.SetSort(PaneId.Primary, "size");
+        workspace.SetFileListView(PaneId.Secondary, "details");
+        workspace.SetFileListIconSize(PaneId.Secondary, 16);
+        workspace.SetSort(PaneId.Secondary, "date");
+        workspace.SetSort(PaneId.Secondary, "date");
+
+        Assert.Equal("content", workspace.ViewFor(PaneId.Primary));
+        Assert.Equal(48, workspace.IconSizeFor(PaneId.Primary));
+        Assert.Equal("size", workspace.SortByFor(PaneId.Primary));
+        Assert.True(workspace.SortAscendingFor(PaneId.Primary));
+        Assert.Equal("details", workspace.ViewFor(PaneId.Secondary));
+        Assert.Equal(16, workspace.IconSizeFor(PaneId.Secondary));
+        Assert.Equal("date", workspace.SortByFor(PaneId.Secondary));
+        Assert.False(workspace.SortAscendingFor(PaneId.Secondary));
+
+        await workspace.SaveUiSettingsAsync();
+        Assert.Equal("tiles", settingsIpc.Settings["defaultView"]);
+        Assert.Equal("96", settingsIpc.Settings["defaultIconSize"]);
+
+        workspace.ApplyViewOptionsToBothPanes(PaneId.Secondary);
+
+        Assert.Equal("details", workspace.ViewFor(PaneId.Primary));
+        Assert.Equal(16, workspace.IconSizeFor(PaneId.Primary));
+        Assert.Equal("date", workspace.SortByFor(PaneId.Primary));
+        Assert.False(workspace.SortAscendingFor(PaneId.Primary));
+        Assert.Equal("details", workspace.ViewFor(PaneId.Secondary));
+        Assert.Equal(16, workspace.IconSizeFor(PaneId.Secondary));
+        Assert.Equal("date", workspace.SortByFor(PaneId.Secondary));
+        Assert.False(workspace.SortAscendingFor(PaneId.Secondary));
+    }
+
+    [Fact]
+    public async Task ApplyingDefaultViewSettingsCanPreserveCurrentPaneViewOptions()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var workspace = new ExplorerWorkspace(backend);
+        await workspace.InitializeAsync();
+
+        workspace.SetFileListView(PaneId.Primary, "content");
+        workspace.SetFileListIconSize(PaneId.Primary, 48);
+        var settings = workspace.Settings;
+        settings.DefaultView = "tiles";
+        settings.DefaultIconSize = 96;
+
+        workspace.ApplyUiSettings(settings, applyViewDefaultsToPanes: false);
+
+        Assert.Equal("tiles", workspace.Settings.DefaultView);
+        Assert.Equal(96, workspace.Settings.DefaultIconSize);
+        Assert.Equal("content", workspace.ViewFor(PaneId.Primary));
+        Assert.Equal(48, workspace.IconSizeFor(PaneId.Primary));
     }
 
 }

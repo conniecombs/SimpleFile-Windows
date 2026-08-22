@@ -45,6 +45,7 @@ public sealed class ExplorerWorkspace
         Settings = UiSettings.CreateDefault();
         Primary = new ExplorerPane(PaneId.Primary);
         Secondary = new ExplorerPane(PaneId.Secondary);
+        ApplyDefaultViewOptionsToPanes();
     }
 
     public event EventHandler? Changed;
@@ -60,8 +61,8 @@ public sealed class ExplorerWorkspace
     public string HomePath { get; private set; } = "";
     public bool DualPaneEnabled { get; private set; }
     public PaneId ActivePane { get; private set; } = PaneId.Primary;
-    public string SortBy { get; private set; } = "name";
-    public bool SortAscending { get; private set; } = true;
+    public string SortBy => SortByFor(ActivePane);
+    public bool SortAscending => SortAscendingFor(ActivePane);
     public bool ShowHiddenFiles { get; private set; }
     private string _primaryFilterQuery = "";
     private string _secondaryFilterQuery = "";
@@ -111,7 +112,7 @@ public sealed class ExplorerWorkspace
     public IReadOnlyList<string> History => Primary.History;
     public int HistoryIndex => Primary.HistoryIndex;
     public IReadOnlyList<FileEntry> VisibleEntries =>
-        Primary.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQueryFor(PaneId.Primary));
+        Primary.VisibleEntries(ShowHiddenFiles, FilterQueryFor(PaneId.Primary));
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => Primary.Breadcrumbs;
     public bool IsNavigating => Primary.IsNavigating;
     public bool ListingInProgress => Primary.ListingInProgress;
@@ -125,6 +126,8 @@ public sealed class ExplorerWorkspace
         DualPaneEnabled ? (ActivePane == PaneId.Secondary ? "Right pane" : "Left pane") : null;
 
     public string FilterQuery => FilterQueryFor(ActivePane);
+    public string FileListView => ViewFor(ActivePane);
+    public int FileListIconSize => IconSizeFor(ActivePane);
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -162,7 +165,7 @@ public sealed class ExplorerWorkspace
         return string.IsNullOrEmpty(HomePath) ? Primary.Path : HomePath;
     }
 
-    public void ApplyUiSettings(UiSettings settings)
+    public void ApplyUiSettings(UiSettings settings, bool applyViewDefaultsToPanes = true)
     {
         Settings = settings;
         Settings.DefaultView = UiSettings.NormalizeDefaultView(settings.DefaultView);
@@ -172,6 +175,11 @@ public sealed class ExplorerWorkspace
         Settings.DualPanePrimaryPercent = UiSettings.NormalizeDualPanePrimaryPercent(settings.DualPanePrimaryPercent);
         Settings.DualPanePrimaryWidth = UiSettings.NormalizeDualPanePrimaryWidth(settings.DualPanePrimaryWidth);
         ShowHiddenFiles = settings.ShowHidden;
+        if (applyViewDefaultsToPanes)
+        {
+            ApplyDefaultViewOptionsToPanes();
+        }
+
         Columns.ApplyPreset(string.IsNullOrWhiteSpace(settings.ColumnPreset) ? "default" : settings.ColumnPreset);
         Columns.RestoreWidths(settings.ColumnWidths);
         RaiseChanged();
@@ -186,14 +194,104 @@ public sealed class ExplorerWorkspace
 
     public void SetFileListView(string view)
     {
-        Settings.DefaultView = UiSettings.NormalizeDefaultView(view);
+        SetFileListView(ActivePane, view);
+    }
+
+    public void SetFileListView(PaneId pane, string view)
+    {
+        var target = Pane(pane);
+        var next = UiSettings.NormalizeDefaultView(view);
+        if (string.Equals(target.View, next, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        target.View = next;
         RaiseChanged();
     }
 
     public void SetFileListIconSize(int iconSize)
     {
-        Settings.DefaultIconSize = UiSettings.NormalizeIconSize(iconSize);
+        SetFileListIconSize(ActivePane, iconSize);
+    }
+
+    public void SetFileListIconSize(PaneId pane, int iconSize)
+    {
+        var target = Pane(pane);
+        var next = UiSettings.NormalizeIconSize(iconSize);
+        if (target.IconSize == next)
+        {
+            return;
+        }
+
+        target.IconSize = next;
         RaiseChanged();
+    }
+
+    public void ApplyViewOptionsToBothPanes(PaneId sourcePane)
+    {
+        var source = Pane(sourcePane);
+        var primaryChanged = !SameViewOptions(Primary, source);
+        var secondaryChanged = !SameViewOptions(Secondary, source);
+        Primary.CopyViewOptionsFrom(source);
+        Secondary.CopyViewOptionsFrom(source);
+        if (primaryChanged || secondaryChanged)
+        {
+            RaiseChanged();
+        }
+    }
+
+    public string ViewFor(PaneId pane)
+    {
+        return Pane(pane).View;
+    }
+
+    public int IconSizeFor(PaneId pane)
+    {
+        return Pane(pane).IconSize;
+    }
+
+    public string SortByFor(PaneId pane)
+    {
+        return Pane(pane).SortBy;
+    }
+
+    public bool SortAscendingFor(PaneId pane)
+    {
+        return Pane(pane).SortAscending;
+    }
+
+    private static bool SameViewOptions(ExplorerPane left, ExplorerPane right)
+    {
+        return string.Equals(left.View, right.View, StringComparison.Ordinal)
+            && left.IconSize == right.IconSize
+            && string.Equals(left.SortBy, right.SortBy, StringComparison.OrdinalIgnoreCase)
+            && left.SortAscending == right.SortAscending;
+    }
+
+    private void ApplyDefaultViewOptionsToPanes()
+    {
+        Primary.ApplyViewDefaults(Settings);
+        Secondary.ApplyViewDefaults(Settings);
+    }
+
+    public void SetSort(string sortBy)
+    {
+        SetSort(ActivePane, sortBy);
+    }
+
+    public void SetSort(PaneId pane, string sortBy)
+    {
+        var target = Pane(pane);
+        var next = string.IsNullOrWhiteSpace(sortBy) ? "name" : sortBy;
+        var currentSort = target.SortBy;
+        var currentAscending = target.SortAscending;
+        target.SetSort(next);
+        if (!string.Equals(target.SortBy, currentSort, StringComparison.OrdinalIgnoreCase)
+            || target.SortAscending != currentAscending)
+        {
+            RaiseChanged();
+        }
     }
 
     public ExplorerPane OtherPane()
@@ -979,21 +1077,6 @@ public sealed class ExplorerWorkspace
         }
     }
 
-    public void SetSort(string sortBy)
-    {
-        if (string.Equals(SortBy, sortBy, StringComparison.OrdinalIgnoreCase))
-        {
-            SortAscending = !SortAscending;
-        }
-        else
-        {
-            SortBy = sortBy;
-            SortAscending = true;
-        }
-
-        RaiseChanged();
-    }
-
     public void SetFilterQuery(string query)
     {
         SetFilterQuery(ActivePane, query);
@@ -1008,7 +1091,7 @@ public sealed class ExplorerWorkspace
         var selectionCleared = false;
         if (!string.IsNullOrEmpty(state.SelectedPath))
         {
-            var visible = state.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, normalized);
+            var visible = state.VisibleEntries(ShowHiddenFiles, normalized);
             if (!visible.Any(entry => PathRules.PathsEqual(entry.Path, state.SelectedPath)))
             {
                 state.SelectedPath = null;
@@ -1244,7 +1327,7 @@ public sealed class ExplorerWorkspace
         var state = Pane(target);
         var entries = state.ListingInProgress
             ? EntryPresentation.VisibleEntriesPreSorted(state.Entries, FilterQueryFor(target), ShowHiddenFiles)
-            : state.VisibleEntries(SortBy, SortAscending, ShowHiddenFiles, FilterQueryFor(target));
+            : state.VisibleEntries(ShowHiddenFiles, FilterQueryFor(target));
 
         if (ActiveTagFilter is long tagId)
         {
@@ -1561,8 +1644,9 @@ public sealed class ExplorerWorkspace
     public async Task ApplyLayoutAsync(WorkspaceLayout layout, CancellationToken cancellationToken = default)
     {
         DualPaneEnabled = layout.DualPaneEnabled;
-        SortBy = string.IsNullOrWhiteSpace(layout.SortBy) ? "name" : layout.SortBy;
-        SortAscending = layout.SortAscending;
+        var legacySortBy = string.IsNullOrWhiteSpace(layout.SortBy) ? "name" : layout.SortBy;
+        RestorePaneViewOptions(Primary, layout.Primary, legacySortBy, layout.SortAscending);
+        RestorePaneViewOptions(Secondary, layout.Secondary, legacySortBy, layout.SortAscending);
         RestorePaneTabs(Primary, layout.Primary);
         RestorePaneTabs(Secondary, layout.Secondary);
 
@@ -1805,6 +1889,7 @@ public sealed class ExplorerWorkspace
             Bookmarks = await ReadBookmarksAsync(cancellationToken).ConfigureAwait(false);
             RecentPaths = await ReadRecentPathsAsync(cancellationToken).ConfigureAwait(false);
             ShowHiddenFiles = Settings.ShowHidden;
+            ApplyDefaultViewOptionsToPanes();
             Columns.ApplyPreset(Settings.ColumnPreset);
             Columns.RestoreWidths(Settings.ColumnWidths);
         }
@@ -1946,6 +2031,10 @@ public sealed class ExplorerWorkspace
         {
             Path = pane.Path,
             ActiveTabId = pane.ActiveTabId,
+            View = pane.View,
+            IconSize = pane.IconSize,
+            SortBy = pane.SortBy,
+            SortAscending = pane.SortAscending,
             Tabs = pane.Tabs.Select(tab => new WorkspaceTabLayout
             {
                 Id = tab.Id,
@@ -1955,6 +2044,19 @@ public sealed class ExplorerWorkspace
                 HistoryIndex = tab.HistoryIndex,
             }).ToList(),
         };
+    }
+
+    private void RestorePaneViewOptions(
+        ExplorerPane pane,
+        WorkspacePaneLayout layout,
+        string fallbackSortBy,
+        bool fallbackSortAscending)
+    {
+        pane.View = UiSettings.NormalizeDefaultView(
+            string.IsNullOrWhiteSpace(layout.View) ? Settings.DefaultView : layout.View);
+        pane.IconSize = UiSettings.NormalizeIconSize(layout.IconSize ?? Settings.DefaultIconSize);
+        pane.SortBy = string.IsNullOrWhiteSpace(layout.SortBy) ? fallbackSortBy : layout.SortBy;
+        pane.SortAscending = layout.SortAscending ?? fallbackSortAscending;
     }
 
     private static void RestorePaneTabs(ExplorerPane pane, WorkspacePaneLayout layout)

@@ -228,6 +228,12 @@ public class DualPaneAndTabsTests
         await workspace.NavigatePaneAsync(PaneId.Secondary, @"C:\");
         workspace.SetFilterQuery(PaneId.Primary, "notes");
         workspace.SetFilterQuery(PaneId.Secondary, "desktop");
+        workspace.SetFileListView(PaneId.Primary, "content");
+        workspace.SetFileListIconSize(PaneId.Primary, 48);
+        workspace.SetSort(PaneId.Primary, "size");
+        workspace.SetFileListView(PaneId.Secondary, "tiles");
+        workspace.SetFileListIconSize(PaneId.Secondary, 96);
+        workspace.SetSort(PaneId.Secondary, "date");
         await workspace.CloseFilePaneAsync(PaneId.Primary);
 
         Assert.False(workspace.DualPaneEnabled);
@@ -235,10 +241,16 @@ public class DualPaneAndTabsTests
         Assert.Equal(@"C:\", workspace.Primary.Path);
         Assert.Equal(@"C:\Users\test", workspace.Secondary.Path);
         Assert.Equal("desktop", workspace.FilterQuery);
+        Assert.Equal("tiles", workspace.ViewFor(PaneId.Primary));
+        Assert.Equal(96, workspace.IconSizeFor(PaneId.Primary));
+        Assert.Equal("date", workspace.SortByFor(PaneId.Primary));
         Assert.Contains(workspace.Primary.Tabs, tab => tab.Path == @"C:\");
 
         await workspace.ToggleDualPaneAsync();
         Assert.Equal("notes", workspace.FilterQueryFor(PaneId.Secondary));
+        Assert.Equal("content", workspace.ViewFor(PaneId.Secondary));
+        Assert.Equal(48, workspace.IconSizeFor(PaneId.Secondary));
+        Assert.Equal("size", workspace.SortByFor(PaneId.Secondary));
     }
 
     [Fact]

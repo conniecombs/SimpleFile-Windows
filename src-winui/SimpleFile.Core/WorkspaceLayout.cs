@@ -7,7 +7,7 @@ public sealed class WorkspaceLayout
     public const string SettingsKey = "workspace-layout";
 
     [JsonPropertyName("version")]
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     [JsonPropertyName("dualPaneEnabled")]
     public bool DualPaneEnabled { get; set; }
@@ -38,6 +38,18 @@ public sealed class WorkspacePaneLayout
 
     [JsonPropertyName("tabs")]
     public List<WorkspaceTabLayout> Tabs { get; set; } = [];
+
+    [JsonPropertyName("view")]
+    public string View { get; set; } = "";
+
+    [JsonPropertyName("iconSize")]
+    public int? IconSize { get; set; }
+
+    [JsonPropertyName("sortBy")]
+    public string SortBy { get; set; } = "";
+
+    [JsonPropertyName("sortAscending")]
+    public bool? SortAscending { get; set; }
 }
 
 public sealed class WorkspaceTabLayout

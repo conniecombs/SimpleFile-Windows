@@ -257,14 +257,14 @@ public sealed partial class MainWindow : Window
         ReplaceIfChanged(
             PrimaryFiles,
             (_searchMode && _searchPane == PaneId.Primary
-                ? _activeSearchResults.Select(SearchRowFrom)
-                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(ToFileRow)).ToList(),
+                ? _activeSearchResults.Select(result => SearchRowFrom(result, PaneId.Primary))
+                : _workspace.VisibleEntriesFor(PaneId.Primary).Select(entry => ToFileRow(entry, PaneId.Primary))).ToList(),
             SameFileRow);
         ReplaceIfChanged(
             SecondaryFiles,
             (_searchMode && _searchPane == PaneId.Secondary
-                ? _activeSearchResults.Select(SearchRowFrom)
-                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(ToFileRow)).ToList(),
+                ? _activeSearchResults.Select(result => SearchRowFrom(result, PaneId.Secondary))
+                : _workspace.VisibleEntriesFor(PaneId.Secondary).Select(entry => ToFileRow(entry, PaneId.Secondary))).ToList(),
             SameFileRow);
         ReplaceIfChanged(
             Drives,
@@ -912,19 +912,25 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var view = UiSettings.NormalizeDefaultView(_workspace.Settings.DefaultView);
-        var iconSize = UiSettings.NormalizeIconSize(_workspace.Settings.DefaultIconSize);
-        FileListViewHost.Apply(view, iconSize);
+        var primaryView = _workspace.ViewFor(PaneId.Primary);
+        var primaryIconSize = _workspace.IconSizeFor(PaneId.Primary);
+        var secondaryView = _workspace.ViewFor(PaneId.Secondary);
+        var secondaryIconSize = _workspace.IconSizeFor(PaneId.Secondary);
+        FileListViewHost.Apply(PaneId.Primary, primaryView, primaryIconSize);
+        FileListViewHost.Apply(PaneId.Secondary, secondaryView, secondaryIconSize);
 
-        var detailsVisible = view == "details" ? Visibility.Visible : Visibility.Collapsed;
-        PrimaryColumnHeader.Visibility = detailsVisible;
-        SecondaryColumnHeader.Visibility = detailsVisible;
+        PrimaryColumnHeader.Visibility = primaryView == "details" ? Visibility.Visible : Visibility.Collapsed;
+        SecondaryColumnHeader.Visibility = secondaryView == "details" ? Visibility.Visible : Visibility.Collapsed;
 
-        var usesTiles = view == "tiles";
-        var itemStyle = usesTiles ? "SfFileTileItemStyle" : "SfFileListItemStyle";
-        var itemsPanel = usesTiles ? "SfWrapItemsPanelTemplate" : "SfStackItemsPanelTemplate";
-        ApplyFileListPresentation(PrimaryFileList, itemStyle, itemsPanel, usesTiles);
-        ApplyFileListPresentation(SecondaryFileList, itemStyle, itemsPanel, usesTiles);
+        var primaryUsesTiles = primaryView == "tiles";
+        var primaryItemStyle = primaryUsesTiles ? "SfFileTileItemStyle" : "SfFileListItemStyle";
+        var primaryItemsPanel = primaryUsesTiles ? "SfWrapItemsPanelTemplate" : "SfStackItemsPanelTemplate";
+        ApplyFileListPresentation(PrimaryFileList, primaryItemStyle, primaryItemsPanel, primaryUsesTiles);
+
+        var secondaryUsesTiles = secondaryView == "tiles";
+        var secondaryItemStyle = secondaryUsesTiles ? "SfFileTileItemStyle" : "SfFileListItemStyle";
+        var secondaryItemsPanel = secondaryUsesTiles ? "SfWrapItemsPanelTemplate" : "SfStackItemsPanelTemplate";
+        ApplyFileListPresentation(SecondaryFileList, secondaryItemStyle, secondaryItemsPanel, secondaryUsesTiles);
     }
 
     private static void ApplyFileListPresentation(
@@ -964,16 +970,19 @@ public sealed partial class MainWindow : Window
         list.SelectedItem = path is null ? null : rows.FirstOrDefault(row => row.Path == path);
     }
 
-    private FileRow ToFileRow(FileEntry entry)
+    private FileRow ToFileRow(FileEntry entry) =>
+        ToFileRow(entry, _workspace?.Normalize(_workspace.ActivePane) ?? PaneId.Primary);
+
+    private FileRow ToFileRow(FileEntry entry, PaneId pane)
     {
         var cut = _workspace?.Clipboard is { Operation: ClipboardOperation.Cut, HasItems: true } clipboard
             && clipboard.SourcePaths.Any(path => PathRules.PathsEqual(path, entry.Path));
         Tag? tag = null;
         _workspace?.FileTags.TryGetValue(entry.Path, out tag);
-        return FileRow.From(entry, cut, tag);
+        return FileRow.From(entry, cut, tag, pane);
     }
 
-    private FileRow SearchRowFrom(SearchResult result)
+    private FileRow SearchRowFrom(SearchResult result, PaneId pane)
     {
         return ToFileRow(new FileEntry
         {
@@ -983,7 +992,7 @@ public sealed partial class MainWindow : Window
             Size = result.Size,
             Modified = result.Modified,
             Extension = result.Extension,
-        });
+        }, pane);
     }
 
     private void UpdateEmptyStates()
@@ -1072,7 +1081,8 @@ public sealed partial class MainWindow : Window
         && left.PathText == right.PathText
         && left.ParentText == right.ParentText
         && left.TagColor == right.TagColor
-        && left.Icon == right.Icon;
+        && left.Icon == right.Icon
+        && left.Pane == right.Pane;
 
     private static bool SameDriveRow(DriveRow left, DriveRow right) =>
         left.Path == right.Path
@@ -2312,21 +2322,29 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void OnSortColumn(object sender, RoutedEventArgs e)
+    private async void OnSortColumn(object sender, RoutedEventArgs e)
     {
-        if (_workspace is not null && sender is FrameworkElement { Tag: string sort })
+        if (_workspace is not null && sender is FrameworkElement { Tag: PaneSort sort })
         {
-            _workspace.SetSort(sort);
+            await RunUiActionAsync(
+                "Sort",
+                async () =>
+                {
+                    _workspace.SetSort(sort.Pane, sort.Sort);
+                    await _workspace.SaveWorkspaceLayoutAsync();
+                });
         }
     }
 
-    private void ApplyColumnHeader(Grid header, ColumnLayout columns, ref string? renderedKey)
+    private void ApplyColumnHeader(Grid header, ColumnLayout columns, PaneId pane, ref string? renderedKey)
     {
         var visible = columns.VisibleColumns;
+        var sortBy = _workspace?.SortByFor(pane) ?? "name";
+        var sortAscending = _workspace?.SortAscendingFor(pane) ?? true;
         var key = string.Join(
             '\u001f',
             visible.Select(column => $"{column.Id}:{column.Width:0.###}"))
-            + $"|{_workspace?.SortBy}:{_workspace?.SortAscending}";
+            + $"|{sortBy}:{sortAscending}";
         if (string.Equals(renderedKey, key, StringComparison.Ordinal))
         {
             return;
@@ -2351,8 +2369,8 @@ public sealed partial class MainWindow : Window
             {
                 Style = ChromeStyle("SfColumnHeaderButtonStyle"),
                 Padding = column.Id == "name" ? new Thickness(38, 5, 8, 5) : new Thickness(10, 5, 8, 5),
-                Content = HeaderLabel(column),
-                Tag = column.Sort,
+                Content = HeaderLabel(column, pane),
+                Tag = new PaneSort(pane, column.Sort),
             };
             button.Click += OnSortColumn;
             ToolTipService.SetToolTip(button, $"Sort by {column.Label}");
@@ -2388,15 +2406,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private string HeaderLabel(FileListColumn column)
+    private string HeaderLabel(FileListColumn column, PaneId pane)
     {
         var label = column.Id == "date" ? "Date modified" : column.Label;
-        if (_workspace is null || !string.Equals(_workspace.SortBy, column.Sort, StringComparison.OrdinalIgnoreCase))
+        if (_workspace is null || !string.Equals(_workspace.SortByFor(pane), column.Sort, StringComparison.OrdinalIgnoreCase))
         {
             return label;
         }
 
-        return _workspace.SortAscending ? $"{label} ↑" : $"{label} ↓";
+        return _workspace.SortAscendingFor(pane) ? $"{label} ↑" : $"{label} ↓";
     }
 
     private void OnDividerPressed(object sender, PointerRoutedEventArgs e)
@@ -3057,6 +3075,8 @@ public sealed partial class MainWindow : Window
 
     private readonly record struct PaneTab(PaneId Pane, string TabId);
 
+    private readonly record struct PaneSort(PaneId Pane, string Sort);
+
     // ========================================================================
     // File operation helpers
     // ========================================================================
@@ -3634,11 +3654,11 @@ public sealed partial class MainWindow : Window
     {
         if (_searchPane == PaneId.Secondary)
         {
-            Replace(SecondaryFiles, _activeSearchResults.Select(SearchRowFrom));
+            Replace(SecondaryFiles, _activeSearchResults.Select(result => SearchRowFrom(result, PaneId.Secondary)));
         }
         else
         {
-            Replace(PrimaryFiles, _activeSearchResults.Select(SearchRowFrom));
+            Replace(PrimaryFiles, _activeSearchResults.Select(result => SearchRowFrom(result, PaneId.Primary)));
         }
 
         CountText.Text = _activeSearchResults.Count == 1
@@ -3885,7 +3905,7 @@ public sealed partial class MainWindow : Window
             try
             {
                 dialog.ApplyTo(workspace.Settings);
-                workspace.ApplyUiSettings(workspace.Settings);
+                workspace.ApplyUiSettings(workspace.Settings, applyViewDefaultsToPanes: false);
                 ApplyTheme(workspace.Settings.Theme);
                 await workspace.SaveUiSettingsAsync(utilityCts.Token);
             }
