@@ -17,6 +17,14 @@ public static class ToolbarOverflowPlanner
 
     public const double PathMinWidth = 140;
     public const double ColumnSpacing = 8;
+    public const double SearchMinWidth = 260;
+    public const double SearchMaxWidth = 480;
+    public const double FilterMinWidth = 128;
+    public const double FilterMaxWidth = 200;
+
+    private const double SearchWidthRatio = 0.24;
+    private const double FilterWidthRatio = 0.10;
+    private const double FilterOuterChromeWidth = 12;
 
     /// <summary>Hide first as the pane shrinks. Nav, path, and More stay.</summary>
     public static readonly string[] PrimaryHideOrder =
@@ -68,5 +76,27 @@ public static class ToolbarOverflowPlanner
         }
 
         return overflowed;
+    }
+
+    public static double SearchWidthFor(double availableWidth) =>
+        ResponsiveWidth(availableWidth, SearchMinWidth, SearchMaxWidth, SearchWidthRatio);
+
+    public static double FilterWidthFor(double availableWidth) =>
+        ResponsiveWidth(availableWidth, FilterMinWidth, FilterMaxWidth, FilterWidthRatio);
+
+    public static double SearchOverflowWidthFor(double availableWidth) =>
+        SearchWidthFor(availableWidth) + ColumnSpacing;
+
+    public static double FilterOverflowWidthFor(double availableWidth) =>
+        FilterWidthFor(availableWidth) + FilterOuterChromeWidth;
+
+    private static double ResponsiveWidth(double availableWidth, double minWidth, double maxWidth, double ratio)
+    {
+        if (double.IsNaN(availableWidth) || availableWidth <= 0)
+        {
+            return minWidth;
+        }
+
+        return Math.Clamp(availableWidth * ratio, minWidth, maxWidth);
     }
 }

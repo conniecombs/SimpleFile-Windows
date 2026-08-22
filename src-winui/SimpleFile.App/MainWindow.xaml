@@ -602,7 +602,9 @@
                             <Grid
                                 x:Name="PrimarySearchHost"
                                 Grid.Column="2"
-                                Width="196">
+                                Width="260"
+                                MinWidth="260"
+                                MaxWidth="480">
                                 <TextBox
                                     x:Name="SearchBox"
                                     Padding="30,4,28,4"
@@ -653,7 +655,9 @@
                                 Spacing="2">
                                 <TextBox
                                     x:Name="QuickFilterBox"
-                                    Width="96"
+                                    Width="128"
+                                    MinWidth="128"
+                                    MaxWidth="200"
                                     Margin="4,0,6,0"
                                     VerticalAlignment="Center"
                                     AutomationProperties.Name="Quick filter active pane"

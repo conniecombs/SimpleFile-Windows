@@ -429,10 +429,13 @@ public sealed partial class MainWindow : Window
 
     private void ApplyPrimaryToolbarOverflow()
     {
-        if (_applyingToolbarOverflow || PrimaryToolbar.ActualWidth <= 0)
+        var toolbarWidth = PrimaryToolbar.ActualWidth;
+        if (_applyingToolbarOverflow || toolbarWidth <= 0)
         {
             return;
         }
+
+        ApplyResponsiveToolbarSizing(toolbarWidth);
 
         var reserved = MeasuredWidth(PrimaryNavHost)
             + MeasuredWidth(PrimaryMoreButton)
@@ -441,8 +444,8 @@ public sealed partial class MainWindow : Window
 
         var widths = new Dictionary<string, double>(StringComparer.Ordinal)
         {
-            [ToolbarOverflowPlanner.Filter] = 108,
-            [ToolbarOverflowPlanner.Search] = 196 + ToolbarOverflowPlanner.ColumnSpacing,
+            [ToolbarOverflowPlanner.Filter] = ToolbarOverflowPlanner.FilterOverflowWidthFor(toolbarWidth),
+            [ToolbarOverflowPlanner.Search] = ToolbarOverflowPlanner.SearchOverflowWidthFor(toolbarWidth),
             [ToolbarOverflowPlanner.Settings] = 32,
             [ToolbarOverflowPlanner.DualPane] = 32,
             [ToolbarOverflowPlanner.ViewOptions] = 32,
@@ -451,12 +454,18 @@ public sealed partial class MainWindow : Window
         };
 
         var overflowed = ToolbarOverflowPlanner.OverflowIds(
-            PrimaryToolbar.ActualWidth,
+            toolbarWidth,
             reserved,
             widths,
             ToolbarOverflowPlanner.PrimaryHideOrder);
 
         ApplyOverflowSet(_primaryToolbarOverflow, overflowed, ApplyPrimaryOverflowVisibility);
+    }
+
+    private void ApplyResponsiveToolbarSizing(double toolbarWidth)
+    {
+        SetWidthIfChanged(PrimarySearchHost, ToolbarOverflowPlanner.SearchWidthFor(toolbarWidth));
+        SetWidthIfChanged(QuickFilterBox, ToolbarOverflowPlanner.FilterWidthFor(toolbarWidth));
     }
 
     private void ApplyOverflowSet(
@@ -513,6 +522,14 @@ public sealed partial class MainWindow : Window
     private static void SetOverflowVisible(FrameworkElement element, bool visible)
     {
         element.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private static void SetWidthIfChanged(FrameworkElement element, double width)
+    {
+        if (double.IsNaN(element.Width) || Math.Abs(element.Width - width) > 0.5)
+        {
+            element.Width = width;
+        }
     }
 
     private static double MeasuredWidth(FrameworkElement element)
