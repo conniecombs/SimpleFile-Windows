@@ -282,7 +282,7 @@ fn list_drives_blocking() -> Result<Vec<DriveInfo>, String> {
     });
 
     let mut drives = Vec::new();
-    for (drive, probe) in pending.iter().zip(probe_results.into_iter()) {
+    for (drive, probe) in pending.iter().zip(probe_results) {
         let (drive_status, status_detail) =
             probe.unwrap_or_else(|| ("available".to_string(), None));
 

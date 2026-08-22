@@ -76,10 +76,17 @@ function Find-ServiceExecutable {
 }
 
 function Find-PublishDirectory {
+    $targetFramework = "net10.0-windows10.0.19041.0"
     $candidates = @(
-        (Join-Path $root "src-winui\SimpleFile.App\bin\Release\net8.0-windows10.0.19041.0\win-x64\publish"),
-        (Join-Path $root "src-winui\SimpleFile.App\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\publish")
+        (Join-Path $root "src-winui\SimpleFile.App\bin\Release\$targetFramework\win-x64\publish"),
+        (Join-Path $root "src-winui\SimpleFile.App\bin\x64\Release\$targetFramework\win-x64\publish")
     )
+    $binRoot = Join-Path $root "src-winui\SimpleFile.App\bin"
+    if (Test-Path -LiteralPath $binRoot) {
+        $candidates += Get-ChildItem -LiteralPath $binRoot -Directory -Recurse -Filter publish |
+            Select-Object -ExpandProperty FullName
+    }
+
     foreach ($candidate in $candidates) {
         if (Test-Path -LiteralPath (Join-Path $candidate "SimpleFile.App.exe")) {
             return $candidate

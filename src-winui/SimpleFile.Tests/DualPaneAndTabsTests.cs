@@ -116,7 +116,7 @@ public class DualPaneAndTabsTests
     }
 
     [Fact]
-    public async Task CloseLastTab_OpensHome()
+    public async Task CloseLastTabInSinglePane_OpensHome()
     {
         var workspace = await Started();
         await workspace.NavigateToAsync(@"C:\Users\test\Desktop");
@@ -126,6 +126,61 @@ public class DualPaneAndTabsTests
         Assert.Single(workspace.Primary.Tabs);
         Assert.Equal(@"C:\Users\test", workspace.Primary.Path);
         Assert.NotEqual(only, workspace.Primary.ActiveTabId);
+    }
+
+    [Fact]
+    public async Task CloseLastTabInRightPane_ClosesPaneAndReopensSecondPane()
+    {
+        var workspace = await Started();
+        await workspace.ToggleDualPaneAsync();
+        await workspace.NavigatePaneAsync(PaneId.Secondary, @"C:\");
+        var only = workspace.Secondary.ActiveTabId;
+
+        await workspace.CloseTabAsync(only!, PaneId.Secondary);
+
+        Assert.False(workspace.DualPaneEnabled);
+        Assert.Equal(PaneId.Primary, workspace.ActivePane);
+        Assert.Equal(@"C:\Users\test", workspace.Primary.Path);
+        Assert.Equal(@"C:\", workspace.Secondary.Path);
+        Assert.Empty(workspace.Secondary.Tabs);
+
+        var raises = 0;
+        workspace.Changed += (_, _) => raises++;
+        await workspace.ToggleDualPaneAsync();
+
+        Assert.True(workspace.DualPaneEnabled);
+        Assert.True(raises > 0);
+        Assert.Equal(PaneId.Primary, workspace.ActivePane);
+        Assert.Equal(@"C:\", workspace.Secondary.Path);
+        Assert.Single(workspace.Secondary.Tabs);
+        Assert.NotNull(workspace.Secondary.ActiveTabId);
+    }
+
+    [Fact]
+    public async Task CloseLastTabInLeftPane_PromotesRightPaneAndReopensSecondPane()
+    {
+        var workspace = await Started();
+        await workspace.ToggleDualPaneAsync();
+        await workspace.NavigatePaneAsync(PaneId.Secondary, @"C:\");
+        var rightTab = workspace.Secondary.ActiveTabId;
+        var onlyLeft = workspace.Primary.ActiveTabId;
+
+        await workspace.CloseTabAsync(onlyLeft!, PaneId.Primary);
+
+        Assert.False(workspace.DualPaneEnabled);
+        Assert.Equal(PaneId.Primary, workspace.ActivePane);
+        Assert.Equal(@"C:\", workspace.Primary.Path);
+        Assert.Equal(rightTab, workspace.Primary.ActiveTabId);
+        Assert.Single(workspace.Primary.Tabs);
+        Assert.Equal(@"C:\Users\test", workspace.Secondary.Path);
+        Assert.Empty(workspace.Secondary.Tabs);
+
+        await workspace.ToggleDualPaneAsync();
+
+        Assert.True(workspace.DualPaneEnabled);
+        Assert.Equal(@"C:\Users\test", workspace.Secondary.Path);
+        Assert.Single(workspace.Secondary.Tabs);
+        Assert.NotNull(workspace.Secondary.ActiveTabId);
     }
 
     [Fact]

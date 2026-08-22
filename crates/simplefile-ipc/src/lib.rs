@@ -6,7 +6,7 @@
 pub const PROTOCOL_VERSION: u32 = 1;
 pub const JSONRPC_VERSION: &str = "2.0";
 pub const MAX_FRAME_BYTES: u32 = 80 * 1024 * 1024;
-pub const DOMAIN_METHOD_COUNT: usize = 74;
+pub const DOMAIN_METHOD_COUNT: usize = 76;
 
 pub const ERR_APPLICATION: i32 = -32000;
 pub const ERR_HOST_OWNED: i32 = -32001;

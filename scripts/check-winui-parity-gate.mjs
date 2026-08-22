@@ -58,8 +58,8 @@ for (const status of statuses) {
 }
 
 const commands = activeServiceCommands(serviceDispatch);
-if (commands.length !== 74) {
-  fail(`expected 74 domain commands, found ${commands.length}.`);
+if (commands.length !== 76) {
+  fail(`expected 76 domain commands, found ${commands.length}.`);
 }
 
 for (const command of commands) {

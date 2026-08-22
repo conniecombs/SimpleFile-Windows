@@ -610,7 +610,7 @@ public sealed partial class MainWindow
 
         var dualPaneItem = new MenuFlyoutItem
         {
-            Text = _workspace.DualPaneEnabled ? "Close right pane" : "Open right pane",
+            Text = _workspace.DualPaneEnabled ? "Close right pane" : "Open second pane",
             Tag = "pane:dual",
             KeyboardAcceleratorTextOverride = "F6",
             Icon = CreateMenuIcon(_workspace.DualPaneEnabled ? "\uE711" : "\uE8A7"),

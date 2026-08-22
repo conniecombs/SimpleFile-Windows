@@ -841,7 +841,9 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
         }
         "cancel_folder_metrics" => {
             state.folder_size_cancel.store(true, Ordering::Relaxed);
-            state.folder_item_count_cancel.store(true, Ordering::Relaxed);
+            state
+                .folder_item_count_cancel
+                .store(true, Ordering::Relaxed);
             state.count_items_cancel.store(true, Ordering::Relaxed);
             Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), Value::Null))
         }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <RootNamespace>SimpleFile.App</RootNamespace>
@@ -25,31 +25,36 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
-    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
-    <PackageReference Include="System.Drawing.Common" Version="8.0.11" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.11" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SimpleFile.Core\SimpleFile.Core.csproj" />
   </ItemGroup>
 
-  <!-- WASDK self-contained deletes the merged resources.pri after MSIX extract.
+  <!-- WASDK self-contained deletes the merged resources.pri after runtime MSIX extract.
        XamlControlsResources then cannot resolve
        ms-appx:///Microsoft.UI.Xaml/Themes/themeresources.xaml and the process
        dies with 0xC000027B before a window appears. Restore that PRI. -->
   <Target Name="CopyWindowsAppSdkMergedPri"
-          AfterTargets="ExtractMicrosoftWindowsAppSDKMsixFiles"
+          BeforeTargets="CopyFilesToOutputDirectory;PublishUnpackagedXamlPayload"
           Condition="'$(WindowsAppSDKSelfContained)'=='true'">
     <PropertyGroup>
       <_WasdkMsixArch Condition="'$(_WasdkMsixArch)'=='' and ('$(Platform)'=='x64' or '$(RuntimeIdentifier)'=='win-x64')">x64</_WasdkMsixArch>
       <_WasdkMsixArch Condition="'$(_WasdkMsixArch)'==''">x64</_WasdkMsixArch>
       <_WasdkPriDir>$([MSBuild]::NormalizeDirectory('$(IntermediateOutputPath)','WasdkMergedPri'))</_WasdkPriDir>
+      <_WasdkRuntimePackageDir>$([MSBuild]::NormalizeDirectory('$(PkgMicrosoft_WindowsAppSDK_Runtime)'))</_WasdkRuntimePackageDir>
     </PropertyGroup>
     <ItemGroup>
-      <_WasdkRuntimeMsix Include="$([MSBuild]::NormalizeDirectory('$(MicrosoftWindowsAppSDKPackageDir)','tools\MSIX\win10-$(_WasdkMsixArch)'))Microsoft.WindowsAppRuntime.*.Msix" />
+      <_WasdkRuntimeMsix Include="$([MSBuild]::NormalizeDirectory('$(_WasdkRuntimePackageDir)','tools\MSIX\win10-$(_WasdkMsixArch)'))Microsoft.WindowsAppRuntime.*.msix"
+                         Exclude="$([MSBuild]::NormalizeDirectory('$(_WasdkRuntimePackageDir)','tools\MSIX\win10-$(_WasdkMsixArch)'))Microsoft.WindowsAppRuntime.Main.*.msix;$([MSBuild]::NormalizeDirectory('$(_WasdkRuntimePackageDir)','tools\MSIX\win10-$(_WasdkMsixArch)'))Microsoft.WindowsAppRuntime.DDLM.*.msix;$([MSBuild]::NormalizeDirectory('$(_WasdkRuntimePackageDir)','tools\MSIX\win10-$(_WasdkMsixArch)'))Microsoft.WindowsAppRuntime.Singleton.*.msix"
+                         Condition="'$(_WasdkRuntimePackageDir)'!=''" />
     </ItemGroup>
-    <MakeDir Directories="$(_WasdkPriDir)" />
+    <Error Condition="'@(_WasdkRuntimeMsix)'==''"
+           Text="Could not find the Windows App SDK runtime MSIX used to restore resources.pri." />
+    <MakeDir Directories="$(OutDir);$(_WasdkPriDir)" />
     <Unzip SourceFiles="@(_WasdkRuntimeMsix)"
            DestinationFolder="$(_WasdkPriDir)"
            SkipUnchangedFiles="true" />

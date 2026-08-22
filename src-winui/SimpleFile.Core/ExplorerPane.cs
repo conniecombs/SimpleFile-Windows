@@ -111,6 +111,38 @@ public sealed class ExplorerPane
         };
     }
 
+    public void EnsureActiveTab(string? fallbackPath = null)
+    {
+        if (ActiveTabId is not null && Tabs.Any(tab => tab.Id == ActiveTabId))
+        {
+            return;
+        }
+
+        if (Tabs.Count > 0)
+        {
+            ActiveTabId = Tabs[0].Id;
+            return;
+        }
+
+        var path = string.IsNullOrEmpty(Path) ? fallbackPath : Path;
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        var tab = CreateTab(path);
+        if (History.Count > 0)
+        {
+            tab.History = [.. History];
+            tab.HistoryIndex = HistoryIndex >= 0 && HistoryIndex < tab.History.Count
+                ? HistoryIndex
+                : tab.History.Count - 1;
+        }
+
+        Tabs.Add(tab);
+        ActiveTabId = tab.Id;
+    }
+
     public void ApplyTabHistory(FileTab tab)
     {
         History.Clear();

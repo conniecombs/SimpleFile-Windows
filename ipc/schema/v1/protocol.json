@@ -13,7 +13,7 @@
     "rule": "additive-optional-fields-ok",
     "renamesRequireBump": true,
     "frozenMethodNames": true,
-    "notes": "protocolVersion 1 is frozen to the 74 WinUI service domain method names plus ipc.handshake. Unknown major versions return an application error and leave the process up."
+    "notes": "protocolVersion 1 is frozen to the 76 WinUI service domain method names plus ipc.handshake. Unknown major versions return an application error and leave the process up."
   },
   "handshake": {
     "method": "ipc.handshake",
@@ -56,6 +56,7 @@
       "cancel_folder_size",
       "cancel_folder_item_count",
       "cancel_count_items",
+      "cancel_folder_metrics",
       "cancel_disk_cleanup",
       "cancel_duplicate_check"
     ],

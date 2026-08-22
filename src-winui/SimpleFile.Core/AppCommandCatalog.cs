@@ -42,7 +42,7 @@ public static class AppCommandCatalog
         new("terminal", "Open terminal", "Tools", "F4"),
         new("preview", "Toggle preview pane", "View"),
         new("toggle-side-menu", "Toggle side menu", "View"),
-        new("dual-pane", "Open or close right pane", "View", "F6"),
+        new("dual-pane", "Open or close second pane", "View", "F6"),
         new("close-left-pane", "Close left pane", "View"),
         new("view-details", "View: details", "View"),
         new("view-list", "View: list", "View"),

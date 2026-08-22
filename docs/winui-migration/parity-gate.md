@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-15  
 **Source tree:** `R:\Repos\SimpleFile-Windows`  
-**Contract:** [`inventory.md`](inventory.md) (74 commands / emitted events / Svelte workflows)  
+**Contract:** [`inventory.md`](inventory.md) (76 commands / emitted events / Svelte workflows)
 **Hosts:** WinUI 3 + `simplefile-service` is the shipping app. Svelte/Tauri UI and packaging glue have been retired.
 
 This is the **retirement lock**. Required `OPEN` rows are none. `MANUAL` rows stay as human smoke coverage. Leftover `src-tauri/src` domain remains until those modules live solely in `crates/simplefile-core`.
@@ -30,7 +30,7 @@ Required = every row except those marked `WAIVED`.
 # Automated (CI + local)
 npm run check                 # ipc-schema, updater, workflows, packaging, parity-gate
 npm run check:winui           # xUnit: navigation, IPC, transfers, polish
-npm run check:ipc-schema      # 74-command schema vs Rust/C#
+npm run check:ipc-schema      # 76-command schema vs Rust/C#
 npm run check:winui-packaging
 cargo test --locked --all-features
 
@@ -59,7 +59,7 @@ Manual host: `npm run dev:winui` or `dist\winui\payload\SimpleFile.exe`.
 
 ---
 
-## 2. IPC commands (74)
+## 2. IPC commands (76)
 
 Each command must appear here. Service registry is `crates/simplefile-service/src/dispatch.rs`. C# names are `SimpleFile.Ipc.Protocol` + `ISimpleFileIpc`.
 
@@ -90,9 +90,11 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `unwatch_directory` | Drop watch | Shutdown / navigate | Client | — | `PASS` |
 | `calculate_folder_size` | Folder metrics | Metrics dialog | IPC wrapper | Folder metrics on a folder | `MANUAL` |
 | `count_folder_items` | Folder metrics | Metrics dialog | IPC wrapper | Same dialog | `MANUAL` |
+| `get_folder_metrics` | Combined folder metrics | Metrics dialog | IPC service | Folder metrics on a folder | `PASS` |
 | `cancel_folder_size` | Abort size on nav | Wired on IPC | Schema/client | Navigate during metrics | `MANUAL` |
 | `cancel_folder_item_count` | Abort counts | IPC | Schema/client | — | `PASS` |
 | `cancel_count_items` | Unused wrapper | IPC kept | Schema | — | `WAIVED` | No live Svelte caller |
+| `cancel_folder_metrics` | Abort combined metrics | IPC service | Schema | Navigate during metrics | `PASS` |
 
 ### 2.2 Preview, open, inspection
 
@@ -366,7 +368,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | Check | What it gates |
 | --- | --- |
 | `npm run check:winui-parity-gate` | This file lists every handler, ctx id, palette id, and a status |
-| `npm run check:ipc-schema` | 74 commands + events vs Rust/C# |
+| `npm run check:ipc-schema` | 76 commands + events vs Rust/C# |
 | `npm run check:winui` | xUnit: workspace, dual-pane, IPC, file ops, polish |
 | `npm run check:winui-packaging` | NSIS/WiX/scripts/workflows |
 | `npm run check:updater` / `check:workflows` | WinUI updater + installer artifacts |

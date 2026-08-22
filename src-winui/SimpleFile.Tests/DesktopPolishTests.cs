@@ -19,7 +19,7 @@ public class DesktopPolishTests
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "toggle-side-menu");
         Assert.Equal("Go home", AppCommandCatalog.Find("go-home")?.Label);
         Assert.Equal("Disk cleanup", AppCommandCatalog.Find("disk-cleanup")?.Label);
-        Assert.Equal("Open or close right pane", AppCommandCatalog.Find("dual-pane")?.Label);
+        Assert.Equal("Open or close second pane", AppCommandCatalog.Find("dual-pane")?.Label);
         Assert.Equal(AppCommandCatalog.All.Count, AppCommandCatalog.Filter("").Count);
         var git = AppCommandCatalog.Filter("git");
         Assert.Equal(2, git.Count);
@@ -282,6 +282,7 @@ public class DesktopPolishTests
         Assert.Equal("overflow-new-folder", overflowed[2].Id);
         Assert.Equal("overflow-new-file", overflowed[3].Id);
         Assert.Equal("overflow-dual-pane", overflowed[4].Id);
+        Assert.Equal("Open second pane", overflowed[4].Label);
         Assert.Equal("overflow-view", overflowed[5].Id);
         Assert.Equal("overflow-settings", overflowed[6].Id);
         Assert.Contains(overflowed[5].Children, child => child.Id == "view:details");
@@ -411,7 +412,7 @@ public class DesktopPolishTests
     {
         Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "commandPalette.open" && item.Keys == "Ctrl+Shift+P");
         Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "pane.switch" && item.Keys == "Tab");
-        Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "pane.toggleDual" && item.Label == "Open or close right pane");
+        Assert.Contains(KeyboardShortcutMap.Defaults, item => item.Id == "pane.toggleDual" && item.Label == "Open or close second pane");
         var remapped = KeyboardShortcutMap.ApplyOverrides(new Dictionary<string, string>
         {
             ["search.focus"] = "Ctrl+K",

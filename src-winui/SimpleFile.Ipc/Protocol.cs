@@ -5,7 +5,7 @@ public static class Protocol
     public const int Version = 1;
     public const string JsonRpc = "2.0";
     public const uint MaxFrameBytes = 80 * 1024 * 1024;
-    public const int DomainMethodCount = 74;
+    public const int DomainMethodCount = 76;
 
     public const string HandshakeMethod = "ipc.handshake";
     public const string HealthMethod = "ipc.health";
@@ -47,6 +47,7 @@ public static class Protocol
     public const string ListSubdirectoriesMethod = "list_subdirectories";
     public const string CalculateFolderSizeMethod = "calculate_folder_size";
     public const string CountFolderItemsMethod = "count_folder_items";
+    public const string GetFolderMetricsMethod = "get_folder_metrics";
     public const string CopyWithProgressMethod = "copy_with_progress";
     public const string MoveWithProgressMethod = "move_with_progress";
     public const string CancelOperationMethod = "cancel_operation";
@@ -58,6 +59,7 @@ public static class Protocol
     public const string CancelFolderSizeMethod = "cancel_folder_size";
     public const string CancelFolderItemCountMethod = "cancel_folder_item_count";
     public const string CancelCountItemsMethod = "cancel_count_items";
+    public const string CancelFolderMetricsMethod = "cancel_folder_metrics";
     public const string CheckRarInstalledMethod = "check_rar_installed";
     public const string PrepareRarInstallMethod = "prepare_rar_install";
     public const string DiscardRarInstallMethod = "discard_rar_install";

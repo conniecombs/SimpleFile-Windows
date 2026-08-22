@@ -63,11 +63,11 @@ const schemaMethods = new Set(
   Object.keys(commands.methods || {}).filter((name) => !name.startsWith('ipc.')),
 );
 
-if (handlers.size !== 74) {
-  fail(`expected 74 domain handlers, found ${handlers.size}`);
+if (handlers.size !== 76) {
+  fail(`expected 76 domain handlers, found ${handlers.size}`);
 }
-if (commands.domainMethodCount !== 74) {
-  fail(`commands.json domainMethodCount must be 74, found ${commands.domainMethodCount}`);
+if (commands.domainMethodCount !== 76) {
+  fail(`commands.json domainMethodCount must be 76, found ${commands.domainMethodCount}`);
 }
 if (protocol.protocolVersion !== 1 || commands.protocolVersion !== 1) {
   fail('schema protocolVersion must be 1');
@@ -212,6 +212,7 @@ for (const name of [
   'cancel_folder_size',
   'cancel_folder_item_count',
   'cancel_count_items',
+  'cancel_folder_metrics',
   'cancel_disk_cleanup',
   'cancel_duplicate_check',
 ]) {

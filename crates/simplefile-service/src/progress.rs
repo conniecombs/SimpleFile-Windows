@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 
@@ -340,7 +340,11 @@ struct CopyContext<'a> {
 
 impl CopyContext<'_> {
     fn attempts(&self) -> u32 {
-        if self.network { NETWORK_MAX_RETRIES } else { 1 }
+        if self.network {
+            NETWORK_MAX_RETRIES
+        } else {
+            1
+        }
     }
 
     fn buffer_size(&self) -> usize {
@@ -363,6 +367,36 @@ fn create_dir_exclusive(path: &Path) -> Result<(), String> {
             format!("Failed to create directory: {error}")
         }
     })
+}
+
+fn is_real_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .map(|meta| {
+            let file_type = meta.file_type();
+            file_type.is_dir() && !file_type.is_symlink()
+        })
+        .unwrap_or(false)
+}
+
+fn prepare_destination_for_copy(
+    source_is_dir: bool,
+    dst_path: &Path,
+    replace_existing: bool,
+) -> Result<bool, String> {
+    if !path_exists_no_follow(dst_path) {
+        return Ok(false);
+    }
+
+    if !replace_existing {
+        return Err(conflict_for_existing_destination(dst_path));
+    }
+
+    if source_is_dir && is_real_directory(dst_path) {
+        return Ok(true);
+    }
+
+    remove_path(dst_path, "destination")?;
+    Ok(false)
 }
 
 fn copy_file_attempt(
@@ -491,6 +525,7 @@ fn copy_item_with_progress(
     dst: &Path,
     ctx: &CopyContext,
     completed_bytes: &mut u64,
+    replace_existing: bool,
 ) -> Result<(), String> {
     let mut stack: Vec<(PathBuf, PathBuf)> = vec![(src.to_path_buf(), dst.to_path_buf())];
     let mut copied_dirs: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -504,17 +539,17 @@ fn copy_item_with_progress(
             None,
         );
 
-        if path_exists_no_follow(&dst_path) {
-            return Err(conflict_for_existing_destination(&dst_path));
-        }
-
         let lstat = fs::symlink_metadata(&src_path)
             .map_err(|error| format!("Failed to stat source: {error}"))?;
         let file_type = lstat.file_type();
+        let merged_existing_directory =
+            prepare_destination_for_copy(file_type.is_dir(), &dst_path, replace_existing)?;
 
         if file_type.is_dir() {
-            create_dir_exclusive(&dst_path)?;
-            copied_dirs.push((src_path.clone(), dst_path.clone()));
+            if !merged_existing_directory {
+                create_dir_exclusive(&dst_path)?;
+                copied_dirs.push((src_path.clone(), dst_path.clone()));
+            }
             for entry in fs::read_dir(&src_path)
                 .map_err(|error| format!("Failed to read directory: {error}"))?
             {
@@ -551,10 +586,6 @@ fn copy_plan_with_progress(
 ) -> Result<(), String> {
     ensure_destination_available(plan)?;
 
-    if plan.replace_existing && path_exists_no_follow(&plan.final_dest) {
-        remove_path(&plan.final_dest, "destination")?;
-    }
-
     let copy_ctx = CopyContext {
         progress: ctx,
         network: false,
@@ -564,6 +595,7 @@ fn copy_plan_with_progress(
         &plan.final_dest,
         &copy_ctx,
         completed_bytes,
+        plan.replace_existing,
     )
 }
 
@@ -573,10 +605,6 @@ fn move_plan_with_progress(
     completed_bytes: &mut u64,
 ) -> Result<(), String> {
     ensure_destination_available(plan)?;
-
-    if plan.replace_existing && path_exists_no_follow(&plan.final_dest) {
-        remove_path(&plan.final_dest, "destination")?;
-    }
 
     let rename_size = fs::symlink_metadata(&plan.source_path)
         .map(|meta| {
@@ -606,6 +634,7 @@ fn move_plan_with_progress(
         &plan.final_dest,
         &copy_ctx,
         completed_bytes,
+        plan.replace_existing,
     )?;
     remove_path(&plan.source_path, "source")
         .map_err(|error| format!("Copied but failed to delete source: {error}"))?;
@@ -949,6 +978,45 @@ mod tests {
     }
 
     #[test]
+    fn replace_merges_existing_destination_directory() {
+        let src_root = unique_temp_path("replace_merge_src");
+        let dst_root = unique_temp_path("replace_merge_dst");
+        let source = src_root.join("Repos");
+        let existing = dst_root.join("Repos");
+        fs::create_dir_all(source.join("nested")).unwrap();
+        fs::create_dir_all(&existing).unwrap();
+        fs::write(source.join("same.txt"), b"source").unwrap();
+        fs::write(source.join("nested").join("new.txt"), b"new").unwrap();
+        fs::write(existing.join("same.txt"), b"destination").unwrap();
+        fs::write(existing.join("keep.txt"), b"keep").unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+
+        let result = transfer_with_progress_blocking(
+            "copy",
+            vec![source.to_string_lossy().to_string()],
+            dst_root.to_string_lossy().to_string(),
+            "op_replace_merge_test".to_string(),
+            "replace".to_string(),
+            cancel,
+            &|_| {},
+        )
+        .expect("replace copy should merge existing directories");
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].destination, existing.to_string_lossy());
+        assert_eq!(fs::read(existing.join("same.txt")).unwrap(), b"source");
+        assert_eq!(
+            fs::read(existing.join("nested").join("new.txt")).unwrap(),
+            b"new"
+        );
+        assert_eq!(fs::read(existing.join("keep.txt")).unwrap(), b"keep");
+        assert!(source.exists());
+
+        let _ = fs::remove_dir_all(&src_root);
+        let _ = fs::remove_dir_all(&dst_root);
+    }
+
+    #[test]
     fn transfer_emits_cancelled_when_cancelled_before_preflight() {
         let src_dir = unique_temp_path("cancel_src");
         let dst_dir = unique_temp_path("cancel_dst");
@@ -972,13 +1040,11 @@ mod tests {
         .expect("cancel should return partial results");
 
         assert!(result.is_empty());
-        assert!(
-            updates
-                .lock()
-                .unwrap()
-                .iter()
-                .any(|update| update.status == "cancelled")
-        );
+        assert!(updates
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|update| update.status == "cancelled"));
         assert!(!dst_dir.join("large.txt").exists());
 
         let _ = fs::remove_dir_all(&src_dir);

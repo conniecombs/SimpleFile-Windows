@@ -69,7 +69,8 @@ where
         "Automatic update installation is currently disabled because the downloaded ",
         "installer cannot yet be cryptographically verified. Please download the ",
         "latest release from the GitHub releases page."
-    ).to_string())
+    )
+    .to_string())
 }
 
 fn load_manifest() -> Result<LatestManifest, String> {

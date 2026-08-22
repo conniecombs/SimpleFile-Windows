@@ -963,6 +963,7 @@ mod tests {
         path
     }
 
+    #[allow(clippy::permissions_set_readonly_false)]
     fn clear_readonly(path: &Path) {
         if let Ok(metadata) = fs::metadata(path) {
             let mut permissions = metadata.permissions();

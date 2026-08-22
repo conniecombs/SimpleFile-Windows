@@ -167,7 +167,7 @@ public static class ContextMenuBuilder
 
         if (Has(ToolbarOverflowPlanner.DualPane) && !request.DualPaneEnabled)
         {
-            items.Add(Item("overflow-dual-pane", "Open right pane", shortcut: "F6", iconGlyph: "\uE8A7"));
+            items.Add(Item("overflow-dual-pane", "Open second pane", shortcut: "F6", iconGlyph: "\uE8A7"));
         }
 
         if (Has(ToolbarOverflowPlanner.ViewOptions))

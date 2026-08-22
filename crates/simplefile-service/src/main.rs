@@ -23,7 +23,11 @@ async fn run() -> Result<(), String> {
         let mut token = String::new();
         std::io::stdin().read_line(&mut token).ok();
         let token = token.trim().to_string();
-        if token.is_empty() { None } else { Some(token) }
+        if token.is_empty() {
+            None
+        } else {
+            Some(token)
+        }
     };
 
     #[cfg(windows)]
@@ -65,8 +69,8 @@ async fn run() -> Result<(), String> {
 
 #[cfg(windows)]
 async fn monitor_parent_liveness(parent_pid: u32) {
-    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE};
     use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE};
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;

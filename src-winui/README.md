@@ -17,7 +17,7 @@ owns dual-pane navigation, tabs, sidebar, transfers, search, and persistence.
 | `SimpleFile.Core` | Service lifetime + explorer workspace |
 | `SimpleFile.Tests` | Framing, DTO, client, path, and navigation tests |
 
-Target: Windows 10 2004+ / Windows 11 x64, `net8.0-windows10.0.19041.0`, Windows App SDK self-contained.
+Target: Windows 10 2004+ / Windows 11 x64, `net10.0-windows10.0.19041.0`, Windows App SDK self-contained.
 
 ## Build
 

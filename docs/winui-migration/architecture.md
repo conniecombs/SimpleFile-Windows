@@ -267,7 +267,7 @@ Do this in **named PRs** so `src-tauri` keeps shipping and Gate 3 is not claimed
 
 **`Host` must live in `simplefile-core` before PRs 5–6.** Parking the trait in `src-tauri` would force a circular `simplefile-core` → `src-tauri` dependency the moment `dir_list` / `archive` / `rar_installer` / `progress` / `search` / `watcher` / `cleanup` move. PR 3 creates the crate and the trait; `src-tauri` implements `TauriHost` only.
 
-**Gate 3 is not done** until steps E–I have removed `Channel`, `AppHandle`, `tauri::State`, and plugin traits from domain modules, and PR 10’s contract tests exercise all 74 methods against core. Do not skip to the service while those modules are still `mod` (private) inside `src-tauri`.
+**Gate 3 is not done** until steps E-I have removed `Channel`, `AppHandle`, `tauri::State`, and plugin traits from domain modules, and PR 10's contract tests exercise all 76 methods against core. Do not skip to the service while those modules are still `mod` (private) inside `src-tauri`.
 
 Modules and their Tauri coupling (from inventory §6, verified):
 
@@ -316,7 +316,7 @@ pub trait Host: Send + Sync {
 
 ## C# projects
 
-New solution, no project under `frontend/`. Target: unpackaged WinUI 3 on **Windows 10 2004 (build 19041)+ / Windows 11 x64**. TFM is **`net8.0-windows10.0.19041.0`** with `SupportedOSPlatformVersion` `10.0.19041.0`. Do not advertise 1809; the TFM will not run there. Do not bump to .NET 10 in this migration; that would be a later, separate TFM change.
+New solution, no project under `frontend/`. Target: unpackaged WinUI 3 on **Windows 10 2004 (build 19041)+ / Windows 11 x64**. Current TFM is **`net10.0-windows10.0.19041.0`** with `SupportedOSPlatformVersion` `10.0.19041.0`. Do not advertise 1809; the TFM will not run there.
 
 ```text
 src-winui\
@@ -329,10 +329,10 @@ src-winui\
 
 | Project | TFM | References | Responsibility |
 | --- | --- | --- | --- |
-| `SimpleFile.App` | `net8.0-windows10.0.19041.0` | Core, Ipc, Windows App SDK | Window (1200×800, min 800×600, centered, title `SimpleFile - File Explorer`), XAML shells, `FolderPicker`, drag-drop, process/job lifetime, Activate |
-| `SimpleFile.Ipc` | `net8.0-windows` | none of WinUI | Named-pipe client, framing, 74 methods, event multicast, error mapping |
-| `SimpleFile.Core` | `net8.0-windows` | Ipc | Port of `frontend/src/lib/app/*`, `appState.ts`, transfer/search/navigation workflows |
-| `SimpleFile.Tests` | `net8.0-windows` | Core, Ipc | **Required.** Serialization parity, client framing, workflow unit tests. `dotnet test` is part of `check:winui`. |
+| `SimpleFile.App` | `net10.0-windows10.0.19041.0` | Core, Ipc, Windows App SDK | Window (1200x800, min 800x600, centered, title `SimpleFile - File Explorer`), XAML shells, `FolderPicker`, drag-drop, process/job lifetime, Activate |
+| `SimpleFile.Ipc` | `net10.0-windows` | none of WinUI | Named-pipe client, framing, 76 methods, event multicast, error mapping |
+| `SimpleFile.Core` | `net10.0-windows` | Ipc | Port of `frontend/src/lib/app/*`, `appState.ts`, transfer/search/navigation workflows |
+| `SimpleFile.Tests` | `net10.0-windows` | Core, Ipc | **Required.** Serialization parity, client framing, workflow unit tests. `dotnet test` is part of `check:winui`. |
 
 Unpackaged + Windows App SDK self-contained is the default so NSIS / MSI / portable zip do not require a separate WASDK runtime. Packaged MSIX is out of scope until a later packaging PR explicitly chooses it.
 
@@ -498,7 +498,7 @@ Result:
   "protocolVersion": 1,
   "appVersion": "1.1.0",
   "identifier": "com.simplefile.desktop",
-  "methodCount": 74
+  "methodCount": 76
 }
 ```
 
@@ -1030,7 +1030,7 @@ Gates are explicit. No gate implies code deletion.
 | --- | --- | --- | --- |
 | 1 | Inventory | Tauri | [`inventory.md`](inventory.md) exists and lists 74 commands, events, workflows, paths, checks. **Done.** |
 | 2 | Architecture | Tauri | This document reviewed; Key Decisions accepted. **This step.** |
-| 3 | IPC service + contract tests | Tauri | PRs 1–10: core extract finished (no Tauri types in domain modules), `simplefile-service` implements 74 methods + 5 events + `list_directory.chunk`. Updater commands return the unconfigured stub string. Golden JSON + parity script green. `src-tauri` still ships. Svelte still the UI. |
+| 3 | IPC service + contract tests | Tauri | PRs 1–10: core extract finished (no Tauri types in domain modules), `simplefile-service` implements 76 methods + 5 events + `list_directory.chunk`. Updater commands return the unconfigured stub string. Golden JSON + parity script green. `src-tauri` still ships. Svelte still the UI. |
 | 4 | WinUI shell lists/navigates | Tauri | `SimpleFile.App` starts the service, handshakes, `list_directory` + chunks, tree, drives, breadcrumbs. Svelte remains default. |
 | 5 | Feature parity | Tauri | Rewrite of frontend stage checks against WinUI/Core: dual-pane + tabs + watcher (`stage11`), transfer safety (`stage10`), search + smart folders (`stage7`), inspection (`stage8`), organization/cleanup (`stage9`), overlays/menus (`stage5`), settings/tools (`stage4`, About shows updater stub), huge-folder + marquee + fast listing, markdown/HTML sanitizer replacements. Manual pass of keyboard map and Escape order. Real `latest-winui.json` client is **not** required to exit Gate 5. |
 | 6 | WinUI default package | **WinUI** | NSIS/MSI/portable produce WinUI as the installed UI. `latest.json` points at the Tauri-compatible stub artifact (launches WinUI NSIS, removes Tauri exe). `latest-winui.json` serves already-on-WinUI clients. Tauri still `cargo tauri build`able. C# version matches Cargo. |
@@ -1197,7 +1197,7 @@ None remaining. User decisions (2026-08-14) are final:
 | --- | --- | --- |
 | 1 | Gate 6 updater bridge | **Tauri-compatible stub artifact.** 1.1.0 `latest.json` downloads a stub that launches the WinUI NSIS (passive) and removes the Tauri exe. Existing auto-update keeps working. |
 | 2 | Single-instance | **Keep multi-instance.** No mutex. Matches current Tauri. |
-| 3 | .NET TFM | **Keep `net8.0-windows10.0.19041.0`.** Windows 10 2004+. No .NET 10 bump in this migration. |
+| 3 | .NET TFM | **Use `net10.0-windows10.0.19041.0`.** Windows 10 2004+. |
 | 4 | DTO sync | **Hand-sync + parity script.** No typeshare unless a later PR chooses it. |
 | 5 | Version source | **Cargo package version is canonical; MSBuild reads it.** No root `VERSION` file. |
 
@@ -1243,7 +1243,7 @@ Ordered. Each PR is independently reviewable. None of these is this design-only 
 | 7 | `refactor: move preview + opener-free shell open into core` | `simplefile-core`, `ShellExecuteW` | PR 6 | No `tauri-plugin-opener` in core. |
 | 8 | `refactor: move db/tags/smart_folders into core` | `simplefile-core`, `Host::app_data_dir()` | PR 4 | Same `%APPDATA%\com.simplefile.desktop` paths. |
 | 9 | `refactor: move remaining domain modules into core` | `drives`, `git`, `terminal`, `checksum`, `compare`, `metadata`, `open_with` | PRs 6–8 | Updater **logic** not extracted yet. Domain modules have no Tauri types after this PR. |
-| 10 | `feat: simplefile-service named-pipe JSON-RPC` | `crates/simplefile-service/**`, panic logger, `init_db`, PID check | PRs 2, 5–9 | Implements 74 methods + notifications. `select_directory` → `-32001` `HOST_OWNED: select_directory`. `show_main_window` no-op. `check_for_update` / `install_update` → `Err("App updates are not configured for this build.")`. Parent-pid watcher + client-PID check. Contract tests vs goldens. Tauri still ships. **Gate 3 exit.** |
+| 10 | `feat: simplefile-service named-pipe JSON-RPC` | `crates/simplefile-service/**`, panic logger, `init_db`, PID check | PRs 2, 5-9 | Implements 76 methods + notifications. `select_directory` -> `-32001` `HOST_OWNED: select_directory`. `show_main_window` no-op. `check_for_update` / `install_update` -> `Err("App updates are not configured for this build.")`. Parent-pid watcher + client-PID check. Contract tests vs goldens. Tauri still ships. **Gate 3 exit.** |
 | 11 | `feat: src-winui SimpleFile.Ipc + Tests` | `src-winui/SimpleFile.Ipc/**`, `SimpleFile.Tests/**` | PR 10 | Required test project. C# client, mixed-case DTOs, framing, error mapping, `ListDirectoryAsync`. `dotnet test` in CI. |
 | 12 | `feat: WinUI shell can list and navigate` | `src-winui/SimpleFile.App/**`, `SimpleFile.Core` (nav subset) | PR 11 | Window chrome, job object spawn, inherited-pipe token, handshake, drives, `list_directory` chunks, breadcrumbs, tree. Svelte remains default. **Gate 4 exit.** |
 | 13 | `feat: persist UI settings + ui-export.json + LevelDB importer` | `SimpleFile.Core` persistence, Tauri dump helper, LevelDB fixture | PR 12 | Inventory localStorage keys. Do not move `metadata.db`. Dual-stack dump for testers; Gate 6 installer will reuse the helper. |
@@ -1267,8 +1267,8 @@ PRs 14–18 may be split further to match review bandwidth, but they cannot skip
 2. **One UI process owns one service process.** Pipe name is `\\.\pipe\SimpleFile.{sessionId}.{uiPid}`. Same-user auth is `GetNamedPipeClientProcessId == --parent-pid` plus an inherited-pipe token (not argv). `PIPE_REJECT_REMOTE_CLIENTS` + user-only DACL. Not a global well-known pipe.
 3. **UI is the parent.** Job object `KILL_ON_JOB_CLOSE` plus parent-pid poll. Service `main` runs panic hook, `AppState`, and `init_db` before accept. A respawn is a new process (empty cancels/watchers/RAR tokens).
 4. **Keep `src-tauri` and `frontend/` until gate 7.** Dual-host: PR 3 creates `simplefile-core` with **`Host` + `AppAboutInfo`**; only `TauriHost` stays in `src-tauri`. PRs 4–9 move domain modules into that crate **before** the service (PR 10). PRs 5–6 must not leave `Host` in `src-tauri` while moving `AppHandle` / emit users. Gate 3 is not done while domain modules still use Tauri types.
-5. **C# split:** `SimpleFile.App` (WinUI), `SimpleFile.Ipc` (client), `SimpleFile.Core` (workflows), **required** `SimpleFile.Tests`. Unpackaged WinUI 3, WASDK self-contained, TFM **`net8.0-windows10.0.19041.0`**, min OS Windows 10 2004. Keep multi-instance (no mutex). Hand-sync DTOs + parity script (no typeshare). Cargo package version is canonical; MSBuild reads it.
-6. **Methods are the 74 existing command names.** Top-level params stay camelCase (`TauriCommandMap`); nested structs and results stay snake_case (`models.rs` / `types.ts`). `FileEntry.itemCount` is not on the wire.
+5. **C# split:** `SimpleFile.App` (WinUI), `SimpleFile.Ipc` (client), `SimpleFile.Core` (workflows), **required** `SimpleFile.Tests`. Unpackaged WinUI 3, WASDK self-contained, TFM **`net10.0-windows10.0.19041.0`**, min OS Windows 10 2004. Keep multi-instance (no mutex). Hand-sync DTOs + parity script (no typeshare). Cargo package version is canonical; MSBuild reads it.
+6. **Methods are the 76 existing command names.** Top-level params stay camelCase (`TauriCommandMap`); nested structs and results stay snake_case (`models.rs` / `types.ts`). `FileEntry.itemCount` is not on the wire.
 7. **`list_directory` Channel becomes notification `list_directory.chunk`** with `requestId`, same 96/256 sizes, `done: true` on the last (possibly non-empty) chunk, plus the existing full `DirectoryListing` result when it fits. If that result would exceed 80 MiB, return `RESULT_TOO_LARGE` and let Core concat+sort chunks; do not disconnect.
 8. **Cancellation stays named commands** (`cancel_operation`, `cancel_search`, folder-size/count/cleanup/duplicate cancels). No generic JSON-RPC cancel. `CancellationToken` only abandons the client await; no per-RPC idle timeout.
 9. **`Err(String)` maps to JSON-RPC `-32000` with the identical message**, including `CONFLICT:` and `TRASH_UNAVAILABLE:`. Live transfers probe + `conflictAction`; `CONFLICT:` is the residual backend error.

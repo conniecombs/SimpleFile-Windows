@@ -678,9 +678,9 @@
                                 <Button
                                     x:Name="DualPaneButton"
                                     Style="{StaticResource SfToolbarButtonStyle}"
-                                    AutomationProperties.Name="Open right pane"
+                                    AutomationProperties.Name="Open second pane"
                                     Click="OnToggleDualPane"
-                                    ToolTipService.ToolTip="Open right pane (F6)">
+                                    ToolTipService.ToolTip="Open second pane (F6)">
                                     <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A7;" />
                                 </Button>
                                 <Button

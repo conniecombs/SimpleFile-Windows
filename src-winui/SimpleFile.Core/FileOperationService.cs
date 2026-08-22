@@ -392,6 +392,27 @@ public sealed class FileOperationService
     public static bool IsTrashUnavailable(IpcException ex)
         => ex.Message.StartsWith(Protocol.PrefixTrashUnavailable, StringComparison.Ordinal);
 
+    public static string TrashUnavailableMessage(IpcException ex)
+    {
+        var detail = StripPrefix(ex.Message, Protocol.PrefixTrashUnavailable);
+        if (Contains(detail, "cannot find the file specified") || Contains(detail, "0x80070002"))
+        {
+            return "Windows could not move the selection to the Recycle Bin because one of the items is no longer available. Refresh the folder and try again, or permanently delete any remaining items instead.";
+        }
+
+        return "The Recycle Bin is not available for this location. This can happen on network, virtual, or cloud-backed drives.";
+    }
+
+    private static string StripPrefix(string message, string prefix)
+    {
+        return message.StartsWith(prefix, StringComparison.Ordinal)
+            ? message[prefix.Length..].Trim()
+            : message.Trim();
+    }
+
+    private static bool Contains(string value, string text)
+        => value.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+
     private static long _operationCounter;
 
     private static string GenerateOperationId()

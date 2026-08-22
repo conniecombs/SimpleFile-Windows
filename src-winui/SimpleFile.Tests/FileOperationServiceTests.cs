@@ -326,6 +326,22 @@ public class FileOperationServiceTests
     }
 
     [Fact]
+    public void TrashUnavailableMessage_HidesRawBackendDetails()
+    {
+        var error = new IpcException(
+            Protocol.ErrApplication,
+            "TRASH_UNAVAILABLE: Error during a 'trash' operation: Os { code: -2147024894, description: \"windows error: The system cannot find the file specified. (0x80070002)\" }");
+
+        var message = FileOperationService.TrashUnavailableMessage(error);
+
+        Assert.Contains("Recycle Bin", message);
+        Assert.Contains("no longer available", message);
+        Assert.DoesNotContain("TRASH_UNAVAILABLE", message);
+        Assert.DoesNotContain("-2147024894", message);
+        Assert.DoesNotContain("0x80070002", message);
+    }
+
+    [Fact]
     public async Task GenerateOperationId_FormatCheck()
     {
         string? capturedOpId = null;

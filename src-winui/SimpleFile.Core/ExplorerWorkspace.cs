@@ -754,7 +754,8 @@ public sealed class ExplorerWorkspace
         if (DualPaneEnabled)
         {
             DualPaneEnabled = false;
-            ActivatePane(PaneId.Primary);
+            ActivePane = PaneId.Primary;
+            RaiseChanged();
             return;
         }
 
@@ -769,8 +770,16 @@ public sealed class ExplorerWorkspace
                     cancellationToken)
                 .ConfigureAwait(false);
         }
+        else
+        {
+            lock (_gate)
+            {
+                Secondary.EnsureActiveTab(Primary.Path);
+            }
+        }
 
-        ActivatePane(PaneId.Primary);
+        ActivePane = PaneId.Primary;
+        RaiseChanged();
     }
 
     public Task CloseFilePaneAsync(PaneId pane, CancellationToken cancellationToken = default)
@@ -879,6 +888,7 @@ public sealed class ExplorerWorkspace
         var target = Normalize(pane);
         string? nextId = null;
         string? homeFallback = null;
+        PaneId? paneToClose = null;
         lock (_gate)
         {
             var state = Pane(target);
@@ -891,15 +901,23 @@ public sealed class ExplorerWorkspace
             state.Tabs.RemoveAt(closingIndex);
             if (state.Tabs.Count == 0)
             {
-                homeFallback = HomePath;
-                if (string.IsNullOrEmpty(homeFallback))
+                state.ActiveTabId = null;
+                if (DualPaneEnabled)
                 {
-                    homeFallback = state.Path;
+                    paneToClose = target;
                 }
-
-                if (string.IsNullOrEmpty(homeFallback))
+                else
                 {
-                    homeFallback = Primary.Path;
+                    homeFallback = HomePath;
+                    if (string.IsNullOrEmpty(homeFallback))
+                    {
+                        homeFallback = state.Path;
+                    }
+
+                    if (string.IsNullOrEmpty(homeFallback))
+                    {
+                        homeFallback = Primary.Path;
+                    }
                 }
             }
             else if (state.ActiveTabId == tabId)
@@ -907,6 +925,12 @@ public sealed class ExplorerWorkspace
                 var next = state.Tabs[Math.Min(closingIndex, state.Tabs.Count - 1)];
                 nextId = next.Id;
             }
+        }
+
+        if (paneToClose is not null)
+        {
+            await CloseFilePaneAsync(paneToClose.Value, cancellationToken).ConfigureAwait(false);
+            return;
         }
 
         if (homeFallback is not null)

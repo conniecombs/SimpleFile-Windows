@@ -27,12 +27,12 @@ public class NamedPipeJsonClientTests
                 ProtocolVersion = 1,
                 AppVersion = "1.1.0",
                 Identifier = Protocol.Identifier,
-                MethodCount = 74,
+                MethodCount = Protocol.DomainMethodCount,
             });
 
         var handshake = await handshakeTask;
         Assert.Equal(Protocol.Identifier, handshake.Identifier);
-        Assert.Equal(74, handshake.MethodCount);
+        Assert.Equal(Protocol.DomainMethodCount, handshake.MethodCount);
 
         var healthTask = client.HealthAsync();
         var healthRequest = await server.ReadRequestAsync();

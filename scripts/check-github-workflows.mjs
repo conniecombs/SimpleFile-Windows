@@ -65,7 +65,7 @@ const ciSnippets = [
     'x86_64-pc-windows-msvc',
     'cargo build -p simplefile-service --locked --release --target ${{ matrix.target }}',
     'uses: actions/setup-dotnet@v4',
-    'dotnet-version: 8.0.x',
+    'dotnet-version: 10.0.x',
     'npm run check:winui',
     'cargo build -p simplefile-service --locked --release',
 ];

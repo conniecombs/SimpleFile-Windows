@@ -307,16 +307,14 @@ fn spawn_folder_metrics<W>(
             tokio::join!(size_handle, count_handle, subdirs_handle);
 
         let response = match (size_result, count_result, subdirs_result) {
-            (Ok(Some(size)), Ok(Some(count)), Ok(Ok(subdirs))) => {
-                JsonRpcResponse::result(
-                    id,
-                    json!({
-                        "size": size,
-                        "itemCount": count,
-                        "subdirectories": subdirs,
-                    }),
-                )
-            }
+            (Ok(Some(size)), Ok(Some(count)), Ok(Ok(subdirs))) => JsonRpcResponse::result(
+                id,
+                json!({
+                    "size": size,
+                    "itemCount": count,
+                    "subdirectories": subdirs,
+                }),
+            ),
             (Ok(None), _, _) | (_, Ok(None), _) => {
                 JsonRpcResponse::application_error(id, "cancelled".to_string())
             }

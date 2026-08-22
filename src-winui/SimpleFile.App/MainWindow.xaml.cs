@@ -527,7 +527,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateDualPaneButton(bool dualPaneEnabled)
     {
-        var label = dualPaneEnabled ? "Close right pane" : "Open right pane";
+        var label = dualPaneEnabled ? "Close right pane" : "Open second pane";
         AutomationProperties.SetName(DualPaneButton, label);
         ToolTipService.SetToolTip(DualPaneButton, $"{label} (F6)");
     }
@@ -1105,7 +1105,7 @@ public sealed partial class MainWindow : Window
 
         var closing = _workspace.DualPaneEnabled;
         await _workspace.ToggleDualPaneAsync();
-        StatusText.Text = closing ? "Right pane closed" : "Right pane opened";
+        StatusText.Text = closing ? "Right pane closed" : "Second pane opened";
     }
 
     private async Task CloseDualPaneFromUiAsync()
@@ -3250,7 +3250,7 @@ public sealed partial class MainWindow : Window
         {
             if (ex is IpcException ipcException && FileOperationService.IsTrashUnavailable(ipcException))
             {
-                ShowMessage("Trash unavailable", ex.Message, InfoBarSeverity.Warning);
+                await PromptPermanentDeleteAfterTrashUnavailableAsync(paths, workspace, ipcException, utilityCts.Token);
                 return;
             }
 
@@ -3259,6 +3259,52 @@ public sealed partial class MainWindow : Window
         finally
         {
             FinishUtilityOperation(utilityCts);
+        }
+    }
+
+    private async Task PromptPermanentDeleteAfterTrashUnavailableAsync(
+        string[] paths,
+        ExplorerWorkspace workspace,
+        IpcException exception,
+        CancellationToken cancellationToken)
+    {
+        var itemText = paths.Length == 1 ? "this item" : $"{paths.Length} items";
+        var dialog = new ContentDialog
+        {
+            Title = "Recycle Bin unavailable",
+            Content = $"{FileOperationService.TrashUnavailableMessage(exception)}{Environment.NewLine}{Environment.NewLine}Permanently delete {itemText} instead? This cannot be undone.",
+            PrimaryButtonText = "Delete permanently",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Content.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            ShowMessage("Recycle Bin unavailable", "Nothing was permanently deleted.", InfoBarSeverity.Warning);
+            return;
+        }
+
+        if (!ReferenceEquals(_workspace, workspace))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var path in paths)
+            {
+                await workspace.DeleteSelectedAsync(path, cancellationToken);
+            }
+
+            ShowMessage("Deleted permanently", $"Deleted {itemText}.", InfoBarSeverity.Success);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception deleteException)
+        {
+            ShowMessage("Delete", deleteException.Message, InfoBarSeverity.Error);
         }
     }
 
@@ -4083,7 +4129,17 @@ public sealed partial class MainWindow : Window
             dialog.Hide();
             if (!IsCancellationMessage(ex.Message))
             {
-                ShowMessage("Duplicate checker", ex.Message, InfoBarSeverity.Error);
+                if (ex is IpcException ipcException && FileOperationService.IsTrashUnavailable(ipcException))
+                {
+                    ShowMessage(
+                        "Recycle Bin unavailable",
+                        FileOperationService.TrashUnavailableMessage(ipcException),
+                        InfoBarSeverity.Warning);
+                }
+                else
+                {
+                    ShowMessage("Duplicate checker", ex.Message, InfoBarSeverity.Error);
+                }
             }
         }
         finally

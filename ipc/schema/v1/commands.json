@@ -1,6 +1,6 @@
 {
   "protocolVersion": 1,
-  "domainMethodCount": 74,
+  "domainMethodCount": 76,
   "methods": {
     "ipc.handshake": {
       "kind": "handshake",
@@ -76,9 +76,14 @@
     "generate_thumbnails": { "params": { "paths": "string[]", "size": "number" }, "result": "ThumbnailResult[]" },
     "calculate_folder_size": { "params": { "path": "string" }, "result": "number" },
     "count_folder_items": { "params": { "path": "string" }, "result": "number" },
+    "get_folder_metrics": {
+      "params": { "path": "string" },
+      "result": { "size": "number", "itemCount": "number", "subdirectories": "TreeNode[]" }
+    },
     "cancel_folder_size": { "params": null, "result": "null", "cancellation": true },
     "cancel_folder_item_count": { "params": null, "result": "null", "cancellation": true },
     "cancel_count_items": { "params": null, "result": "null", "cancellation": true },
+    "cancel_folder_metrics": { "params": null, "result": "null", "cancellation": true },
     "open_file": { "params": { "path": "string" }, "result": "null" },
     "reveal_in_folder": { "params": { "path": "string" }, "result": "null" },
     "open_external_url": { "params": { "url": "string" }, "result": "null" },
