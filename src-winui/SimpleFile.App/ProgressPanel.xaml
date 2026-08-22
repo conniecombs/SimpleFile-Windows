@@ -24,11 +24,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Grid Grid.Row="0" ColumnSpacing="12">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <Grid Grid.Row="0">
                     <StackPanel Spacing="3">
                         <TextBlock
                             x:Name="OperationLabel"
@@ -42,20 +38,6 @@
                             Foreground="{ThemeResource SfTextMutedBrush}"
                             TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                    <Button
-                        x:Name="CancelButton"
-                        Grid.Column="1"
-                        MinWidth="88"
-                        HorizontalAlignment="Right"
-                        Style="{StaticResource SfGhostButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon
-                                FontFamily="{StaticResource SfIconFont}"
-                                FontSize="11"
-                                Glyph="&#xE711;" />
-                            <TextBlock Text="Cancel" />
-                        </StackPanel>
-                    </Button>
                 </Grid>
 
                 <Grid Grid.Row="1">
@@ -153,63 +135,38 @@
                         TextTrimming="CharacterEllipsis" />
                 </Grid>
 
-                <Expander
-                    x:Name="DetailsExpander"
+                <StackPanel
                     Grid.Row="5"
-                    Header="Details"
-                    IsExpanded="False">
-                    <Grid Padding="0,8,0,0" RowSpacing="6" ColumnSpacing="10">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="88" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <TextBlock
-                            Grid.Row="0"
-                            Grid.Column="0"
-                            FontSize="12"
-                            Foreground="{ThemeResource SfTextMutedBrush}"
-                            Text="Current" />
-                        <TextBlock
-                            x:Name="CurrentPathLabel"
-                            Grid.Row="0"
-                            Grid.Column="1"
-                            FontSize="12"
-                            Foreground="{ThemeResource SfTextMutedBrush}"
-                            MaxLines="2"
-                            TextWrapping="WrapWholeWords" />
-                        <TextBlock
-                            Grid.Row="1"
-                            Grid.Column="0"
-                            FontSize="12"
-                            Foreground="{ThemeResource SfTextMutedBrush}"
-                            Text="Speed" />
-                        <TextBlock
-                            x:Name="DetailSpeedLabel"
-                            Grid.Row="1"
-                            Grid.Column="1"
-                            FontSize="12"
-                            Foreground="{ThemeResource SfTextMutedBrush}"
-                            TextTrimming="CharacterEllipsis" />
-                        <TextBlock
-                            Grid.Row="2"
-                            Grid.Column="0"
-                            FontSize="12"
-                            Foreground="{ThemeResource SfTextMutedBrush}"
-                            Text="Remaining" />
-                        <TextBlock
-                            x:Name="DetailEtaLabel"
-                            Grid.Row="2"
-                            Grid.Column="1"
-                            FontSize="12"
-                            Foreground="{ThemeResource SfTextMutedBrush}"
-                            TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Expander>
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        x:Name="PauseButton"
+                        MinWidth="88"
+                        IsEnabled="False"
+                        Style="{StaticResource SfGhostButtonStyle}"
+                        ToolTipService.ToolTip="Pause is not available for this transfer yet">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon
+                                FontFamily="{StaticResource SfIconFont}"
+                                FontSize="11"
+                                Glyph="&#xE769;" />
+                            <TextBlock Text="Pause" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        x:Name="CancelButton"
+                        MinWidth="88"
+                        Style="{StaticResource SfGhostButtonStyle}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon
+                                FontFamily="{StaticResource SfIconFont}"
+                                FontSize="11"
+                                Glyph="&#xE711;" />
+                            <TextBlock Text="Cancel" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

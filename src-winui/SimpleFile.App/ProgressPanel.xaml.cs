@@ -31,7 +31,7 @@ public sealed partial class ProgressPanel : UserControl
         _startedAt = DateTimeOffset.UtcNow;
         Visibility = Visibility.Visible;
         CancelButton.IsEnabled = true;
-        DetailsExpander.IsExpanded = false;
+        PauseButton.IsEnabled = false;
 
         ApplyDisplay(TransferProgressFormatter.Format(
             _context,
@@ -59,6 +59,7 @@ public sealed partial class ProgressPanel : UserControl
         var speed = TrackSpeed(update);
         var display = TransferProgressFormatter.Format(_context, update, speed, AverageFilesPerSecond(update));
         CancelButton.IsEnabled = update.Status == "running";
+        PauseButton.IsEnabled = false;
         ApplyDisplay(display);
     }
 
@@ -67,6 +68,7 @@ public sealed partial class ProgressPanel : UserControl
         OperationLabel.Text = _context.Move ? "Cancelling move" : "Cancelling copy";
         SummaryLabel.Text = "Stopping transfer safely";
         CancelButton.IsEnabled = false;
+        PauseButton.IsEnabled = false;
         ProgressBar.IsIndeterminate = true;
         FileProgressBar.IsIndeterminate = true;
     }
@@ -74,6 +76,7 @@ public sealed partial class ProgressPanel : UserControl
     public void SetCompleted()
     {
         CancelButton.IsEnabled = false;
+        PauseButton.IsEnabled = false;
         ProgressBar.Value = 100;
         ProgressBar.IsIndeterminate = false;
         FileProgressBar.Value = 100;
@@ -145,12 +148,8 @@ public sealed partial class ProgressPanel : UserControl
         ToLabel.Text = display.To;
         SpeedLabel.Text = display.Speed;
         EtaLabel.Text = display.Eta;
-        CurrentPathLabel.Text = string.IsNullOrWhiteSpace(display.CurrentItemPath) ? "-" : display.CurrentItemPath;
-        DetailSpeedLabel.Text = display.Speed;
-        DetailEtaLabel.Text = display.Eta;
 
         ToolTipService.SetToolTip(CurrentItemLabel, display.CurrentItemPath);
-        ToolTipService.SetToolTip(CurrentPathLabel, display.CurrentItemPath);
         ToolTipService.SetToolTip(FromLabel, display.From);
         ToolTipService.SetToolTip(ToLabel, display.To);
 

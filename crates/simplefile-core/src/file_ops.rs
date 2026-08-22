@@ -92,11 +92,139 @@ pub fn delete_entry(path: &str) -> Result<(), String> {
             fs::remove_file(&path_buf).map_err(|e| format!("Failed to delete symlink: {}", e))?;
         }
     } else if lstat.is_dir() {
-        fs::remove_dir_all(&path_buf).map_err(|e| format!("Failed to delete directory: {e}"))?;
+        delete_filesystem_entry(&path_buf, true)
+            .map_err(|e| format!("Failed to delete directory: {e}"))?;
     } else {
-        fs::remove_file(&path_buf).map_err(|e| format!("Failed to delete file: {e}"))?;
+        delete_filesystem_entry(&path_buf, false)
+            .map_err(|e| format!("Failed to delete file: {e}"))?;
     }
     Ok(())
+}
+
+fn delete_filesystem_entry(path: &Path, is_dir: bool) -> io::Result<()> {
+    let result = if is_dir {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
+
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) => delete_filesystem_entry_after_error(path, is_dir, error),
+    }
+}
+
+#[cfg(windows)]
+fn delete_filesystem_entry_after_error(
+    path: &Path,
+    is_dir: bool,
+    original_error: io::Error,
+) -> io::Result<()> {
+    if original_error.kind() != io::ErrorKind::PermissionDenied {
+        return Err(original_error);
+    }
+
+    clear_readonly_attributes_for_delete(path);
+
+    let retry = if is_dir {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
+    };
+
+    match retry {
+        Ok(()) => Ok(()),
+        Err(retry_error) if retry_error.kind() == io::ErrorKind::PermissionDenied => {
+            delete_with_shell_permanently(path).map_err(|_| retry_error)
+        }
+        Err(retry_error) => Err(retry_error),
+    }
+}
+
+#[cfg(not(windows))]
+fn delete_filesystem_entry_after_error(
+    _path: &Path,
+    _is_dir: bool,
+    original_error: io::Error,
+) -> io::Result<()> {
+    Err(original_error)
+}
+
+#[cfg(windows)]
+#[allow(clippy::permissions_set_readonly_false)]
+fn clear_readonly_attributes_for_delete(path: &Path) {
+    fn clear_one(path: &Path) {
+        let Ok(metadata) = fs::symlink_metadata(path) else {
+            return;
+        };
+        if metadata.file_type().is_symlink() {
+            return;
+        }
+
+        let mut permissions = metadata.permissions();
+        if permissions.readonly() {
+            permissions.set_readonly(false);
+            let _ = fs::set_permissions(path, permissions);
+        }
+    }
+
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return;
+    };
+    if metadata.is_dir() && !metadata.file_type().is_symlink() {
+        if let Ok(entries) = fs::read_dir(path) {
+            for entry in entries.flatten() {
+                let child = entry.path();
+                let Ok(child_metadata) = fs::symlink_metadata(&child) else {
+                    clear_one(&child);
+                    continue;
+                };
+
+                if child_metadata.is_dir() && !child_metadata.file_type().is_symlink() {
+                    clear_readonly_attributes_for_delete(&child);
+                } else {
+                    clear_one(&child);
+                }
+            }
+        }
+    }
+
+    clear_one(path);
+}
+
+#[cfg(windows)]
+fn delete_with_shell_permanently(path: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr::{null, null_mut};
+    use winapi::um::shellapi::{
+        SHFileOperationW, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE, SHFILEOPSTRUCTW,
+    };
+
+    let from: Vec<u16> = path.as_os_str().encode_wide().chain([0, 0]).collect();
+    let mut operation = SHFILEOPSTRUCTW {
+        hwnd: null_mut(),
+        wFunc: FO_DELETE as u32,
+        pFrom: from.as_ptr(),
+        pTo: null(),
+        fFlags: FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT,
+        fAnyOperationsAborted: 0,
+        hNameMappings: null_mut(),
+        lpszProgressTitle: null(),
+    };
+
+    let result = unsafe { SHFileOperationW(&mut operation) };
+    if result == 0 && operation.fAnyOperationsAborted == 0 {
+        return Ok(());
+    }
+
+    if result != 0 {
+        return Err(io::Error::from_raw_os_error(result));
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::Interrupted,
+        "delete operation was aborted",
+    ))
 }
 
 pub fn move_to_trash(paths: &[String]) -> Result<(), String> {
@@ -945,7 +1073,7 @@ fn calculate_size_recursive(path: &Path, cancel: &AtomicBool) -> Option<u64> {
 
 #[cfg(all(test, windows))]
 mod tests {
-    use super::copy_file_exclusive_preserve_times;
+    use super::{copy_file_exclusive_preserve_times, delete_entry};
     use std::fs;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -974,6 +1102,12 @@ mod tests {
         }
     }
 
+    fn set_readonly(path: &Path) {
+        let mut permissions = fs::metadata(path).expect("metadata").permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(path, permissions).expect("set readonly");
+    }
+
     #[test]
     fn copy_readonly_file_sets_timestamps_before_permissions() {
         let root = temp_dir("readonly-copy");
@@ -998,6 +1132,24 @@ mod tests {
 
         clear_readonly(&src);
         clear_readonly(&dst);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn delete_entry_removes_readonly_directory_tree() {
+        let root = temp_dir("readonly-delete");
+        let target = root.join("target");
+        let nested = target.join("nested");
+        let readonly_file = nested.join("readonly.txt");
+        fs::create_dir_all(&nested).expect("create nested directory");
+        fs::write(&readonly_file, b"readonly payload").expect("write readonly file");
+        set_readonly(&readonly_file);
+        set_readonly(&nested);
+        set_readonly(&target);
+
+        delete_entry(&target.to_string_lossy()).expect("delete readonly directory tree");
+
+        assert!(!target.exists());
         let _ = fs::remove_dir_all(root);
     }
 }

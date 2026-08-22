@@ -120,6 +120,7 @@ public sealed partial class MainWindow : Window
                 ?? throw new InvalidOperationException("IPC service started without an active client.");
             var fileOps = new FileOperationService(client);
             _workspace = new ExplorerWorkspace(_backend, fileOps);
+            FileListThumbnailHost.Configure(LoadFileListImageThumbnailAsync);
             ColumnLayoutHost.Attach(_workspace.Columns);
             _workspace.Changed += OnWorkspaceChanged;
             _fileChangeSubscription = client.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
@@ -302,6 +303,7 @@ public sealed partial class MainWindow : Window
         ApplySidebarSectionVisibility();
         ApplyPreviewVisibility();
         ApplyFileListViewPresentation();
+        ApplyFileListThumbnailPolicy();
         ApplyColumnWidths();
         ApplyTheme(_workspace.Settings.Theme);
         UpdateEmptyStates();
@@ -958,6 +960,47 @@ public sealed partial class MainWindow : Window
             list,
             usesTiles ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto);
         ScrollViewer.SetVerticalScrollBarVisibility(list, ScrollBarVisibility.Auto);
+    }
+
+    private void ApplyFileListThumbnailPolicy()
+    {
+        if (_workspace is null)
+        {
+            FileListThumbnailHost.ApplyPolicy(PaneId.Primary, enabled: false);
+            FileListThumbnailHost.ApplyPolicy(PaneId.Secondary, enabled: false);
+            return;
+        }
+
+        FileListThumbnailHost.ApplyPolicy(
+            PaneId.Primary,
+            ShouldUseFileListThumbnails(PrimaryFiles));
+        FileListThumbnailHost.ApplyPolicy(
+            PaneId.Secondary,
+            ShouldUseFileListThumbnails(SecondaryFiles));
+    }
+
+    private bool ShouldUseFileListThumbnails(IEnumerable<FileRow> rows)
+    {
+        if (_workspace is null)
+        {
+            return false;
+        }
+
+        var entries = rows.Select(row => new FileEntry
+        {
+            Name = row.Name,
+            Path = row.Path,
+            IsDir = row.IsDir,
+            Extension = row.Extension,
+        });
+        return PhotoFolder.IsPhotoFolder(entries, _workspace.Settings.PhotoFolderImageThreshold);
+    }
+
+    private Task<string> LoadFileListImageThumbnailAsync(string path, uint size, CancellationToken cancellationToken)
+    {
+        var fileOps = _workspace?.FileOps
+            ?? throw new InvalidOperationException("File operations are not available.");
+        return fileOps.GenerateThumbnailAsync(path, size, cancellationToken);
     }
 
     private static void SelectRow(ListView list, ObservableCollection<FileRow> rows, string? path)
@@ -1955,30 +1998,8 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static async Task<ImageSource> CreatePreviewImageSourceAsync(string base64, string path)
-    {
-        var bytes = Convert.FromBase64String(base64);
-        using var stream = new InMemoryRandomAccessStream();
-        using (var writer = new DataWriter(stream.GetOutputStreamAt(0)))
-        {
-            writer.WriteBytes(bytes);
-            await writer.StoreAsync();
-            await writer.FlushAsync();
-            writer.DetachStream();
-        }
-
-        stream.Seek(0);
-        if (System.IO.Path.GetExtension(path).Equals(".svg", StringComparison.OrdinalIgnoreCase))
-        {
-            var svg = new SvgImageSource();
-            await svg.SetSourceAsync(stream);
-            return svg;
-        }
-
-        var bitmap = new BitmapImage();
-        await bitmap.SetSourceAsync(stream);
-        return bitmap;
-    }
+    private static Task<ImageSource> CreatePreviewImageSourceAsync(string base64, string path) =>
+        PreviewImageSourceFactory.FromBase64Async(base64, path);
 
     private void AddMetadataRows(IEnumerable<string[]> rows)
     {
@@ -3052,6 +3073,7 @@ public sealed partial class MainWindow : Window
 
             workspace.Changed -= OnWorkspaceChanged;
             ColumnLayoutHost.Detach(workspace.Columns);
+            FileListThumbnailHost.Configure(null);
             _workspace = null;
         }
 

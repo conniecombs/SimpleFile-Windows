@@ -17,6 +17,7 @@ public sealed partial class FileRowView : UserControl
     private TextBlock? _nameText;
     private TextBlock? _metadataText;
     private TextBlock? _secondaryText;
+    private CancellationTokenSource? _thumbnailCts;
 
     public static readonly DependencyProperty RowProperty = DependencyProperty.Register(
         nameof(Row),
@@ -49,6 +50,7 @@ public sealed partial class FileRowView : UserControl
     {
         ColumnLayoutHost.Shared.Changed += OnColumnsChanged;
         FileListViewHost.Changed += OnViewSettingsChanged;
+        FileListThumbnailHost.Changed += OnThumbnailsChanged;
         ApplyColumns();
         ApplyRow();
     }
@@ -57,6 +59,8 @@ public sealed partial class FileRowView : UserControl
     {
         ColumnLayoutHost.Shared.Changed -= OnColumnsChanged;
         FileListViewHost.Changed -= OnViewSettingsChanged;
+        FileListThumbnailHost.Changed -= OnThumbnailsChanged;
+        CancelThumbnailLoad();
     }
 
     private void OnColumnsChanged(object? sender, EventArgs e)
@@ -71,6 +75,11 @@ public sealed partial class FileRowView : UserControl
         ApplyRow();
     }
 
+    private void OnThumbnailsChanged(object? sender, EventArgs e)
+    {
+        ApplyRow();
+    }
+
     private void ApplyRow()
     {
         if (Row is null)
@@ -79,13 +88,7 @@ public sealed partial class FileRowView : UserControl
         }
 
         ApplyColumns();
-        if (_iconImage is not null)
-        {
-            var iconSize = FileListViewHost.IconSizeFor(Row.Pane);
-            _iconImage.Width = iconSize;
-            _iconImage.Height = iconSize;
-            _iconImage.Source = ShellIconLoader.ForEntry(Row.Path, Row.IsDir, iconSize);
-        }
+        ApplyIcon();
 
         if (_nameText is not null)
         {
@@ -150,6 +153,80 @@ public sealed partial class FileRowView : UserControl
                 ? new GridLength(1, GridUnitType.Star)
                 : new GridLength(column.Width);
         }
+    }
+
+    private void ApplyIcon()
+    {
+        if (_iconImage is null || Row is null)
+        {
+            CancelThumbnailLoad();
+            return;
+        }
+
+        var row = Row;
+        var iconSize = FileListViewHost.IconSizeFor(row.Pane);
+        _iconImage.Width = iconSize;
+        _iconImage.Height = iconSize;
+        CancelThumbnailLoad();
+        _iconImage.Source = ShellIconLoader.ForEntry(row.Path, row.IsDir, iconSize);
+
+        if (!FileListThumbnailHost.ShouldUseThumbnails(row, iconSize))
+        {
+            return;
+        }
+
+        var cached = FileListThumbnailHost.CachedThumbnail(row, iconSize);
+        if (cached is not null)
+        {
+            _iconImage.Source = cached;
+            return;
+        }
+
+        var cts = new CancellationTokenSource();
+        _thumbnailCts = cts;
+        _ = LoadThumbnailAsync(row, iconSize, cts);
+    }
+
+    private async Task LoadThumbnailAsync(FileRow row, int iconSize, CancellationTokenSource cts)
+    {
+        try
+        {
+            var source = await FileListThumbnailHost.LoadThumbnailAsync(row, iconSize, cts.Token);
+            if (source is null || !IsCurrentThumbnailTarget(row, iconSize, cts.Token))
+            {
+                return;
+            }
+
+            _iconImage!.Source = source;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (ReferenceEquals(_thumbnailCts, cts))
+            {
+                _thumbnailCts = null;
+            }
+
+            cts.Dispose();
+        }
+    }
+
+    private bool IsCurrentThumbnailTarget(FileRow row, int iconSize, CancellationToken cancellationToken)
+    {
+        return !cancellationToken.IsCancellationRequested
+            && _iconImage is not null
+            && Row is not null
+            && Row.Pane == row.Pane
+            && string.Equals(Row.Path, row.Path, StringComparison.OrdinalIgnoreCase)
+            && FileListViewHost.IconSizeFor(Row.Pane) == iconSize;
+    }
+
+    private void CancelThumbnailLoad()
+    {
+        _thumbnailCts?.Cancel();
+        _thumbnailCts = null;
     }
 
     private void RebuildLayout(string view, int iconSize, IReadOnlyList<FileListColumn> columns)
