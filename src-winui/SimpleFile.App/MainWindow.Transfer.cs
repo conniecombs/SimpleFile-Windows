@@ -193,38 +193,58 @@ public sealed partial class MainWindow
         try
         {
             var progress = new Progress<ProgressUpdate>(OnTransferProgress);
-            if (move)
+            while (true)
             {
-                var results = await fileOps.MoveAsync(
-                    sources,
-                    destination,
-                    action,
-                    progress,
-                    operationId => StartTransferProgress(operationId, move: true, sources, destination),
-                    transferCts.Token);
-                if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+                try
                 {
-                    workspace.Undo.PushMove(results, fileOps);
-                }
-            }
-            else
-            {
-                var results = await fileOps.CopyAsync(
-                    sources,
-                    destination,
-                    action,
-                    progress,
-                    operationId => StartTransferProgress(operationId, move: false, sources, destination),
-                    transferCts.Token);
-                if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
-                {
-                    workspace.Undo.PushCopy(results, fileOps);
-                }
-            }
+                    if (move)
+                    {
+                        var results = await fileOps.MoveAsync(
+                            sources,
+                            destination,
+                            action,
+                            progress,
+                            operationId => StartTransferProgress(operationId, move: true, sources, destination),
+                            transferCts.Token);
+                        if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+                        {
+                            workspace.Undo.PushMove(results, fileOps);
+                        }
+                    }
+                    else
+                    {
+                        var results = await fileOps.CopyAsync(
+                            sources,
+                            destination,
+                            action,
+                            progress,
+                            operationId => StartTransferProgress(operationId, move: false, sources, destination),
+                            transferCts.Token);
+                        if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+                        {
+                            workspace.Undo.PushCopy(results, fileOps);
+                        }
+                    }
 
-            if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
-            {
-                await workspace.RefreshAsync(transferCts.Token);
+                    if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
+                    {
+                        await workspace.RefreshAsync(transferCts.Token);
+                    }
+
+                    break;
+                }
+                catch (IpcException exception) when (FileOperationService.IsConflict(exception) && !transferCts.IsCancellationRequested)
+                {
+                    var retryAction = await ChooseConflictActionFromBackendConflictAsync(exception.Message, destination);
+                    if (retryAction is null)
+                    {
+                        _currentOperationId = null;
+                        CloseTransferProgressWindow();
+                        return;
+                    }
+
+                    action = retryAction;
+                }
             }
         }
         catch (OperationCanceledException)
@@ -250,30 +270,90 @@ public sealed partial class MainWindow
             return null;
         }
 
-        try
+        var names = await LoadDestinationEntryNamesAsync(destination);
+        if (names is null)
         {
-            var listing = await _workspace.FileOps!.GetEntryInfoAsync(destination);
-            _ = listing;
-        }
-        catch
-        {
-            // Destination probe uses the current pane listing when available.
+            return "error";
         }
 
-        var names = _workspace.Pane(_workspace.ActivePane).Entries.Select(entry => entry.Name).ToList();
-        if (PathRules.PathsEqual(_workspace.Active.Path, destination) is false)
-        {
-            names = [];
-        }
-
-        var conflicts = DropDestination.ConflictingNames(sources, names);
+        var conflicts = DropDestination.ConflictingTransferNames(sources, names);
         if (conflicts.Count == 0)
         {
-            return "keep-both";
+            return "error";
         }
 
+        return await ShowTransferConflictDialogAsync(destination, conflicts);
+    }
+
+    private async Task<IReadOnlyList<string>?> LoadDestinationEntryNamesAsync(string destination)
+    {
+        if (_backend is not null)
+        {
+            try
+            {
+                var listing = await _backend.ListDirectoryAsync(destination);
+                return listing.Entries.Select(entry => entry.Name).ToArray();
+            }
+            catch
+            {
+                // Fall back to loaded panes below; otherwise the backend "error" action remains safe.
+            }
+        }
+
+        if (_workspace is null)
+        {
+            return null;
+        }
+
+        foreach (var pane in new[] { PaneId.Primary, PaneId.Secondary })
+        {
+            var state = _workspace.Pane(pane);
+            if (PathRules.PathsEqual(state.Path, destination))
+            {
+                return state.Entries.Select(entry => entry.Name).ToArray();
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ChooseConflictActionFromBackendConflictAsync(string message, string destination)
+    {
+        var conflictPath = ConflictPathFromMessage(message);
+        var conflictName = string.IsNullOrWhiteSpace(conflictPath)
+            ? PathRules.Basename(destination)
+            : PathRules.Basename(conflictPath);
+        IReadOnlyList<string> conflicts = string.IsNullOrWhiteSpace(conflictName)
+            ? Array.Empty<string>()
+            : [conflictName];
+        return await ShowTransferConflictDialogAsync(destination, conflicts);
+    }
+
+    private static string ConflictPathFromMessage(string message)
+    {
+        var detail = message.StartsWith(Protocol.PrefixConflict, StringComparison.Ordinal)
+            ? message[Protocol.PrefixConflict.Length..].Trim()
+            : message.Trim();
+        foreach (var marker in new[]
+                 {
+                     "destination already exists:",
+                     "multiple sources would replace the same destination:",
+                 })
+        {
+            var index = detail.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                return detail[(index + marker.Length)..].Trim();
+            }
+        }
+
+        return detail;
+    }
+
+    private async Task<string?> ShowTransferConflictDialogAsync(string destination, IReadOnlyList<string> conflicts)
+    {
         var dialog = new ConflictDialog { XamlRoot = Content.XamlRoot };
-        dialog.SetConflictPath(PathRules.JoinPath(destination, conflicts[0]));
+        dialog.SetConflict(destination, conflicts);
         var result = await dialog.ShowAsync();
         if (dialog.Result == ConflictResolution.KeepBoth)
         {

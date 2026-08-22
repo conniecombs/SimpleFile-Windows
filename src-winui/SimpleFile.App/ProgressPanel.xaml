@@ -4,13 +4,12 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Grid>
         <Border
-            Width="560"
+            MinWidth="560"
             MinHeight="252"
-            MaxHeight="388"
             Margin="16"
             Padding="16"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Bottom"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
             Background="{ThemeResource SfBgPrimaryBrush}"
             BorderBrush="{ThemeResource SfBorderBrush}"
             BorderThickness="1"

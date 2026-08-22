@@ -69,4 +69,30 @@ public static class DropDestination
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    public static IReadOnlyList<string> ConflictingTransferNames(
+        IReadOnlyList<string> sources,
+        IReadOnlyList<string> destinationEntryNames)
+    {
+        var destination = new HashSet<string>(destinationEntryNames, StringComparer.OrdinalIgnoreCase);
+        var seenSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var conflicts = new List<string>();
+        var emitted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var source in sources)
+        {
+            var name = PathRules.Basename(source);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            if ((destination.Contains(name) || !seenSources.Add(name)) && emitted.Add(name))
+            {
+                conflicts.Add(name);
+            }
+        }
+
+        return conflicts;
+    }
 }

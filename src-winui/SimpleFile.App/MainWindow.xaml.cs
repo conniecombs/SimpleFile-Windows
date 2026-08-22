@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
     private int _watchRequestToken;
     private string? _currentOperationId;
     private CancellationTokenSource? _transferCts;
+    private TransferProgressWindow? _transferProgressWindow;
     private CancellationTokenSource? _archiveCts;
     private CancellationTokenSource? _utilityCts;
     private string? _activeSearchId;
@@ -92,10 +93,9 @@ public sealed partial class MainWindow : Window
 
         PrimaryFileList.ItemsSource = PrimaryFiles;
         SecondaryFileList.ItemsSource = SecondaryFiles;
+        AttachPaneActivationHandlers();
         DriveList.ItemsSource = Drives;
         QuickAccessList.ItemsSource = QuickAccess;
-        FileProgressPanel.CancelRequested += OnFileProgressCancelRequested;
-
         Closed += OnClosed;
         Activated += OnActivated;
     }
@@ -175,7 +175,7 @@ public sealed partial class MainWindow : Window
         _transferCts?.Cancel();
         _transferCts = null;
         _currentOperationId = null;
-        FileProgressPanel.Visibility = Visibility.Collapsed;
+        CloseTransferProgressWindow();
         ClearSearchState();
         SyncFromWorkspace();
         ShowMessage(
@@ -1144,6 +1144,12 @@ public sealed partial class MainWindow : Window
     private void OnSidebarLeft(object sender, RoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Primary);
 
     private void OnSidebarRight(object sender, RoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Secondary);
+
+    private void AttachPaneActivationHandlers()
+    {
+        PrimaryPaneRoot.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnPrimaryPanePressed), true);
+        SecondaryPaneRoot.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnSecondaryPanePressed), true);
+    }
 
     private void OnPrimaryPanePressed(object sender, PointerRoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Primary);
 
@@ -2953,6 +2959,7 @@ public sealed partial class MainWindow : Window
         _transferCts?.Cancel();
         _transferCts = null;
         _currentOperationId = null;
+        CloseTransferProgressWindow();
         _searchCts?.Cancel();
         _searchCts = null;
         Interlocked.Increment(ref _columnEnrichmentToken);
@@ -3337,7 +3344,8 @@ public sealed partial class MainWindow : Window
     private void StartTransferProgress(string operationId, bool move, IReadOnlyList<string> sources, string destination)
     {
         _currentOperationId = operationId;
-        FileProgressPanel.Start(new TransferProgressContext(
+        var window = EnsureTransferProgressWindow();
+        window.Start(new TransferProgressContext(
             move,
             sources.Count,
             DescribeTransferSource(sources),
@@ -3379,7 +3387,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        FileProgressPanel.UpdateProgress(update);
+        _transferProgressWindow?.UpdateProgress(update);
         if (update.Status is "completed" or "cancelled" or "error")
         {
             _currentOperationId = null;
@@ -3395,7 +3403,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        FileProgressPanel.SetCancelling();
+        _transferProgressWindow?.SetCancelling();
         try
         {
             await _workspace.FileOps.CancelOperationAsync(operationId);
@@ -3406,6 +3414,51 @@ public sealed partial class MainWindow : Window
         catch (Exception ex)
         {
             ShowMessage("Cancel operation", ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
+    private TransferProgressWindow EnsureTransferProgressWindow()
+    {
+        if (_transferProgressWindow is { IsClosed: false } existing)
+        {
+            return existing;
+        }
+
+        var window = new TransferProgressWindow();
+        window.CancelRequested += OnFileProgressCancelRequested;
+        window.Closed += OnTransferProgressWindowClosed;
+        _transferProgressWindow = window;
+        return window;
+    }
+
+    private void OnTransferProgressWindowClosed(object sender, WindowEventArgs args)
+    {
+        if (sender is TransferProgressWindow window)
+        {
+            window.CancelRequested -= OnFileProgressCancelRequested;
+            window.Closed -= OnTransferProgressWindowClosed;
+        }
+
+        if (ReferenceEquals(_transferProgressWindow, sender))
+        {
+            _transferProgressWindow = null;
+        }
+    }
+
+    private void CloseTransferProgressWindow()
+    {
+        var window = _transferProgressWindow;
+        if (window is null)
+        {
+            return;
+        }
+
+        window.CancelRequested -= OnFileProgressCancelRequested;
+        window.Closed -= OnTransferProgressWindowClosed;
+        _transferProgressWindow = null;
+        if (!window.IsClosed)
+        {
+            window.Close();
         }
     }
 

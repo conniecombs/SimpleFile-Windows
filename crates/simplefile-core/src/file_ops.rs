@@ -753,8 +753,6 @@ fn create_dir_exclusive(path: &Path) -> Result<(), String> {
 
 pub fn preserve_basic_metadata(src: &Path, dst: &Path) -> Result<(), String> {
     let metadata = fs::metadata(src).map_err(|e| format!("Failed to stat copied source: {e}"))?;
-    fs::set_permissions(dst, metadata.permissions())
-        .map_err(|e| format!("Failed to preserve permissions: {e}"))?;
     filetime::set_file_times(
         dst,
         filetime::FileTime::from_last_access_time(&metadata),
@@ -762,6 +760,8 @@ pub fn preserve_basic_metadata(src: &Path, dst: &Path) -> Result<(), String> {
     )
     .map_err(|e| format!("Failed to preserve file timestamps: {e}"))?;
     preserve_creation_time(&metadata, dst)?;
+    fs::set_permissions(dst, metadata.permissions())
+        .map_err(|e| format!("Failed to preserve permissions: {e}"))?;
     preserve_platform_metadata(src, dst)
 }
 
@@ -941,4 +941,62 @@ fn calculate_size_recursive(path: &Path, cancel: &AtomicBool) -> Option<u64> {
         }
     }
     Some(total)
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::copy_file_exclusive_preserve_times;
+    use std::fs;
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_dir(label: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time after unix epoch")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "simplefile-file-ops-{label}-{}-{nanos}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn clear_readonly(path: &Path) {
+        if let Ok(metadata) = fs::metadata(path) {
+            let mut permissions = metadata.permissions();
+            if permissions.readonly() {
+                permissions.set_readonly(false);
+                let _ = fs::set_permissions(path, permissions);
+            }
+        }
+    }
+
+    #[test]
+    fn copy_readonly_file_sets_timestamps_before_permissions() {
+        let root = temp_dir("readonly-copy");
+        let src = root.join("source.txt");
+        let dst = root.join("destination.txt");
+        fs::write(&src, b"readonly payload").expect("write source");
+        let mut permissions = fs::metadata(&src).expect("source metadata").permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&src, permissions).expect("make source readonly");
+
+        let copied = copy_file_exclusive_preserve_times(&src, &dst).expect("copy readonly file");
+
+        assert_eq!(copied, b"readonly payload".len() as u64);
+        assert_eq!(
+            fs::read(&dst).expect("read destination"),
+            b"readonly payload"
+        );
+        assert!(fs::metadata(&dst)
+            .expect("destination metadata")
+            .permissions()
+            .readonly());
+
+        clear_readonly(&src);
+        clear_readonly(&dst);
+        let _ = fs::remove_dir_all(root);
+    }
 }

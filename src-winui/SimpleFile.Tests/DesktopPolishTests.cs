@@ -242,6 +242,25 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void TransferProgressFormatter_ErrorWithoutItem_DoesNotShowPreparing()
+    {
+        var context = new TransferProgressContext(false, 1, @"R:\Source", @"V:\Stuff");
+        var update = new ProgressUpdate
+        {
+            OperationType = "copy",
+            Status = "error",
+            Error = "Failed to preserve file timestamps: Access is denied. (os error 5)",
+        };
+
+        var display = TransferProgressFormatter.Format(context, update, bytesPerSecond: null, averageFilesPerSecond: null);
+
+        Assert.Equal("Copy failed", display.Title);
+        Assert.Equal(update.Error, display.Summary);
+        Assert.Equal("Transfer failed", display.CurrentItemName);
+        Assert.Equal("", display.CurrentItemPath);
+    }
+
+    [Fact]
     public void PaneMoreMenu_PrependsOverflowedToolbarCommands()
     {
         var overflowed = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
@@ -279,6 +298,24 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void FilePanes_AcceptClicksAcrossPaneAndRowWhitespace()
+    {
+        var root = FindRepoRoot();
+        var mainWindow = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "MainWindow.xaml.cs"));
+        var fileRowView = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "FileRowView.xaml"));
+
+        Assert.Contains("AttachPaneActivationHandlers();", mainWindow);
+        Assert.Contains(
+            "PrimaryPaneRoot.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnPrimaryPanePressed), true);",
+            mainWindow);
+        Assert.Contains(
+            "SecondaryPaneRoot.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnSecondaryPanePressed), true);",
+            mainWindow);
+        Assert.Contains("HorizontalAlignment=\"Stretch\"", fileRowView);
+        Assert.Contains("Background=\"Transparent\"", fileRowView);
+    }
+
+    [Fact]
     public void ColumnLayout_ClampsResizeAndAppliesPresets()
     {
         var columns = new ColumnLayout();
@@ -312,6 +349,11 @@ public class DesktopPolishTests
             [@"C:\src\notes.txt", @"C:\src\other.txt"],
             ["notes.txt", "readme.md"]);
         Assert.Equal(["notes.txt"], conflicts);
+
+        var transferConflicts = DropDestination.ConflictingTransferNames(
+            [@"C:\one\notes.txt", @"C:\two\notes.txt", @"C:\src\readme.md"],
+            ["readme.md"]);
+        Assert.Equal(["notes.txt", "readme.md"], transferConflicts);
     }
 
     [Fact]
@@ -536,5 +578,22 @@ public class DesktopPolishTests
 
         workspace.ApplyUiSettings(new UiSettings { StartLocation = "last", LastPath = @"D:\Last" });
         Assert.Equal(@"D:\Last", workspace.ResolveStartPath());
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "SimpleFile.App", "MainWindow.xaml.cs");
+            if (File.Exists(candidate))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate src-winui source root.");
     }
 }

@@ -976,13 +976,6 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (FileProgressPanel.Visibility == Visibility.Visible)
-            {
-                e.Handled = true;
-                FileProgressPanel.Visibility = Visibility.Collapsed;
-                return;
-            }
-
             if (_searchMode)
             {
                 e.Handled = true;

@@ -736,8 +736,7 @@
                             Grid.Column="0"
                             Background="{ThemeResource SfBgPrimaryBrush}"
                             BorderBrush="{ThemeResource SfBorderBrush}"
-                            BorderThickness="0"
-                            PointerPressed="OnPrimaryPanePressed">
+                            BorderThickness="0">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
@@ -926,7 +925,6 @@
                             Background="{ThemeResource SfBgPrimaryBrush}"
                             BorderBrush="{ThemeResource SfBorderBrush}"
                             BorderThickness="0"
-                            PointerPressed="OnSecondaryPanePressed"
                             Visibility="Collapsed">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -1259,11 +1257,6 @@
                         </Grid>
                     </Border>
                 </Grid>
-
-                <local:ProgressPanel
-                    x:Name="FileProgressPanel"
-                    Grid.Row="1"
-                    Visibility="Collapsed" />
 
                 <Grid
                     Grid.Row="2"

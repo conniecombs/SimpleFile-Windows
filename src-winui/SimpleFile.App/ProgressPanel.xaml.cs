@@ -13,6 +13,7 @@ public sealed partial class ProgressPanel : UserControl
     private ulong _lastSampleBytes;
     private double? _bytesPerSecond;
     private bool _hasSample;
+    private string _lastCurrentItemPath = "";
 
     public event EventHandler? CancelRequested;
 
@@ -26,6 +27,7 @@ public sealed partial class ProgressPanel : UserControl
     {
         _context = context;
         ResetRate();
+        _lastCurrentItemPath = "";
         _startedAt = DateTimeOffset.UtcNow;
         Visibility = Visibility.Visible;
         CancelButton.IsEnabled = true;
@@ -45,6 +47,15 @@ public sealed partial class ProgressPanel : UserControl
 
     public void UpdateProgress(ProgressUpdate update)
     {
+        if (string.IsNullOrWhiteSpace(update.CurrentItem))
+        {
+            update.CurrentItem = _lastCurrentItemPath;
+        }
+        else
+        {
+            _lastCurrentItemPath = update.CurrentItem;
+        }
+
         var speed = TrackSpeed(update);
         var display = TransferProgressFormatter.Format(_context, update, speed, AverageFilesPerSecond(update));
         CancelButton.IsEnabled = update.Status == "running";

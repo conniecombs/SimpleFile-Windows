@@ -917,6 +917,38 @@ mod tests {
     }
 
     #[test]
+    fn keep_both_preserves_existing_destination() {
+        let src_dir = unique_temp_path("keep_both_src");
+        let dst_dir = unique_temp_path("keep_both_dst");
+        fs::create_dir_all(&src_dir).unwrap();
+        fs::create_dir_all(&dst_dir).unwrap();
+        let source = src_dir.join("same.txt");
+        let existing = dst_dir.join("same.txt");
+        fs::write(&source, b"source").unwrap();
+        fs::write(&existing, b"destination").unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+
+        let result = transfer_with_progress_blocking(
+            "copy",
+            vec![source.to_string_lossy().to_string()],
+            dst_dir.to_string_lossy().to_string(),
+            "op_keep_both_test".to_string(),
+            "keep-both".to_string(),
+            cancel,
+            &|_| {},
+        )
+        .expect("keep-both copy should complete");
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(fs::read(&existing).unwrap(), b"destination");
+        assert_ne!(result[0].destination, existing.to_string_lossy());
+        assert_eq!(fs::read(&result[0].destination).unwrap(), b"source");
+
+        let _ = fs::remove_dir_all(&src_dir);
+        let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
     fn transfer_emits_cancelled_when_cancelled_before_preflight() {
         let src_dir = unique_temp_path("cancel_src");
         let dst_dir = unique_temp_path("cancel_dst");

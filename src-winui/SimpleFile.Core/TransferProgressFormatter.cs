@@ -42,7 +42,7 @@ public static class TransferProgressFormatter
         var currentFiles = Math.Min(update.CurrentFiles, update.TotalFiles > 0 ? update.TotalFiles : update.CurrentFiles);
         var fileProgressPercent = Percent(currentFiles, update.TotalFiles);
         var fileProgressIsIndeterminate = update.TotalFiles == 0 && update.Status == "running";
-        var currentItemName = CurrentItemName(update.CurrentItem);
+        var currentItemName = CurrentItemName(update.CurrentItem, update.Status);
         var summary = Summary(update, current);
         var speed = Speed(update, bytesPerSecond);
         var eta = Eta(update, current, bytesPerSecond);
@@ -58,7 +58,7 @@ public static class TransferProgressFormatter
             fileProgressPercent,
             fileProgressIsIndeterminate,
             currentItemName,
-            update.Error ?? update.CurrentItem,
+            update.CurrentItem,
             LabelValue("From", context.Source),
             LabelValue("To", context.Destination),
             speed,
@@ -138,11 +138,17 @@ public static class TransferProgressFormatter
         return $"{Count(currentFiles)} files";
     }
 
-    private static string CurrentItemName(string currentItem)
+    private static string CurrentItemName(string currentItem, string status)
     {
         if (string.IsNullOrWhiteSpace(currentItem))
         {
-            return "Preparing transfer";
+            return status switch
+            {
+                "completed" => "Transfer complete",
+                "cancelled" => "Transfer cancelled",
+                "error" => "Transfer failed",
+                _ => "Preparing transfer",
+            };
         }
 
         var trimmed = currentItem.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

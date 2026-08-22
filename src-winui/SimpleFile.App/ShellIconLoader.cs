@@ -46,40 +46,47 @@ internal static class ShellIconLoader
                 ? $"entry:{requestedSize}:{ext}"
                 : $"entry:{requestedSize}:file";
 
-        return Cache.GetOrAdd(
-            cacheKey,
-            k =>
-            {
-                // Use SHGFI_USEFILEATTRIBUTES (useAttributes: true) for the initial call.
-                // This never touches the filesystem and returns instantly.
-                var icon = LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: true)
-                    ?? Load(path, isDirectory, requestedSize, useAttributes: true)
-                    ?? CreateFallbackIcon(path, isDirectory, requestedSize);
-
-                // For file-specific icons, queue async extraction in the background.
-                // The cache entry will be updated when the real icon arrives.
-                if (fileSpecific)
+        try
+        {
+            return Cache.GetOrAdd(
+                cacheKey,
+                k =>
                 {
-                    _ = Task.Run(() =>
-                    {
-                        try
-                        {
-                            var realIcon = LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: false)
-                                ?? Load(path, isDirectory, requestedSize, useAttributes: false);
-                            if (realIcon is not null)
-                            {
-                                Cache[cacheKey] = realIcon;
-                            }
-                        }
-                        catch
-                        {
-                            // Best-effort; keep the extension-based icon.
-                        }
-                    });
-                }
+                    // Use SHGFI_USEFILEATTRIBUTES (useAttributes: true) for the initial call.
+                    // This never touches the filesystem and returns instantly.
+                    var icon = LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: true)
+                        ?? Load(path, isDirectory, requestedSize, useAttributes: true)
+                        ?? CreateFallbackIcon(path, isDirectory, requestedSize);
 
-                return icon;
-            });
+                    // For file-specific icons, queue async extraction in the background.
+                    // The cache entry will be updated when the real icon arrives.
+                    if (fileSpecific)
+                    {
+                        _ = Task.Run(() =>
+                        {
+                            try
+                            {
+                                var realIcon = LoadFromSystemImageList(path, isDirectory, requestedSize, useAttributes: false)
+                                    ?? Load(path, isDirectory, requestedSize, useAttributes: false);
+                                if (realIcon is not null)
+                                {
+                                    Cache[cacheKey] = realIcon;
+                                }
+                            }
+                            catch
+                            {
+                                // Best-effort; keep the extension-based icon.
+                            }
+                        });
+                    }
+
+                    return icon;
+                });
+        }
+        catch
+        {
+            return TryCreateFallbackIcon(path, isDirectory, requestedSize);
+        }
     }
 
     public static BitmapImage? ForPath(string path, int iconSize = 16)
@@ -90,15 +97,23 @@ internal static class ShellIconLoader
         }
 
         var requestedSize = NormalizeIconSize(iconSize);
-        return Cache.GetOrAdd($"path:{requestedSize}:{path}", _ =>
+        try
         {
-            // Avoid Directory.Exists() which triggers network I/O. Instead, infer
-            // from path shape or fall back to treating as a file.
+            return Cache.GetOrAdd($"path:{requestedSize}:{path}", _ =>
+            {
+                // Avoid Directory.Exists() which triggers network I/O. Instead, infer
+                // from path shape or fall back to treating as a file.
+                var treatAsDirectory = path.EndsWith('\\') || path.EndsWith('/');
+                return LoadFromSystemImageList(path, treatAsDirectory, requestedSize, useAttributes: true)
+                    ?? Load(path, treatAsDirectory, requestedSize, useAttributes: true)
+                    ?? CreateFallbackIcon(path, treatAsDirectory, requestedSize);
+            });
+        }
+        catch
+        {
             var treatAsDirectory = path.EndsWith('\\') || path.EndsWith('/');
-            return LoadFromSystemImageList(path, treatAsDirectory, requestedSize, useAttributes: true)
-                ?? Load(path, treatAsDirectory, requestedSize, useAttributes: true)
-                ?? CreateFallbackIcon(path, treatAsDirectory, requestedSize);
-        });
+            return TryCreateFallbackIcon(path, treatAsDirectory, requestedSize);
+        }
     }
 
     private static int NormalizeIconSize(int iconSize)
@@ -158,6 +173,18 @@ internal static class ShellIconLoader
         var image = new BitmapImage();
         image.SetSource(memory.AsRandomAccessStream());
         return image;
+    }
+
+    private static BitmapImage? TryCreateFallbackIcon(string path, bool isDirectory, int iconSize)
+    {
+        try
+        {
+            return CreateFallbackIcon(path, isDirectory, iconSize);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void DrawFolderFallback(Graphics graphics, int size)
@@ -286,38 +313,46 @@ internal static class ShellIconLoader
 
     private static BitmapImage? LoadFromSystemImageList(string path, bool isDirectory, int iconSize, bool useAttributes)
     {
-        var info = new ShFileInfo();
-        var attributes = isDirectory ? FileAttributeDirectory : FileAttributeNormal;
-        var flags = ShgfiSysIconIndex;
-        if (useAttributes)
-        {
-            flags |= ShgfiUseFileAttributes;
-        }
-
-        SHGetFileInfo(string.IsNullOrWhiteSpace(path) ? "file" : path, attributes, ref info, (uint)Marshal.SizeOf<ShFileInfo>(), flags);
-        var imageListSize = iconSize switch
-        {
-            <= 16 => ShilSmall,
-            <= 32 => ShilLarge,
-            <= 48 => ShilExtraLarge,
-            _ => ShilJumbo,
-        };
-
-        var iidImageList = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
-        if (SHGetImageList(imageListSize, ref iidImageList, out var imageList) != 0 || imageList is null)
-        {
-            return null;
-        }
-
+        IImageList? imageList = null;
         try
         {
+            var info = new ShFileInfo();
+            var attributes = isDirectory ? FileAttributeDirectory : FileAttributeNormal;
+            var flags = ShgfiSysIconIndex;
+            if (useAttributes)
+            {
+                flags |= ShgfiUseFileAttributes;
+            }
+
+            SHGetFileInfo(string.IsNullOrWhiteSpace(path) ? "file" : path, attributes, ref info, (uint)Marshal.SizeOf<ShFileInfo>(), flags);
+            var imageListSize = iconSize switch
+            {
+                <= 16 => ShilSmall,
+                <= 32 => ShilLarge,
+                <= 48 => ShilExtraLarge,
+                _ => ShilJumbo,
+            };
+
+            var iidImageList = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
+            if (SHGetImageList(imageListSize, ref iidImageList, out imageList) != 0 || imageList is null)
+            {
+                return null;
+            }
+
             return imageList.GetIcon(info.iIcon, IldTransparent, out var hIcon) == 0 && hIcon != IntPtr.Zero
                 ? IconToBitmapImage(hIcon, iconSize)
                 : null;
         }
+        catch
+        {
+            return null;
+        }
         finally
         {
-            Marshal.ReleaseComObject(imageList);
+            if (imageList is not null)
+            {
+                Marshal.ReleaseComObject(imageList);
+            }
         }
     }
 
