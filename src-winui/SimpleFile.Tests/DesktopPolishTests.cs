@@ -137,6 +137,18 @@ public class DesktopPolishTests
         };
         var reserved = 360;
 
+        Assert.Equal(
+            [
+                ToolbarOverflowPlanner.Filter,
+                ToolbarOverflowPlanner.Search,
+                ToolbarOverflowPlanner.Settings,
+                ToolbarOverflowPlanner.DualPane,
+                ToolbarOverflowPlanner.ViewOptions,
+                ToolbarOverflowPlanner.NewFile,
+                ToolbarOverflowPlanner.NewFolder,
+            ],
+            ToolbarOverflowPlanner.PrimaryHideOrder);
+
         var wide = ToolbarOverflowPlanner.OverflowIds(1200, reserved, widths, ToolbarOverflowPlanner.PrimaryHideOrder);
         Assert.Empty(wide);
 
@@ -151,6 +163,82 @@ public class DesktopPolishTests
 
         var again = ToolbarOverflowPlanner.OverflowIds(370, reserved, widths, ToolbarOverflowPlanner.PrimaryHideOrder);
         Assert.True(narrow.SetEquals(again));
+    }
+
+    [Fact]
+    public void TransferProgressFormatter_ShowsRichCopyState()
+    {
+        var context = new TransferProgressContext(false, 6, @"R:\Repos", @"V:\Stuff");
+        var update = new ProgressUpdate
+        {
+            OperationType = "copy",
+            Current = 1100UL * 1024 * 1024,
+            Total = 1500UL * 1024 * 1024,
+            CurrentFiles = 7,
+            TotalFiles = 12,
+            CurrentItem = @"R:\Repos\SimpleFile-Windows\src-winui\SimpleFile.App\file.bin",
+            Status = "running",
+        };
+
+        var display = TransferProgressFormatter.Format(context, update, 50 * 1024 * 1024, 2.5);
+
+        Assert.Equal("Copying 6 items", display.Title);
+        Assert.Equal("1.07 GB of 1.46 GB", display.Summary);
+        Assert.Equal("73%", display.Percent);
+        Assert.Equal("7 of 12 files", display.FileSummary);
+        Assert.Equal("2.5 files/s avg", display.FileRate);
+        Assert.InRange(display.FileProgressPercent, 58.3, 58.4);
+        Assert.Equal("file.bin", display.CurrentItemName);
+        Assert.Equal(@"From: R:\Repos", display.From);
+        Assert.Equal(@"To: V:\Stuff", display.To);
+        Assert.Equal("50 MB/s", display.Speed);
+        Assert.Contains("remaining", display.Eta, StringComparison.Ordinal);
+        Assert.False(display.IsIndeterminate);
+    }
+
+    [Fact]
+    public void TransferProgressFormatter_ClampsOverCompleteProgress()
+    {
+        var context = new TransferProgressContext(true, 1, @"R:\Repos", @"V:\Stuff");
+        var update = new ProgressUpdate
+        {
+            OperationType = "move",
+            Current = 125,
+            Total = 100,
+            CurrentFiles = 4,
+            TotalFiles = 3,
+            CurrentItem = @"R:\Repos\file.txt",
+            Status = "running",
+        };
+
+        var display = TransferProgressFormatter.Format(context, update, bytesPerSecond: null, averageFilesPerSecond: null);
+
+        Assert.Equal("Moving 1 item", display.Title);
+        Assert.Equal(100, display.ProgressPercent);
+        Assert.Equal("100%", display.Percent);
+        Assert.Equal("100 B of 100 B", display.Summary);
+        Assert.Equal(100, display.FileProgressPercent);
+        Assert.Equal("3 of 3 files", display.FileSummary);
+    }
+
+    [Fact]
+    public void TransferProgressFormatter_CompletedZeroTotals_DoNotLookStuck()
+    {
+        var context = new TransferProgressContext(false, 1, @"R:\Empty", @"V:\Stuff");
+        var update = new ProgressUpdate
+        {
+            OperationType = "copy",
+            Status = "completed",
+        };
+
+        var display = TransferProgressFormatter.Format(context, update, bytesPerSecond: null, averageFilesPerSecond: null);
+
+        Assert.Equal("Copy complete", display.Title);
+        Assert.Equal("0 B transferred", display.Summary);
+        Assert.Equal("0 files", display.FileSummary);
+        Assert.Equal("Files complete", display.FileRate);
+        Assert.False(display.IsIndeterminate);
+        Assert.False(display.FileProgressIsIndeterminate);
     }
 
     [Fact]

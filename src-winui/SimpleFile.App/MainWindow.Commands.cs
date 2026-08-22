@@ -38,46 +38,53 @@ public sealed partial class MainWindow
 
     private void FocusSearchUi()
     {
-        if (PrimarySearchHost.Visibility == Visibility.Visible)
+        var pane = ActiveUiPane;
+        var host = SearchHostFor(pane);
+        var box = SearchTextBoxFor(pane);
+        if (host.Visibility == Visibility.Visible)
         {
-            SearchBox.Focus(FocusState.Programmatic);
-            SearchBox.SelectAll();
+            _workspace?.ActivatePane(pane);
+            box.Focus(FocusState.Programmatic);
+            box.SelectAll();
             return;
         }
 
         ShowOverflowInputFlyout(
-            PrimaryMoreButton,
+            MoreButtonFor(pane),
             "Search",
-            SearchBox.Text,
+            box.Text,
             async text =>
             {
-                SearchBox.Text = text;
-                await StartSearchAsync();
+                box.Text = text;
+                await StartSearchAsync(pane);
             },
             commitOnClose: false);
     }
 
     private void FocusFilterUi()
     {
-        if (QuickFilterBox.Visibility == Visibility.Visible)
+        var pane = ActiveUiPane;
+        var box = QuickFilterBoxFor(pane);
+        if (box.Visibility == Visibility.Visible)
         {
-            QuickFilterBox.Focus(FocusState.Programmatic);
-            QuickFilterBox.SelectAll();
+            _workspace?.ActivatePane(pane);
+            box.Focus(FocusState.Programmatic);
+            box.SelectAll();
             return;
         }
 
         ShowOverflowInputFlyout(
-            PrimaryMoreButton,
+            MoreButtonFor(pane),
             "Filter",
-            QuickFilterBox.Text,
+            box.Text,
             text =>
             {
-                if (!string.Equals(QuickFilterBox.Text, text, StringComparison.Ordinal))
+                if (!string.Equals(box.Text, text, StringComparison.Ordinal))
                 {
-                    QuickFilterBox.Text = text;
+                    box.Text = text;
                 }
 
-                _workspace?.SetFilterQuery(text);
+                _workspace?.SetFilterQuery(pane, text);
                 return Task.CompletedTask;
             },
             commitOnClose: true);
@@ -136,6 +143,34 @@ public sealed partial class MainWindow
         }
 
         flyout.ShowAt(anchor);
+    }
+
+    private PaneId ActiveUiPane => _workspace?.Normalize(_workspace.ActivePane) ?? PaneId.Primary;
+
+    private TextBox SearchTextBoxFor(PaneId pane) =>
+        SearchBox;
+
+    private Button SearchCancelButtonFor(PaneId pane) =>
+        SearchCancelButton;
+
+    private FrameworkElement SearchHostFor(PaneId pane) =>
+        PrimarySearchHost;
+
+    private TextBox QuickFilterBoxFor(PaneId pane) =>
+        QuickFilterBox;
+
+    private Button MoreButtonFor(PaneId pane) =>
+        PrimaryMoreButton;
+
+    private void SetSearchCancelEnabled(PaneId pane, bool enabled)
+    {
+        SearchCancelButtonFor(pane).IsEnabled = enabled;
+    }
+
+    private void UpdateSearchCancelButtons()
+    {
+        var searching = _searchMode && !string.IsNullOrEmpty(_activeSearchId);
+        SearchCancelButton.IsEnabled = searching;
     }
 
     private void OnSelectAllAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
@@ -201,7 +236,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        _workspace?.SetFilterQuery(QuickFilterBox.Text);
+        var pane = ActiveUiPane;
+        _workspace?.SetFilterQuery(pane, QuickFilterBox.Text);
     }
 
     private async void OnTogglePreview(object sender, RoutedEventArgs e)
@@ -458,7 +494,7 @@ public sealed partial class MainWindow
                 await ApplyViewOptionAsync("icon:96");
                 break;
             case "search":
-                SearchBox.Focus(FocusState.Programmatic);
+                FocusSearchUi();
                 break;
             case "quick-look":
                 await ShowQuickLookAsync();
@@ -558,10 +594,7 @@ public sealed partial class MainWindow
         PopulateFileListContextFlyout(sender as MenuFlyout, PaneId.Secondary);
 
     private void OnPrimaryMoreMenuOpening(object sender, object e) =>
-        PopulatePaneMoreMenu(sender as MenuFlyout, PaneId.Primary);
-
-    private void OnSecondaryMoreMenuOpening(object sender, object e) =>
-        PopulatePaneMoreMenu(sender as MenuFlyout, PaneId.Secondary);
+        PopulatePaneMoreMenu(sender as MenuFlyout, ActiveUiPane);
 
     private void OnViewOptionsMenuOpening(object sender, object e)
     {
@@ -700,7 +733,7 @@ public sealed partial class MainWindow
 
         var targetPane = ActivatePaneForMenu(pane);
         var selected = SelectedRowsForPane(targetPane);
-        var overflow = targetPane == PaneId.Secondary ? _secondaryToolbarOverflow : _primaryToolbarOverflow;
+        var overflow = _primaryToolbarOverflow;
 
         PopulateMenuFlyout(flyout, ContextMenuBuilder.BuildPaneMoreMenu(BuildContextMenuRequest(selected, overflow)));
     }
@@ -959,10 +992,11 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (!string.IsNullOrEmpty(QuickFilterBox.Text))
+            var filterBox = QuickFilterBoxFor(_workspace.ActivePane);
+            if (!string.IsNullOrEmpty(filterBox.Text))
             {
                 e.Handled = true;
-                QuickFilterBox.Text = "";
+                filterBox.Text = "";
                 return;
             }
 

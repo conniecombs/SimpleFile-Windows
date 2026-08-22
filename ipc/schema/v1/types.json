@@ -31,7 +31,7 @@
     },
     "ProgressUpdate": {
       "source": "crates/simplefile-core/src/models.rs",
-      "fields": ["operation_id", "operation_type", "current", "total", "current_item", "status", "error"]
+      "fields": ["operation_id", "operation_type", "current", "total", "current_files", "total_files", "current_item", "status", "error"]
     },
     "FileChangeEvent": {
       "source": "crates/simplefile-core/src/models.rs",

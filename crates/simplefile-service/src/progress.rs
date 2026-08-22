@@ -10,8 +10,8 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::sync::Mutex;
 
@@ -61,6 +61,13 @@ struct TransferPlan {
     final_dest: PathBuf,
     replace_existing: bool,
     allow_rename: bool,
+    file_count: u64,
+}
+
+#[derive(Default)]
+struct TransferEstimate {
+    bytes: u64,
+    files: u64,
 }
 
 fn path_exists_no_follow(path: &Path) -> bool {
@@ -225,6 +232,7 @@ fn prepare_transfer_inputs(
             final_dest,
             replace_existing,
             allow_rename: !keep_both,
+            file_count: 0,
         });
     }
 
@@ -264,6 +272,8 @@ struct ProgressContext<'a> {
     operation_type: &'a str,
     cancel: &'a Arc<AtomicBool>,
     total_bytes: &'a Arc<AtomicU64>,
+    total_files: &'a Arc<AtomicU64>,
+    completed_files: &'a Arc<AtomicU64>,
 }
 
 impl ProgressContext<'_> {
@@ -294,10 +304,32 @@ impl ProgressContext<'_> {
             operation_type: self.operation_type.to_string(),
             current,
             total,
+            current_files: self.completed_files.load(Ordering::Relaxed),
+            total_files: self.total_files.load(Ordering::Relaxed),
             current_item,
             status: status.to_string(),
             error,
         });
+    }
+
+    fn complete_file(&self, current: u64, current_item: String) {
+        self.complete_files(1, current, current_item);
+    }
+
+    fn complete_files(&self, count: u64, current: u64, current_item: String) {
+        if count > 0 {
+            let completed = self
+                .completed_files
+                .fetch_add(count, Ordering::Relaxed)
+                .saturating_add(count);
+            let known = self.total_files.load(Ordering::Relaxed);
+            if completed > known {
+                self.total_files.store(completed, Ordering::Relaxed);
+            }
+        }
+
+        let total = self.total_bytes.load(Ordering::Relaxed).max(current);
+        self.emit_with_total(current, total, current_item, "running", None);
     }
 }
 
@@ -308,11 +340,7 @@ struct CopyContext<'a> {
 
 impl CopyContext<'_> {
     fn attempts(&self) -> u32 {
-        if self.network {
-            NETWORK_MAX_RETRIES
-        } else {
-            1
-        }
+        if self.network { NETWORK_MAX_RETRIES } else { 1 }
     }
 
     fn buffer_size(&self) -> usize {
@@ -417,12 +445,8 @@ fn copy_file_with_progress(
             .open(dst)
             .map_err(|error| format!("Failed to create destination file: {error}"))?;
         simplefile_core::file_ops::preserve_basic_metadata(src, dst)?;
-        ctx.progress.emit(
-            *completed_bytes,
-            src.to_string_lossy().to_string(),
-            "running",
-            None,
-        );
+        ctx.progress
+            .complete_file(*completed_bytes, src.to_string_lossy().to_string());
         return Ok(());
     }
 
@@ -447,18 +471,8 @@ fn copy_file_with_progress(
                         ctx.progress.total_bytes.store(needed, Ordering::Relaxed);
                     }
                 }
-                let total = ctx
-                    .progress
-                    .total_bytes
-                    .load(Ordering::Relaxed)
-                    .max(*completed_bytes);
-                ctx.progress.emit_with_total(
-                    *completed_bytes,
-                    total,
-                    src.to_string_lossy().to_string(),
-                    "running",
-                    None,
-                );
+                ctx.progress
+                    .complete_file(*completed_bytes, src.to_string_lossy().to_string());
                 return Ok(());
             }
             Err(error) if error == "Operation cancelled" => return Err(error),
@@ -509,6 +523,8 @@ fn copy_item_with_progress(
             }
         } else if file_type.is_symlink() {
             recreate_symlink(&src_path, &dst_path)?;
+            ctx.progress
+                .complete_file(*completed_bytes, src_path.to_string_lossy().to_string());
         } else {
             copy_file_with_progress(&src_path, &dst_path, ctx, completed_bytes)?;
         }
@@ -573,16 +589,10 @@ fn move_plan_with_progress(
         .unwrap_or(0);
     if plan.allow_rename && fs::rename(&plan.source_path, &plan.final_dest).is_ok() {
         *completed_bytes = completed_bytes.saturating_add(rename_size.max(1));
-        let total = ctx
-            .total_bytes
-            .load(Ordering::Relaxed)
-            .max(*completed_bytes);
-        ctx.emit_with_total(
+        ctx.complete_files(
+            plan.file_count,
             *completed_bytes,
-            total,
             plan.source_path.to_string_lossy().to_string(),
-            "running",
-            None,
         );
         return Ok(());
     }
@@ -622,22 +632,28 @@ fn choose_next_keep_both_destination(
     Ok(())
 }
 
-fn estimate_path_bytes(path: &Path, cancel: &Arc<AtomicBool>) -> Result<u64, String> {
+fn estimate_path_transfer(
+    path: &Path,
+    cancel: &Arc<AtomicBool>,
+) -> Result<TransferEstimate, String> {
     check_cancelled(cancel)?;
     let meta = fs::symlink_metadata(path)
         .map_err(|error| format!("Failed to stat {}: {error}", path.display()))?;
     let file_type = meta.file_type();
     if file_type.is_symlink() {
-        return Ok(0);
+        return Ok(TransferEstimate { bytes: 0, files: 1 });
     }
     if file_type.is_file() {
-        return Ok(meta.len());
+        return Ok(TransferEstimate {
+            bytes: meta.len(),
+            files: 1,
+        });
     }
     if !file_type.is_dir() {
-        return Ok(0);
+        return Ok(TransferEstimate::default());
     }
 
-    let mut total = 0u64;
+    let mut estimate = TransferEstimate::default();
     let mut stack = vec![path.to_path_buf()];
     let mut visited = 0u32;
     while let Some(dir) = stack.pop() {
@@ -653,13 +669,13 @@ fn estimate_path_bytes(path: &Path, cancel: &Arc<AtomicBool>) -> Result<u64, Str
                 Err(_) => continue,
             };
             if entry_type.is_symlink() {
-                continue;
-            }
-            if entry_type.is_dir() {
+                estimate.files = estimate.files.saturating_add(1);
+            } else if entry_type.is_dir() {
                 stack.push(entry_path);
             } else if entry_type.is_file() {
+                estimate.files = estimate.files.saturating_add(1);
                 if let Ok(meta) = entry.metadata() {
-                    total = total.saturating_add(meta.len());
+                    estimate.bytes = estimate.bytes.saturating_add(meta.len());
                 }
             }
             visited = visited.saturating_add(1);
@@ -668,17 +684,20 @@ fn estimate_path_bytes(path: &Path, cancel: &Arc<AtomicBool>) -> Result<u64, Str
             }
         }
     }
-    Ok(total)
+    Ok(estimate)
 }
 
-fn estimate_transfer_bytes(
-    plans: &[TransferPlan],
+fn estimate_transfer(
+    plans: &mut [TransferPlan],
     cancel: &Arc<AtomicBool>,
-) -> Result<u64, String> {
-    let mut total = 0u64;
+) -> Result<TransferEstimate, String> {
+    let mut total = TransferEstimate::default();
     for plan in plans {
         check_cancelled(cancel)?;
-        total = total.saturating_add(estimate_path_bytes(&plan.source_path, cancel)?);
+        let estimate = estimate_path_transfer(&plan.source_path, cancel)?;
+        plan.file_count = estimate.files;
+        total.bytes = total.bytes.saturating_add(estimate.bytes);
+        total.files = total.files.saturating_add(estimate.files);
     }
     Ok(total)
 }
@@ -696,7 +715,7 @@ pub fn transfer_with_progress_blocking(
     cancel: Arc<AtomicBool>,
     emit: &dyn Fn(ProgressUpdate),
 ) -> Result<Vec<TransferResult>, String> {
-    let (plans, _dest_path) = prepare_transfer_inputs(sources, destination, &conflict_action)?;
+    let (mut plans, _dest_path) = prepare_transfer_inputs(sources, destination, &conflict_action)?;
     let keep_both = is_keep_both_action(&conflict_action);
     let mut reserved_destinations: HashSet<String> = plans
         .iter()
@@ -704,6 +723,8 @@ pub fn transfer_with_progress_blocking(
         .collect();
 
     let total_bytes = Arc::new(AtomicU64::new(0));
+    let total_files = Arc::new(AtomicU64::new(0));
+    let completed_files = Arc::new(AtomicU64::new(0));
     let mut completed_bytes = 0u64;
     let mut transferred = Vec::with_capacity(plans.len());
     let progress = ProgressContext {
@@ -712,10 +733,12 @@ pub fn transfer_with_progress_blocking(
         operation_type,
         cancel: &cancel,
         total_bytes: &total_bytes,
+        total_files: &total_files,
+        completed_files: &completed_files,
     };
 
     progress.emit_with_total(0, 0, "Calculating size...".to_string(), "running", None);
-    let estimated = match estimate_transfer_bytes(&plans, &cancel) {
+    let estimated = match estimate_transfer(&mut plans, &cancel) {
         Ok(value) => value,
         Err(error) if error == "Operation cancelled" => {
             progress.emit_with_total(
@@ -729,14 +752,15 @@ pub fn transfer_with_progress_blocking(
         }
         Err(error) => {
             eprintln!("simplefile-service: transfer size estimate failed: {error}");
-            0
+            TransferEstimate::default()
         }
     };
-    total_bytes.store(estimated, Ordering::Relaxed);
+    total_bytes.store(estimated.bytes, Ordering::Relaxed);
+    total_files.store(estimated.files, Ordering::Relaxed);
     progress.emit_with_total(
         0,
-        estimated,
-        if estimated > 0 {
+        estimated.bytes,
+        if estimated.bytes > 0 || estimated.files > 0 {
             "Starting transfer...".to_string()
         } else {
             String::new()
@@ -916,11 +940,13 @@ mod tests {
         .expect("cancel should return partial results");
 
         assert!(result.is_empty());
-        assert!(updates
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|update| update.status == "cancelled"));
+        assert!(
+            updates
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|update| update.status == "cancelled")
+        );
         assert!(!dst_dir.join("large.txt").exists());
 
         let _ = fs::remove_dir_all(&src_dir);
@@ -952,11 +978,13 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         assert_eq!(fs::read(dst_dir.join("done.txt")).unwrap(), b"done");
-        assert!(updates
-            .lock()
-            .unwrap()
+        let updates = updates.lock().unwrap();
+        let completed = updates
             .iter()
-            .any(|update| update.status == "completed"));
+            .find(|update| update.status == "completed")
+            .expect("completed progress update");
+        assert_eq!(completed.current_files, 1);
+        assert_eq!(completed.total_files, 1);
 
         let _ = fs::remove_dir_all(&src_dir);
         let _ = fs::remove_dir_all(&dst_dir);

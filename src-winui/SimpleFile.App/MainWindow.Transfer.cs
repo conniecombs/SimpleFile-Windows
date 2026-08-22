@@ -200,7 +200,7 @@ public sealed partial class MainWindow
                     destination,
                     action,
                     progress,
-                    operationId => StartTransferProgress(operationId, "Moving..."),
+                    operationId => StartTransferProgress(operationId, move: true, sources, destination),
                     transferCts.Token);
                 if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
                 {
@@ -214,7 +214,7 @@ public sealed partial class MainWindow
                     destination,
                     action,
                     progress,
-                    operationId => StartTransferProgress(operationId, "Copying..."),
+                    operationId => StartTransferProgress(operationId, move: false, sources, destination),
                     transferCts.Token);
                 if (ReferenceEquals(_workspace, workspace) && !transferCts.IsCancellationRequested)
                 {

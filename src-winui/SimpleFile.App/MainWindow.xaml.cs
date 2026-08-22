@@ -33,7 +33,6 @@ public sealed partial class MainWindow : Window
     private bool _dividerMoved;
     private bool _applyingToolbarOverflow;
     private readonly HashSet<string> _primaryToolbarOverflow = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _secondaryToolbarOverflow = new(StringComparer.Ordinal);
     private IDisposable? _fileChangeSubscription;
     private string? _watchTargetPath;
     private string? _watchedPath;
@@ -286,12 +285,10 @@ public sealed partial class MainWindow : Window
         RebuildTabs(PrimaryTabHost, _workspace.Primary, PaneId.Primary);
         RebuildTabs(SecondaryTabHost, _workspace.Secondary, PaneId.Secondary);
 
-        PrimaryBackButton.IsEnabled = _workspace.Primary.CanGoBack;
-        PrimaryForwardButton.IsEnabled = _workspace.Primary.CanGoForward;
-        PrimaryUpButton.IsEnabled = _workspace.Primary.CanGoUp;
-        SecondaryBackButton.IsEnabled = _workspace.Secondary.CanGoBack;
-        SecondaryForwardButton.IsEnabled = _workspace.Secondary.CanGoForward;
-        SecondaryUpButton.IsEnabled = _workspace.Secondary.CanGoUp;
+        var activeNavigationPane = _workspace.Pane(_workspace.Normalize(_workspace.ActivePane));
+        PrimaryBackButton.IsEnabled = activeNavigationPane.CanGoBack;
+        PrimaryForwardButton.IsEnabled = activeNavigationPane.CanGoForward;
+        PrimaryUpButton.IsEnabled = activeNavigationPane.CanGoUp;
 
         SetExpandGlyph(QuickAccessCollapseButton, _quickAccessCollapsed);
         SetExpandGlyph(MyPcCollapseButton, _myPcCollapsed);
@@ -311,7 +308,9 @@ public sealed partial class MainWindow : Window
         ApplyDualPaneLayout();
         SidebarTargetSwitch.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
         HighlightSidebarTarget();
+        HighlightActivePane();
         SyncQuickFilterFromWorkspace();
+        UpdateSearchCancelButtons();
         UpdateDualPaneButton(_workspace.DualPaneEnabled);
 
         if (!_editingPrimaryPath)
@@ -422,13 +421,9 @@ public sealed partial class MainWindow : Window
     private void OnPrimaryToolbarSizeChanged(object sender, SizeChangedEventArgs e) =>
         ApplyPrimaryToolbarOverflow();
 
-    private void OnSecondaryToolbarSizeChanged(object sender, SizeChangedEventArgs e) =>
-        ApplySecondaryToolbarOverflow();
-
     private void ApplyToolbarOverflow()
     {
         ApplyPrimaryToolbarOverflow();
-        ApplySecondaryToolbarOverflow();
     }
 
     private void ApplyPrimaryToolbarOverflow()
@@ -439,11 +434,9 @@ public sealed partial class MainWindow : Window
         }
 
         var reserved = MeasuredWidth(PrimaryNavHost)
-            + MeasuredWidth(PrimaryEditPathButton)
             + MeasuredWidth(PrimaryMoreButton)
-            + ToolbarOverflowPlanner.PathMinWidth
             + (PrimaryToolbar.Padding.Left + PrimaryToolbar.Padding.Right)
-            + (3 * ToolbarOverflowPlanner.ColumnSpacing);
+            + (4 * ToolbarOverflowPlanner.ColumnSpacing);
 
         var widths = new Dictionary<string, double>(StringComparer.Ordinal)
         {
@@ -463,37 +456,6 @@ public sealed partial class MainWindow : Window
             ToolbarOverflowPlanner.PrimaryHideOrder);
 
         ApplyOverflowSet(_primaryToolbarOverflow, overflowed, ApplyPrimaryOverflowVisibility);
-    }
-
-    private void ApplySecondaryToolbarOverflow()
-    {
-        if (_applyingToolbarOverflow || SecondaryToolbar.ActualWidth <= 0)
-        {
-            return;
-        }
-
-        var reserved = MeasuredWidth(SecondaryNavHost)
-            + MeasuredWidth(SecondaryEditPathButton)
-            + MeasuredWidth(SecondaryMoreButton)
-            + ToolbarOverflowPlanner.PathMinWidth
-            + (SecondaryToolbar.Padding.Left + SecondaryToolbar.Padding.Right)
-            + (3 * ToolbarOverflowPlanner.ColumnSpacing);
-
-        var widths = new Dictionary<string, double>(StringComparer.Ordinal)
-        {
-            [ToolbarOverflowPlanner.DualPane] = 32,
-            [ToolbarOverflowPlanner.ViewOptions] = 32,
-            [ToolbarOverflowPlanner.NewFile] = 32,
-            [ToolbarOverflowPlanner.NewFolder] = 32,
-        };
-
-        var overflowed = ToolbarOverflowPlanner.OverflowIds(
-            SecondaryToolbar.ActualWidth,
-            reserved,
-            widths,
-            ToolbarOverflowPlanner.SecondaryHideOrder);
-
-        ApplyOverflowSet(_secondaryToolbarOverflow, overflowed, ApplySecondaryOverflowVisibility);
     }
 
     private void ApplyOverflowSet(
@@ -530,10 +492,9 @@ public sealed partial class MainWindow : Window
         SetOverflowVisible(PrimarySearchHost, searchVisible);
         PrimarySearchColumn.Width = searchVisible ? GridLength.Auto : new GridLength(0);
         SetOverflowVisible(PrimarySettingsButton, !overflowed.Contains(ToolbarOverflowPlanner.Settings));
-        var dual = _workspace?.DualPaneEnabled == true;
         var dualOverflowed = overflowed.Contains(ToolbarOverflowPlanner.DualPane);
-        SetOverflowVisible(DualPaneButton, !dual && !dualOverflowed);
-        SetOverflowVisible(ClosePrimaryPaneButton, dual && !dualOverflowed);
+        SetOverflowVisible(DualPaneButton, !dualOverflowed);
+        SetOverflowVisible(ClosePrimaryPaneButton, false);
         SetOverflowVisible(PrimaryViewButton, !overflowed.Contains(ToolbarOverflowPlanner.ViewOptions));
         SetOverflowVisible(PrimaryNewFileButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFile));
         SetOverflowVisible(PrimaryNewFolderButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFolder));
@@ -546,20 +507,6 @@ public sealed partial class MainWindow : Window
             || QuickFilterBox.Visibility == Visibility.Visible;
         SetOverflowVisible(PrimaryActionsHost, actionsVisible);
         PrimaryActionsColumn.Width = actionsVisible ? GridLength.Auto : new GridLength(0);
-    }
-
-    private void ApplySecondaryOverflowVisibility(IReadOnlySet<string> overflowed)
-    {
-        SetOverflowVisible(CloseDualPaneButton, !overflowed.Contains(ToolbarOverflowPlanner.DualPane));
-        SetOverflowVisible(SecondaryViewButton, !overflowed.Contains(ToolbarOverflowPlanner.ViewOptions));
-        SetOverflowVisible(SecondaryNewFileButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFile));
-        SetOverflowVisible(SecondaryNewFolderButton, !overflowed.Contains(ToolbarOverflowPlanner.NewFolder));
-        var actionsVisible = SecondaryNewFolderButton.Visibility == Visibility.Visible
-            || SecondaryNewFileButton.Visibility == Visibility.Visible
-            || CloseDualPaneButton.Visibility == Visibility.Visible
-            || SecondaryViewButton.Visibility == Visibility.Visible;
-        SetOverflowVisible(SecondaryActionsHost, actionsVisible);
-        SecondaryActionsColumn.Width = actionsVisible ? GridLength.Auto : new GridLength(0);
     }
 
     private static void SetOverflowVisible(FrameworkElement element, bool visible)
@@ -803,7 +750,6 @@ public sealed partial class MainWindow : Window
         }
 
         UpdateSidebarToggleButton(PrimarySidebarToggleButton, settings.SidebarVisible);
-        UpdateSidebarToggleButton(SecondarySidebarToggleButton, settings.SidebarVisible);
     }
 
     private static void UpdateSidebarToggleButton(Button button, bool sidebarVisible)
@@ -821,8 +767,37 @@ public sealed partial class MainWindow : Window
         var leftActive = !_workspace.DualPaneEnabled || _workspace.SidebarTarget == PaneId.Primary;
         SidebarLeftButton.Background = leftActive ? Brush("SfBgHoverBrush") : Brush("SfTransparentBrush");
         SidebarRightButton.Background = !leftActive ? Brush("SfBgHoverBrush") : Brush("SfTransparentBrush");
+        SidebarLeftButton.Foreground = leftActive ? Brush("SfAccentBrush") : Brush("SfTextPrimaryBrush");
+        SidebarRightButton.Foreground = !leftActive ? Brush("SfAccentBrush") : Brush("SfTextPrimaryBrush");
         SidebarLeftButton.FontWeight = leftActive ? FontWeights.SemiBold : FontWeights.Normal;
         SidebarRightButton.FontWeight = !leftActive ? FontWeights.SemiBold : FontWeights.Normal;
+        AutomationProperties.SetName(SidebarLeftButton, leftActive ? "Side menu target: left pane" : "Navigate left pane");
+        AutomationProperties.SetName(SidebarRightButton, !leftActive ? "Side menu target: right pane" : "Navigate right pane");
+        ToolTipService.SetToolTip(SidebarLeftButton, leftActive ? "Side menu opens folders in the left pane" : "Target the left pane");
+        ToolTipService.SetToolTip(SidebarRightButton, !leftActive ? "Side menu opens folders in the right pane" : "Target the right pane");
+    }
+
+    private void HighlightActivePane()
+    {
+        if (_workspace is null)
+        {
+            return;
+        }
+
+        var dual = _workspace.DualPaneEnabled;
+        var primaryActive = !dual || _workspace.ActivePane == PaneId.Primary;
+        var secondaryActive = dual && _workspace.ActivePane == PaneId.Secondary;
+
+        PrimaryActivePaneRail.Visibility = dual && primaryActive ? Visibility.Visible : Visibility.Collapsed;
+        SecondaryActivePaneRail.Visibility = secondaryActive ? Visibility.Visible : Visibility.Collapsed;
+        PrimaryPaneCaption.Visibility = dual ? Visibility.Visible : Visibility.Collapsed;
+        SecondaryPaneCaption.Visibility = dual ? Visibility.Visible : Visibility.Collapsed;
+        PrimaryPaneHeader.Background = Brush(primaryActive ? "SfBgTertiaryBrush" : "SfBgSecondaryBrush");
+        SecondaryPaneHeader.Background = Brush(secondaryActive ? "SfBgTertiaryBrush" : "SfBgSecondaryBrush");
+        PrimaryPaneCaptionText.Foreground = Brush(primaryActive ? "SfAccentBrush" : "SfTextMutedBrush");
+        SecondaryPaneCaptionText.Foreground = Brush(secondaryActive ? "SfAccentBrush" : "SfTextMutedBrush");
+        PrimaryPaneCaptionRail.Visibility = primaryActive ? Visibility.Visible : Visibility.Collapsed;
+        SecondaryPaneCaptionRail.Visibility = secondaryActive ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ApplyCaptionButtonColors(ElementTheme theme)
@@ -882,10 +857,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var filter = _workspace.FilterQuery;
-        if (!string.Equals(QuickFilterBox.Text, filter, StringComparison.Ordinal))
+        SyncQuickFilterBox(QuickFilterBox, _workspace.FilterQueryFor(_workspace.Normalize(_workspace.ActivePane)));
+    }
+
+    private static void SyncQuickFilterBox(TextBox box, string filter)
+    {
+        if (!string.Equals(box.Text, filter, StringComparison.Ordinal))
         {
-            QuickFilterBox.Text = filter;
+            box.Text = filter;
         }
     }
 
@@ -1171,30 +1150,16 @@ public sealed partial class MainWindow : Window
     private void OnSecondaryPanePressed(object sender, PointerRoutedEventArgs e) => _workspace?.ActivatePane(PaneId.Secondary);
 
     private async void OnPrimaryBack(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Primary, -1));
+        await RunUiActionAsync("Navigation", () => GoHistory(ActiveUiPane, -1));
 
     private async void OnPrimaryForward(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Primary, 1));
+        await RunUiActionAsync("Navigation", () => GoHistory(ActiveUiPane, 1));
 
     private async void OnPrimaryUp(object sender, RoutedEventArgs e)
     {
         if (_workspace is not null)
         {
-            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync(PaneId.Primary));
-        }
-    }
-
-    private async void OnSecondaryBack(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Secondary, -1));
-
-    private async void OnSecondaryForward(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("Navigation", () => GoHistory(PaneId.Secondary, 1));
-
-    private async void OnSecondaryUp(object sender, RoutedEventArgs e)
-    {
-        if (_workspace is not null)
-        {
-            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync(PaneId.Secondary));
+            await RunUiActionAsync("Navigation", () => _workspace.GoUpAsync(ActiveUiPane));
         }
     }
 
@@ -1575,9 +1540,10 @@ public sealed partial class MainWindow : Window
         }
         else if (_searchMode && _searchPane == _workspace.ActivePane)
         {
-            StatusText.Text = string.IsNullOrWhiteSpace(SearchBox.Text)
+            var searchText = SearchTextBoxFor(_searchPane).Text;
+            StatusText.Text = string.IsNullOrWhiteSpace(searchText)
                 ? "Search results"
-                : $"Search results for \"{SearchBox.Text.Trim()}\"";
+                : $"Search results for \"{searchText.Trim()}\"";
         }
         else if (!string.IsNullOrEmpty(_workspace.StatusMessage))
         {
@@ -3368,10 +3334,41 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void StartTransferProgress(string operationId, string label)
+    private void StartTransferProgress(string operationId, bool move, IReadOnlyList<string> sources, string destination)
     {
         _currentOperationId = operationId;
-        FileProgressPanel.Start(label);
+        FileProgressPanel.Start(new TransferProgressContext(
+            move,
+            sources.Count,
+            DescribeTransferSource(sources),
+            destination));
+    }
+
+    private static string DescribeTransferSource(IReadOnlyList<string> sources)
+    {
+        if (sources.Count == 0)
+        {
+            return "";
+        }
+
+        var parents = sources
+            .Select(SourceParent)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return parents.Length == 1 ? parents[0] : "Multiple locations";
+    }
+
+    private static string SourceParent(string source)
+    {
+        var trimmed = source.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return source;
+        }
+
+        var parent = System.IO.Path.GetDirectoryName(trimmed);
+        return string.IsNullOrWhiteSpace(parent) ? source : parent;
     }
 
     private void OnTransferProgress(ProgressUpdate update)
@@ -3412,14 +3409,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task StartSearchAsync()
+    private async Task StartSearchAsync(PaneId? requestedPane = null)
     {
         if (_workspace?.FileOps is null)
         {
             return;
         }
 
-        var query = SearchBox.Text.Trim();
+        var pane = _workspace.Normalize(requestedPane ?? _workspace.ActivePane);
+        _workspace.ActivatePane(pane);
+        var searchBox = SearchTextBoxFor(pane);
+        var query = searchBox.Text.Trim();
         if (query.Length == 0)
         {
             await CancelActiveSearchAsync();
@@ -3430,8 +3430,7 @@ public sealed partial class MainWindow : Window
 
         await CancelActiveSearchAsync();
 
-        var pane = _workspace.ActivePane;
-        var root = _workspace.Active.Path;
+        var root = _workspace.Pane(pane).Path;
         var searchId = $"search_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Interlocked.Increment(ref _searchCounter)}";
         var cts = new CancellationTokenSource();
         _searchCts = cts;
@@ -3440,7 +3439,7 @@ public sealed partial class MainWindow : Window
         _searchPane = pane;
         _searchRoot = root;
         _activeSearchResults.Clear();
-        SearchCancelButton.IsEnabled = true;
+        SetSearchCancelEnabled(pane, true);
         ApplySearchRows();
         StatusText.Text = $"Searching {root}...";
 
@@ -3536,7 +3535,7 @@ public sealed partial class MainWindow : Window
         _searchCts?.Cancel();
         if (string.IsNullOrEmpty(searchId) || _workspace?.FileOps is null)
         {
-            SearchCancelButton.IsEnabled = false;
+            UpdateSearchCancelButtons();
             return;
         }
 
@@ -3555,7 +3554,7 @@ public sealed partial class MainWindow : Window
         finally
         {
             _activeSearchId = null;
-            SearchCancelButton.IsEnabled = false;
+            UpdateSearchCancelButtons();
         }
     }
 
@@ -3567,7 +3566,7 @@ public sealed partial class MainWindow : Window
         _searchCts = null;
         _activeSearchId = null;
         _activeSearchResults.Clear();
-        SearchCancelButton.IsEnabled = false;
+        UpdateSearchCancelButtons();
     }
 
     private void FinishSearchRun(string searchId)
@@ -3578,11 +3577,11 @@ public sealed partial class MainWindow : Window
         }
 
         _activeSearchId = null;
-        SearchCancelButton.IsEnabled = false;
+        UpdateSearchCancelButtons();
     }
 
     private async void OnSearchClick(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("Search", StartSearchAsync);
+        await RunUiActionAsync("Search", () => StartSearchAsync(ActiveUiPane));
 
     private async void OnCancelSearchClick(object sender, RoutedEventArgs e)
     {
@@ -3594,7 +3593,7 @@ public sealed partial class MainWindow : Window
         if (e.Key == VirtualKey.Enter)
         {
             e.Handled = true;
-            await RunUiActionAsync("Search", StartSearchAsync);
+            await RunUiActionAsync("Search", () => StartSearchAsync(ActiveUiPane));
         }
         else if (e.Key == VirtualKey.Escape)
         {
@@ -3610,10 +3609,10 @@ public sealed partial class MainWindow : Window
     // ========================================================================
 
     private async void OnPrimaryNewFolder(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("New Folder", () => PromptAndCreateFolder(PaneId.Primary));
+        await RunUiActionAsync("New Folder", () => PromptAndCreateFolder(ActiveUiPane));
 
     private async void OnPrimaryNewFile(object sender, RoutedEventArgs e) =>
-        await RunUiActionAsync("New File", () => PromptAndCreateFile(PaneId.Primary));
+        await RunUiActionAsync("New File", () => PromptAndCreateFile(ActiveUiPane));
 
     private async void OnPrimaryRename(object sender, RoutedEventArgs e)
     {
@@ -4208,7 +4207,7 @@ public sealed partial class MainWindow : Window
         _searchPane = pane;
         _searchRoot = options.SearchPath;
         _activeSearchResults.Clear();
-        SearchCancelButton.IsEnabled = true;
+        SetSearchCancelEnabled(pane, true);
         ApplySearchRows();
         StatusText.Text = "Searching smart folder...";
 
@@ -4356,7 +4355,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var query = SearchBox.Text.Trim();
+        var queryPane = _searchMode ? _searchPane : workspace.ActivePane;
+        var query = SearchTextBoxFor(queryPane).Text.Trim();
         if (string.IsNullOrWhiteSpace(query))
         {
             ShowMessage("Smart folder", "Run a search before saving it as a smart folder.", InfoBarSeverity.Informational);

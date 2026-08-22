@@ -54,6 +54,8 @@ pub struct ProgressUpdate {
     pub operation_type: String,
     pub current: u64,
     pub total: u64,
+    pub current_files: u64,
+    pub total_files: u64,
     pub current_item: String,
     pub status: String, // "running", "completed", "error", "cancelled"
     pub error: Option<String>,

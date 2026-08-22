@@ -6,6 +6,8 @@
     "operation_type": "copy",
     "current": 1048576,
     "total": 4194304,
+    "current_files": 1,
+    "total_files": 4,
     "current_item": "C:\\src\\a.bin",
     "status": "running",
     "error": null

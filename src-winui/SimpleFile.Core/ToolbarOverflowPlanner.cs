@@ -1,7 +1,7 @@
 namespace SimpleFile.Core;
 
 /// <summary>
-/// Decides which pane-toolbar commands move into the More menu when the pane
+/// Decides which command-strip items move into the More menu when the shell
 /// is too narrow. Uses intrinsic item widths so the set is stable while
 /// collapsing (no show/hide oscillation).
 /// </summary>
@@ -24,14 +24,6 @@ public static class ToolbarOverflowPlanner
         Filter,
         Search,
         Settings,
-        DualPane,
-        ViewOptions,
-        NewFile,
-        NewFolder,
-    ];
-
-    public static readonly string[] SecondaryHideOrder =
-    [
         DualPane,
         ViewOptions,
         NewFile,

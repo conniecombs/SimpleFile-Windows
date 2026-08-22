@@ -152,6 +152,12 @@ public sealed class ProgressUpdate
     [JsonPropertyName("total")]
     public ulong Total { get; set; }
 
+    [JsonPropertyName("current_files")]
+    public ulong CurrentFiles { get; set; }
+
+    [JsonPropertyName("total_files")]
+    public ulong TotalFiles { get; set; }
+
     [JsonPropertyName("current_item")]
     public string CurrentItem { get; set; } = "";
 
