@@ -20,6 +20,8 @@ public class DesktopPolishTests
         Assert.Equal("Go home", AppCommandCatalog.Find("go-home")?.Label);
         Assert.Equal("Disk cleanup", AppCommandCatalog.Find("disk-cleanup")?.Label);
         Assert.Equal("Open or close second pane", AppCommandCatalog.Find("dual-pane")?.Label);
+        Assert.Equal("Move to Recycle Bin", AppCommandCatalog.Find("delete")?.Label);
+        Assert.Equal("Delete Permanently", AppCommandCatalog.Find("delete-permanent")?.Label);
         Assert.Equal(AppCommandCatalog.All.Count, AppCommandCatalog.Filter("").Count);
         var git = AppCommandCatalog.Filter("git");
         Assert.Equal(2, git.Count);
@@ -36,7 +38,7 @@ public class DesktopPolishTests
         var empty = ContextMenuBuilder.Build(new ContextMenuRequest());
         Assert.Contains(empty, entry => entry.Id == "ctx-terminal");
         Assert.DoesNotContain(empty, entry => entry.Id == "ctx-open");
-        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-delete");
+        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-delete-menu");
         Assert.DoesNotContain(empty, entry => entry.Kind == ContextMenuKind.Divider && empty.Last() == entry);
 
         var selected = ContextMenuBuilder.Build(new ContextMenuRequest
@@ -56,7 +58,10 @@ public class DesktopPolishTests
         Assert.False(string.IsNullOrWhiteSpace(open.IconGlyph));
         Assert.Contains(selected, entry => entry.Id == "ctx-open-with");
         Assert.Contains(selected, entry => entry.Id == "ctx-copy-to-pane");
-        Assert.Contains(selected, entry => entry.Id == "ctx-delete" && entry.Label == "Move to trash");
+        var delete = Assert.Single(selected, entry => entry.Id == "ctx-delete-menu");
+        Assert.Equal("Delete:", delete.Label);
+        Assert.Contains(delete.Children, entry => entry.Id == "ctx-delete-recycle" && entry.Label == "Move to Recycle Bin" && entry.Shortcut == "Delete");
+        Assert.Contains(delete.Children, entry => entry.Id == "ctx-delete-permanent" && entry.Label == "Delete Permanently" && entry.Shortcut == "Shift+Delete");
         var extract = Assert.Single(selected, entry => entry.Id == "ctx-extract-menu");
         Assert.False(string.IsNullOrWhiteSpace(extract.IconGlyph));
         Assert.Contains(extract.Children, child => child.Id == "ctx-extract-folder" && child.Label.Contains("pack/", StringComparison.Ordinal));
@@ -86,7 +91,7 @@ public class DesktopPolishTests
     {
         var empty = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest());
         Assert.DoesNotContain(empty, entry => entry.Id == "ctx-rename");
-        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-delete");
+        Assert.DoesNotContain(empty, entry => entry.Id == "ctx-delete-menu");
         Assert.Contains(empty, entry => entry.Id == "ctx-duplicates");
         Assert.Contains(empty, entry => entry.Id == "ctx-cleanup");
         Assert.Contains(empty, entry => entry.Id == "ctx-terminal" && entry.Shortcut == "F4");
@@ -112,11 +117,13 @@ public class DesktopPolishTests
         {
             SelectionCount = 1,
             SelectedIsArchive = true,
-            UseTrash = false,
         });
 
         Assert.Contains(archive, entry => entry.Id == "ctx-rename" && entry.Shortcut == "F2");
-        Assert.Contains(archive, entry => entry.Id == "ctx-delete" && entry.Label == "Delete");
+        var delete = Assert.Single(archive, entry => entry.Id == "ctx-delete-menu");
+        Assert.Equal("Delete:", delete.Label);
+        Assert.Contains(delete.Children, entry => entry.Id == "ctx-delete-recycle" && entry.Label == "Move to Recycle Bin");
+        Assert.Contains(delete.Children, entry => entry.Id == "ctx-delete-permanent" && entry.Label == "Delete Permanently");
         Assert.Contains(archive, entry => entry.Id == "ctx-view-archive");
         Assert.Contains(archive, entry => entry.Id == "ctx-extract-to" && entry.Label == "Extract archive...");
         Assert.Contains(archive, entry => entry.Id == "ctx-compress" && entry.Label == "Create archive...");

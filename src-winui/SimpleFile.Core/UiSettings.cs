@@ -18,7 +18,6 @@ public sealed class UiSettings
     public string DefaultView { get; set; } = "details";
     public int DefaultIconSize { get; set; } = 16;
     public bool ShowHidden { get; set; }
-    public bool UseTrash { get; set; } = true;
     public bool ConfirmDelete { get; set; } = true;
     public bool OpenInNewTab { get; set; }
     public bool AutoCollapseTree { get; set; }

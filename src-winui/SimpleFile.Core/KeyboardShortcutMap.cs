@@ -30,7 +30,7 @@ public static class KeyboardShortcutMap
         new("directory.refresh", "F5", "Refresh"),
         new("file.open", "Enter", "Open"),
         new("file.rename", "F2", "Rename"),
-        new("file.delete.trash", "Delete", "Move to trash"),
+        new("file.delete.trash", "Delete", "Move to Recycle Bin"),
         new("file.delete.permanent", "Shift+Delete", "Permanently delete"),
         new("file.copy", "Ctrl+C", "Copy"),
         new("file.cut", "Ctrl+X", "Cut"),

@@ -3084,15 +3084,6 @@ public sealed partial class MainWindow : Window
     private ListView ActiveFileList
         => _workspace?.ActivePane == PaneId.Secondary ? SecondaryFileList : PrimaryFileList;
 
-    private string? SelectedPath
-    {
-        get
-        {
-            var list = ActiveFileList;
-            return list.SelectedItem is FileRow row ? row.Path : null;
-        }
-    }
-
     private string[]? SelectedPaths
     {
         get
@@ -3244,14 +3235,15 @@ public sealed partial class MainWindow : Window
         if (workspace is null) return;
         var paths = SelectedPaths;
         if (paths is null || paths.Length == 0) return;
+        var itemText = FormatItemCount(paths.Length);
 
         if (workspace.Settings.ConfirmDelete)
         {
             var dialog = new ContentDialog
             {
-                Title = workspace.Settings.UseTrash ? "Move to Trash" : "Delete",
-                Content = $"Delete {paths.Length} item(s)?",
-                PrimaryButtonText = workspace.Settings.UseTrash ? "Trash" : "Delete",
+                Title = "Move to Recycle Bin",
+                Content = $"Move {itemText} to the Recycle Bin?",
+                PrimaryButtonText = "Move to Recycle Bin",
                 CloseButtonText = "Cancel",
                 DefaultButton = ContentDialogButton.Close,
                 XamlRoot = Content.XamlRoot,
@@ -3269,17 +3261,7 @@ public sealed partial class MainWindow : Window
         var utilityCts = BeginUtilityOperation();
         try
         {
-            if (workspace.Settings.UseTrash)
-            {
-                await workspace.TrashSelectedAsync(paths, utilityCts.Token);
-            }
-            else
-            {
-                foreach (var path in paths)
-                {
-                    await workspace.DeleteSelectedAsync(path, utilityCts.Token);
-                }
-            }
+            await workspace.TrashSelectedAsync(paths, utilityCts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -3350,14 +3332,18 @@ public sealed partial class MainWindow : Window
     {
         var workspace = _workspace;
         if (workspace is null) return;
-        var path = SelectedPath;
-        if (path is null) return;
+        var paths = SelectedPaths;
+        if (paths is null || paths.Length == 0) return;
+        var itemText = FormatItemCount(paths.Length);
+        var content = paths.Length == 1
+            ? $"Permanently delete this item? This cannot be undone.{Environment.NewLine}{paths[0]}"
+            : $"Permanently delete {itemText}? This cannot be undone.";
 
         var dialog = new ContentDialog
         {
-            Title = "Permanently Delete",
-            Content = $"Are you sure you want to permanently delete this item?\n{path}",
-            PrimaryButtonText = "Delete",
+            Title = "Delete Permanently",
+            Content = content,
+            PrimaryButtonText = "Delete Permanently",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = Content.XamlRoot,
@@ -3374,7 +3360,10 @@ public sealed partial class MainWindow : Window
             var utilityCts = BeginUtilityOperation();
             try
             {
-                await workspace.DeleteSelectedAsync(path, utilityCts.Token);
+                foreach (var path in paths)
+                {
+                    await workspace.DeleteSelectedAsync(path, utilityCts.Token);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -3389,6 +3378,9 @@ public sealed partial class MainWindow : Window
             }
         }
     }
+
+    private static string FormatItemCount(int count) =>
+        count == 1 ? "this item" : $"{count} items";
 
     private void CopyToClipboard()
     {

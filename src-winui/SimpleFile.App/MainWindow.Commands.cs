@@ -439,6 +439,9 @@ public sealed partial class MainWindow
             case "delete":
                 await TrashSelected();
                 break;
+            case "delete-permanent":
+                await DeleteSelected();
+                break;
             case "rename":
                 await PromptAndRename();
                 break;
@@ -788,7 +791,6 @@ public sealed partial class MainWindow
             AllSelectedAreFiles = selected.Count > 0 && selected.All(row => !row.IsDir),
             SelectedIsArchive = selected.Count == 1 && !selected[0].IsDir && ArchivePaths.IsArchiveFile(selected[0].Path),
             ArchiveExtractFolderName = selected.Count == 1 ? ArchivePaths.ExtractFolderName(selected[0].Name) : null,
-            UseTrash = _workspace?.Settings.UseTrash != false,
             OverflowedToolbarIds = overflowedToolbarIds ?? [],
         };
     }
@@ -965,8 +967,11 @@ public sealed partial class MainWindow
             case "ctx-extract-to":
                 await ExtractSelectedArchiveAsync(id);
                 break;
-            case "ctx-delete":
+            case "ctx-delete-recycle":
                 await TrashSelected();
+                break;
+            case "ctx-delete-permanent":
+                await DeleteSelected();
                 break;
             case "ctx-info":
                 await ShowPropertiesAsync();

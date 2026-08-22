@@ -397,10 +397,10 @@ public sealed class FileOperationService
         var detail = StripPrefix(ex.Message, Protocol.PrefixTrashUnavailable);
         if (Contains(detail, "cannot find the file specified") || Contains(detail, "0x80070002"))
         {
-            return "Windows could not move the selection to the Recycle Bin because one of the items is no longer available. Refresh the folder and try again, or permanently delete any remaining items instead.";
+            return "Windows could not move the selection to the Recycle Bin. The item may no longer be available, or this location may not support Recycle Bin operations. Refresh the folder and try again, or use Delete Permanently instead.";
         }
 
-        return "The Recycle Bin is not available for this location. This can happen on network, virtual, or cloud-backed drives.";
+        return "The Recycle Bin is not available for this location. This can happen on network, virtual, cloud-backed, or removable drives.";
     }
 
     private static string StripPrefix(string message, string prefix)

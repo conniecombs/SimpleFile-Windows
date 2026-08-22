@@ -30,7 +30,6 @@ public sealed class ContextMenuRequest
     public bool AllSelectedAreFiles { get; init; }
     public bool SelectedIsArchive { get; init; }
     public string? ArchiveExtractFolderName { get; init; }
-    public bool UseTrash { get; init; } = true;
     public IReadOnlyCollection<string> OverflowedToolbarIds { get; init; } = [];
 }
 
@@ -47,7 +46,6 @@ public static class ContextMenuBuilder
         var extractFolder = string.IsNullOrEmpty(request.ArchiveExtractFolderName)
             ? "Extract to Folder"
             : $"Extract to {request.ArchiveExtractFolderName}/";
-        var deleteLabel = request.UseTrash ? "Move to trash" : "Delete";
 
         var entries = new List<ContextMenuEntry>
         {
@@ -89,7 +87,7 @@ public static class ContextMenuBuilder
                 ],
             },
             Divider(),
-            Item("ctx-delete", deleteLabel, request.SelectionCount == 0, "Delete", "\uE74D"),
+            DeleteMenu(request.SelectionCount == 0),
             Divider(),
             Item("ctx-info", "Properties", request.SelectionCount != 1, "Alt+Enter", "\uE946"),
         };
@@ -101,7 +99,6 @@ public static class ContextMenuBuilder
     {
         var hasSelection = request.SelectionCount > 0;
         var singleSelection = request.SelectionCount == 1;
-        var deleteLabel = request.UseTrash ? "Move to trash" : "Delete";
 
         var entries = new List<ContextMenuEntry>();
         entries.AddRange(BuildToolbarOverflowItems(request));
@@ -116,7 +113,7 @@ public static class ContextMenuBuilder
             Item("ctx-close-dual-pane", "Close right pane", !request.DualPaneEnabled, "F6", "\uE711"),
             Divider(),
             Item("ctx-rename", "Rename", !singleSelection, "F2", "\uE8AC"),
-            Item("ctx-delete", deleteLabel, !hasSelection, "Delete", "\uE74D"),
+            DeleteMenu(!hasSelection),
             Item("ctx-color-label", "Set color label...", !hasSelection, null, "\uE790"),
             Divider(),
             Item("ctx-view-archive", "View archive contents", !request.SelectedIsArchive, null, "\uE8B7"),
@@ -272,5 +269,22 @@ public static class ContextMenuBuilder
     private static ContextMenuEntry Divider()
     {
         return new ContextMenuEntry { Kind = ContextMenuKind.Divider };
+    }
+
+    private static ContextMenuEntry DeleteMenu(bool disabled)
+    {
+        return new ContextMenuEntry
+        {
+            Kind = ContextMenuKind.Item,
+            Id = "ctx-delete-menu",
+            Label = "Delete:",
+            Disabled = disabled,
+            IconGlyph = "\uE74D",
+            Children =
+            [
+                Item("ctx-delete-recycle", "Move to Recycle Bin", disabled, "Delete", "\uE74D"),
+                Item("ctx-delete-permanent", "Delete Permanently", disabled, "Shift+Delete", "\uE74D"),
+            ],
+        };
     }
 }

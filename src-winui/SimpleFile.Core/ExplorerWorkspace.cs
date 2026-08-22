@@ -1736,7 +1736,6 @@ public sealed class ExplorerWorkspace
         await FileOps.SetSettingAsync("defaultView", Settings.DefaultView, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("defaultIconSize", Settings.DefaultIconSize.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("showHidden", Settings.ShowHidden ? "true" : "false", cancellationToken).ConfigureAwait(false);
-        await FileOps.SetSettingAsync("useTrash", Settings.UseTrash ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("confirmDelete", Settings.ConfirmDelete ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("startLocation", Settings.StartLocation, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("customPath", Settings.CustomPath, cancellationToken).ConfigureAwait(false);
@@ -1857,7 +1856,6 @@ public sealed class ExplorerWorkspace
             Settings.DefaultView = UiSettings.NormalizeDefaultView(await FileOps.GetSettingAsync("defaultView", cancellationToken).ConfigureAwait(false));
             Settings.DefaultIconSize = UiSettings.NormalizeIconSize(await FileOps.GetSettingAsync("defaultIconSize", cancellationToken).ConfigureAwait(false));
             Settings.ShowHidden = await ReadBoolSettingAsync("showHidden", false, cancellationToken).ConfigureAwait(false);
-            Settings.UseTrash = await ReadBoolSettingAsync("useTrash", true, cancellationToken).ConfigureAwait(false);
             Settings.ConfirmDelete = await ReadBoolSettingAsync("confirmDelete", true, cancellationToken).ConfigureAwait(false);
             Settings.StartLocation = UiSettings.NormalizeStartLocation(
                 await FileOps.GetSettingAsync("startLocation", cancellationToken).ConfigureAwait(false));

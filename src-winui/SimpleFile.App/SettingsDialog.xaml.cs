@@ -98,7 +98,6 @@ public sealed partial class SettingsDialog : ContentDialog
         settings.DefaultIconSize = UiSettings.NormalizeIconSize(DefaultIconSize);
         settings.ColumnPreset = UiSettings.NormalizeColumnPreset(ColumnPreset);
         settings.ShowHidden = ShowHiddenSwitch.IsOn;
-        settings.UseTrash = UseTrashSwitch.IsOn;
         settings.ConfirmDelete = ConfirmDeleteSwitch.IsOn;
         settings.StartLocation = UiSettings.NormalizeStartLocation(
             ((ComboBoxItem?)StartLocationComboBox.SelectedItem)?.Tag?.ToString());
@@ -128,8 +127,6 @@ public sealed partial class SettingsDialog : ContentDialog
         SelectColumnPreset(await GetSettingOrDefaultAsync(fileOps, "columnPreset", defaults.ColumnPreset, cancellationToken).ConfigureAwait(true) ?? defaults.ColumnPreset);
 
         ShowHiddenSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "showHidden", defaults.ShowHidden, cancellationToken).ConfigureAwait(true);
-
-        UseTrashSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "useTrash", defaults.UseTrash, cancellationToken).ConfigureAwait(true);
 
         ConfirmDeleteSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "confirmDelete", defaults.ConfirmDelete, cancellationToken).ConfigureAwait(true);
 

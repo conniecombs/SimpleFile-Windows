@@ -335,7 +335,9 @@ public class FileOperationServiceTests
         var message = FileOperationService.TrashUnavailableMessage(error);
 
         Assert.Contains("Recycle Bin", message);
-        Assert.Contains("no longer available", message);
+        Assert.Contains("may no longer be available", message);
+        Assert.Contains("location may not support", message);
+        Assert.Contains("Delete Permanently", message);
         Assert.DoesNotContain("TRASH_UNAVAILABLE", message);
         Assert.DoesNotContain("-2147024894", message);
         Assert.DoesNotContain("0x80070002", message);

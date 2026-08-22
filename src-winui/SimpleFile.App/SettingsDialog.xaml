@@ -106,7 +106,6 @@
                 <StackPanel x:Name="BehaviorPanel" Spacing="16" Visibility="Collapsed">
                     <TextBlock Text="Behavior" FontSize="18" FontWeight="SemiBold" />
                     <ToggleSwitch x:Name="ConfirmDeleteSwitch" Header="Confirm before delete" />
-                    <ToggleSwitch x:Name="UseTrashSwitch" Header="Use Trash (Recycle Bin)" />
                     <ToggleSwitch x:Name="ShowFolderSizesSwitch" Header="Show folder sizes" />
                     <ToggleSwitch x:Name="EnableGitSwitch" Header="Enable Git integration" />
                 </StackPanel>
