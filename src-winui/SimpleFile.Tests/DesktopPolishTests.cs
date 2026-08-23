@@ -319,6 +319,19 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void ServiceJob_DoesNotKillOpenedDocumentsWithTheProcessTree()
+    {
+        var root = FindRepoRoot();
+        var session = File.ReadAllText(Path.Combine(root, "SimpleFile.Core", "BackendSession.cs"));
+        var job = File.ReadAllText(Path.Combine(root, "SimpleFile.Core", "JobObject.cs"));
+
+        Assert.DoesNotContain("entireProcessTree: true", session);
+        Assert.Contains("entireProcessTree: false", session);
+        Assert.Contains("JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK", job);
+        Assert.Contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", job);
+    }
+
+    [Fact]
     public void FilePanes_AcceptClicksAcrossPaneAndRowWhitespace()
     {
         var root = FindRepoRoot();
@@ -337,13 +350,37 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void DetailsColumns_UseIndependentPixelWidthsLikeExplorer()
+    {
+        var root = FindRepoRoot();
+        var mainWindow = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "MainWindow.xaml.cs"))
+            + File.ReadAllText(Path.Combine(root, "SimpleFile.App", "MainWindow.Transfer.cs"));
+        var fileRowView = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "FileRowView.xaml.cs"));
+
+        Assert.Contains("ColumnResizeTarget", mainWindow);
+        Assert.Contains("Size Column to Fit", mainWindow);
+        Assert.Contains("Size All Columns to Fit", mainWindow);
+        Assert.Contains("OnColumnThumbDoubleTapped", mainWindow);
+        Assert.DoesNotContain("resizeId = column.Id == \"name\"", mainWindow);
+        Assert.DoesNotContain(
+            "? new GridLength(1, GridUnitType.Star)",
+            fileRowView.Replace("\r\n", "\n"));
+        Assert.Contains("Width = new GridLength(column.Width)", fileRowView);
+    }
+
+    [Fact]
     public void ColumnLayout_ClampsResizeAndAppliesPresets()
     {
         var columns = new ColumnLayout();
         columns.Resize("size", 10);
-        Assert.Equal(72, columns.WidthOf("size"));
-        columns.Resize("size", 1000);
-        Assert.Equal(220, columns.WidthOf("size"));
+        Assert.Equal(36, columns.WidthOf("size"));
+        columns.Resize("size", 800);
+        Assert.Equal(800, columns.WidthOf("size"));
+        columns.Resize("name", 40);
+        Assert.Equal(80, columns.WidthOf("name"));
+        columns.Resize("name", 500);
+        Assert.Equal(500, columns.WidthOf("name"));
+        Assert.Equal(columns.VisibleColumns.Sum(column => column.Width), columns.VisibleWidth);
         columns.ApplyPreset("developer");
         Assert.Contains("git", columns.VisibleIds);
         Assert.Equal(["name", "size", "date", "extension", "git", "symlink", "path"], columns.VisibleColumns.Select(column => column.Id));

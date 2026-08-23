@@ -7,6 +7,25 @@ namespace SimpleFile.Tests;
 public class BackendSessionTests
 {
     [Fact]
+    public void JobObject_KillsServiceOnCloseWithoutTakingOpenedDocuments()
+    {
+        Assert.Equal(
+            JobObject.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JobObject.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK,
+            JobObject.DefaultLimitFlags);
+
+        using var job = JobObject.TryCreate();
+        Assert.NotNull(job);
+        var flags = job.TryGetLimitFlags();
+        Assert.NotNull(flags);
+        Assert.Equal(
+            JobObject.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+            flags.Value & JobObject.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE);
+        Assert.Equal(
+            JobObject.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK,
+            flags.Value & JobObject.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK);
+    }
+
+    [Fact]
     public async Task StartAsync_CallsHealthAndVersion_WhenServiceIsBuilt()
     {
         if (ServiceLocator.FindServiceExecutable() is null)

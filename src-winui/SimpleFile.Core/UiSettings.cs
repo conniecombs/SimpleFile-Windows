@@ -19,6 +19,7 @@ public sealed class UiSettings
     public int DefaultIconSize { get; set; } = 16;
     public bool ShowHidden { get; set; }
     public bool ConfirmDelete { get; set; } = true;
+    public bool KeepFoldersOnTop { get; set; } = true;
     public bool OpenInNewTab { get; set; }
     public bool AutoCollapseTree { get; set; }
     public bool ShowQuickAccess { get; set; } = true;

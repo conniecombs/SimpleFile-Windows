@@ -12,5 +12,5 @@ Versioned request, response, and event schemas for the WinUI 3 ↔ Rust named-pi
 
 Validation:
 
-- `npm run check:ipc-schema` compares these files to `src-winui/SimpleFile.Ipc/Protocol.cs`, leftover `src-tauri/src/lib.rs` command names when present, and `crates/simplefile-core/src/models.rs`
+- `npm run check:ipc-schema` compares these files to `src-winui/SimpleFile.Ipc/Protocol.cs`, `crates/simplefile-service/src/dispatch.rs`, and `crates/simplefile-core/src/models.rs`
 - `cargo test -p simplefile-ipc` loads the same JSON and asserts counts, casing, and golden keys

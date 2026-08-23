@@ -5,9 +5,9 @@
 **Contract:** [`inventory.md`](inventory.md) (76 commands / emitted events / Svelte workflows)
 **Hosts:** WinUI 3 + `simplefile-service` is the shipping app. Svelte/Tauri UI and packaging glue have been retired.
 
-This is the **retirement lock**. Required `OPEN` rows are none. `MANUAL` rows stay as human smoke coverage. Leftover `src-tauri/src` domain remains until those modules live solely in `crates/simplefile-core`.
+This is the **retirement lock**. Required `OPEN` rows are none. `MANUAL` rows stay as human smoke coverage. Retired `src-tauri/` domain now lives solely in `crates/simplefile-core`.
 
-Inspected for this gate: leftover `src-tauri/src/lib.rs` `generate_handler!`, `src-winui/SimpleFile.Ipc/Protocol.cs`, `crates/simplefile-service/src/dispatch.rs`, `src-winui/**`, `ipc/schema/v1/`, `package.json`, `.github/workflows/*`.
+Inspected for this gate: `src-winui/SimpleFile.Ipc/Protocol.cs`, `crates/simplefile-service/src/dispatch.rs`, `src-winui/**`, `ipc/schema/v1/`, `package.json`, `.github/workflows/*`.
 
 ---
 
@@ -280,7 +280,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `operation-history` | Palette | `OperationLog` retry | Catalog + workspace | — | `PASS` |
 | `clear-recent-history` | Palette clears recents | `ClearRecentHistoryAsync` | Catalog test | — | `PASS` |
 | `undo` `redo` | Palette | Undo stack | Tests | — | `PASS` |
-| `delete` `rename` `new-folder` `new-file` | Palette | Dialogs | Catalog | — | `PASS` |
+| `delete` `delete-permanent` `rename` `new-folder` `new-file` | Palette | Dialogs | Catalog | — | `PASS` |
 | `advanced-rename` | Palette | Find/replace/number | Catalog + rename tests | — | `PASS` |
 | `create-archive` | Palette | Dialog | Catalog | — | `MANUAL` |
 | `terminal` | Palette / F4 | IPC | Catalog | F4 | `MANUAL` |
@@ -320,7 +320,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `ctx-pack` `ctx-unpack` | Pack/unpack | Builder | Same | — | `PASS` |
 | `ctx-compress` | Compress | Builder | Same | — | `PASS` |
 | `ctx-extract-menu` `ctx-extract` `ctx-extract-folder` `ctx-extract-to` | Extract menu | Builder | Same | Archive | `PASS` |
-| `ctx-delete` | Delete | Builder | Same | — | `PASS` |
+| `ctx-delete` `ctx-delete-menu` `ctx-delete-recycle` `ctx-delete-permanent` | Delete menu | Builder | `DesktopPolishTests` | Delete / Shift+Delete | `PASS` |
 | `ctx-info` | Properties | Builder | Same | — | `PASS` |
 | `keys.path.focus` | Ctrl+L / Alt+D | Accelerators | `KeyboardShortcutMap` | Focus path | `PASS` |
 | `keys.nav` | Alt+arrows, Backspace, F5 | Accelerators | Shortcut map | — | `PASS` |
@@ -345,6 +345,7 @@ Each command must appear here. Service registry is `crates/simplefile-service/sr
 | `set.theme` | Theme | Settings Appearance | Save/load | — | `MANUAL` |
 | `set.showHidden` | Hidden files | Toggle | Workspace `SetShowHidden` | — | `PASS` |
 | `set.useTrash` `set.confirmDelete` | Delete behavior | Settings Behavior | Settings apply | — | `MANUAL` |
+| `set.keepFoldersOnTop` | Folders on top vs mixed sort | Settings Behavior | `EntryPresentationTests` | Toggle; sort by name | `PASS` |
 | `set.startLocation` | home/last/custom | Settings Navigation | `ResolveStartPath` | — | `PASS` |
 | `set.openInNewTab` | Open in tab | `OpenPathAsync` opens a tab | Workspace | Toggle; open folder | `PASS` |
 | `set.enableGit` | Git integration | `ApplyGitStatusesAsync` | Workspace | Enable Git in a repo | `PASS` |

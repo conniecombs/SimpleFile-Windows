@@ -1,7 +1,8 @@
 # SimpleFile WinUI 3 host
 
 Native Windows file-manager UI. It starts `simplefile-service` (job object
-`KILL_ON_JOB_CLOSE`) and speaks named-pipe JSON-RPC.
+`KILL_ON_JOB_CLOSE` plus silent breakaway so opened documents outlive the
+app) and speaks named-pipe JSON-RPC.
 
 `SimpleFile.Ipc` multiplexes request/response, `list_directory.chunk`
 notifications, transfer progress, watcher/search notifications, client-side

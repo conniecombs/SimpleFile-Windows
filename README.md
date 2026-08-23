@@ -383,7 +383,6 @@ SimpleFile-Windows/
 │   ├── simplefile-core/          Host-independent file-manager domain
 │   ├── simplefile-ipc/           Framing + JSON-RPC types
 │   └── simplefile-service/       Named-pipe IPC service process
-├── src-tauri/src/                Leftover domain modules not yet in core
 ├── ipc/schema/                   Named-pipe JSON-RPC contract
 ├── packaging/winui/              NSIS + WiX + app icon
 ├── scripts/                      Repo-level checks, release, and smokes

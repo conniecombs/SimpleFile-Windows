@@ -38,6 +38,23 @@ public class EntryPresentationTests
     }
 
     [Fact]
+    public void SortEntries_CanMixFoldersWithFiles()
+    {
+        FileEntry[] entries =
+        [
+            new() { Name = "zoo", IsDir = true, Path = @"C:\zoo" },
+            new() { Name = "alpha.txt", IsDir = false, Path = @"C:\alpha.txt" },
+            new() { Name = "beta", IsDir = true, Path = @"C:\beta" },
+        ];
+
+        var grouped = EntryPresentation.SortEntries(entries, keepFoldersOnTop: true);
+        Assert.Equal(["beta", "zoo", "alpha.txt"], grouped.Select(entry => entry.Name));
+
+        var mixed = EntryPresentation.SortEntries(entries, keepFoldersOnTop: false);
+        Assert.Equal(["alpha.txt", "beta", "zoo"], mixed.Select(entry => entry.Name));
+    }
+
+    [Fact]
     public void VisibleEntries_FilterIsCaseInsensitive()
     {
         FileEntry[] entries =

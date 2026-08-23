@@ -1,7 +1,7 @@
 //! Host-independent SimpleFile backend types and utilities.
 //!
 //! Shared domain logic lives here so the WinUI 3 named-pipe service can use it
-//! without depending on the legacy Svelte/Tauri host.
+//! without depending on a UI host.
 
 pub mod archive;
 pub mod checksum;

@@ -844,13 +844,21 @@
                                     </Button>
                                 </Grid>
                             </Grid>
-                            <Grid
-                                x:Name="PrimaryColumnHeader"
+                            <ScrollViewer
+                                x:Name="PrimaryColumnHeaderScroller"
                                 Grid.Row="1"
-                                Padding="10,0"
-                                Background="Transparent"
-                                BorderBrush="{ThemeResource SfBorderBrush}"
-                                BorderThickness="0,0,0,1" />
+                                HorizontalScrollBarVisibility="Hidden"
+                                HorizontalScrollMode="Disabled"
+                                VerticalScrollBarVisibility="Disabled"
+                                VerticalScrollMode="Disabled">
+                                <Grid
+                                    x:Name="PrimaryColumnHeader"
+                                    Padding="10,0,0,0"
+                                    HorizontalAlignment="Left"
+                                    Background="Transparent"
+                                    BorderBrush="{ThemeResource SfBorderBrush}"
+                                    BorderThickness="0,0,0,1" />
+                            </ScrollViewer>
                             <Grid
                                 Grid.Row="2"
                                 Background="Transparent"
@@ -1033,13 +1041,21 @@
                                     </Button>
                                 </Grid>
                             </Grid>
-                            <Grid
-                                x:Name="SecondaryColumnHeader"
+                            <ScrollViewer
+                                x:Name="SecondaryColumnHeaderScroller"
                                 Grid.Row="1"
-                                Padding="10,0"
-                                Background="Transparent"
-                                BorderBrush="{ThemeResource SfBorderBrush}"
-                                BorderThickness="0,0,0,1" />
+                                HorizontalScrollBarVisibility="Hidden"
+                                HorizontalScrollMode="Disabled"
+                                VerticalScrollBarVisibility="Disabled"
+                                VerticalScrollMode="Disabled">
+                                <Grid
+                                    x:Name="SecondaryColumnHeader"
+                                    Padding="10,0,0,0"
+                                    HorizontalAlignment="Left"
+                                    Background="Transparent"
+                                    BorderBrush="{ThemeResource SfBorderBrush}"
+                                    BorderThickness="0,0,0,1" />
+                            </ScrollViewer>
                             <Grid
                                 Grid.Row="2"
                                 Background="Transparent"

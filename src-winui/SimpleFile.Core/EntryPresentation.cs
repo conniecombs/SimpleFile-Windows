@@ -123,16 +123,23 @@ public static class EntryPresentation
     public static IReadOnlyList<FileEntry> SortEntries(
         IEnumerable<FileEntry> entries,
         string sortBy = "name",
-        bool sortAsc = true)
+        bool sortAsc = true,
+        bool keepFoldersOnTop = true)
     {
         var direction = sortAsc ? 1 : -1;
-        return entries
-            .OrderBy(entry => entry.IsDir ? 0 : 1)
-            .ThenBy(entry => SortValue(entry, sortBy), Comparer<object>.Create((left, right) =>
-            {
-                var compared = Comparer<object>.Default.Compare(left, right);
-                return compared * direction;
-            }))
+        var columnComparer = Comparer<object>.Create((left, right) =>
+        {
+            var compared = Comparer<object>.Default.Compare(left, right);
+            return compared * direction;
+        });
+
+        var ordered = keepFoldersOnTop
+            ? entries
+                .OrderBy(entry => entry.IsDir ? 0 : 1)
+                .ThenBy(entry => SortValue(entry, sortBy), columnComparer)
+            : entries.OrderBy(entry => SortValue(entry, sortBy), columnComparer);
+
+        return ordered
             .ThenBy(entry => entry.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }
@@ -142,9 +149,10 @@ public static class EntryPresentation
         string filterQuery = "",
         bool showHidden = false,
         string sortBy = "name",
-        bool sortAsc = true)
+        bool sortAsc = true,
+        bool keepFoldersOnTop = true)
     {
-        return SortEntries(FilterEntries(entries, filterQuery, showHidden), sortBy, sortAsc);
+        return SortEntries(FilterEntries(entries, filterQuery, showHidden), sortBy, sortAsc, keepFoldersOnTop);
     }
 
     /// <summary>

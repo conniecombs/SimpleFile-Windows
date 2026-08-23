@@ -1,7 +1,7 @@
 # Rust Core Extraction Plan
 
 **Date:** 2026-08-14  
-**Status:** Historical extraction plan. Svelte/Tauri UI is retired. Leftover `src-tauri/src` domain still waits to move into `simplefile-core`.  
+**Status:** Historical extraction plan. Svelte/Tauri UI is retired. Leftover `src-tauri/src` domain now lives in `simplefile-core` and is dispatched by `simplefile-service`.  
 **Source tree:** `R:\Repos\SimpleFile-Windows`  
 **Constraint at write time:** classify and plan only. Do **not** move files in this step. Do **not** delete Svelte/Tauri.  
 **Contract:** [`inventory.md`](inventory.md) (74 commands) and [`architecture.md`](architecture.md) (named-pipe JSON-RPC, `Host` in `simplefile-core` from PR 3).

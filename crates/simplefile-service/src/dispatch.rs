@@ -1031,7 +1031,7 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
         _ => Dispatch::Reply(JsonRpcResponse::error(
             request.id.clone(),
             ERR_METHOD_NOT_FOUND,
-            format!("method not available in IPC MVP: {}", request.method),
+            format!("method not found: {}", request.method),
         )),
     }
 }
@@ -1448,5 +1448,222 @@ mod tests {
         let _ = fs::remove_file(right);
         let _ = fs::remove_file(archive_path);
         let _ = fs::remove_dir_all(extract_dir);
+    }
+
+    fn assert_domain_method_is_wired(
+        state: &mut SessionState,
+        method: &str,
+        id: u64,
+        params: Value,
+    ) {
+        match dispatch(state, &request(method, id, params)) {
+            Dispatch::Reply(response) => {
+                if let Some(error) = response.error {
+                    assert_ne!(
+                        error.code, ERR_METHOD_NOT_FOUND,
+                        "{method} must be implemented, got {}",
+                        error.message
+                    );
+                    assert!(
+                        !error.message.contains("IPC MVP"),
+                        "{method} still uses the leftover MVP stub: {}",
+                        error.message
+                    );
+                }
+            }
+            Dispatch::InstallUpdate { .. }
+            | Dispatch::DiskCleanup { .. }
+            | Dispatch::CancelDiskCleanup { .. }
+            | Dispatch::DuplicateCheck { .. }
+            | Dispatch::CancelDuplicateCheck { .. } => {}
+            other => panic!("{method} produced unexpected dispatch {other:?}"),
+        }
+    }
+
+    #[test]
+    fn leftover_domain_methods_are_wired() {
+        let _lock = metadata_db_env_lock().lock().expect("env lock");
+        let db_path = temp_file("leftover-domain-db", b"");
+        fs::remove_file(&db_path).expect("remove seed temp file");
+        let _env = EnvVarGuard::set("SIMPLEFILE_METADATA_DB", &db_path);
+        let mut state = SessionState {
+            handshake_done: true,
+            ..SessionState::default()
+        };
+
+        // Methods with no required params. Skip prepare_rar_install (downloads)
+        // and check_for_update (hits the network unless a manifest is injected).
+        for (id, method) in [
+            (20u64, "get_all_tags"),
+            (21, "get_all_file_tags"),
+            (22, "load_smart_folders"),
+            (23, "check_rar_installed"),
+            (24, "get_app_version"),
+            (25, "get_app_about_info"),
+            (26, "cancel_disk_cleanup"),
+            (27, "cancel_duplicate_check"),
+            (28, "install_update"),
+        ] {
+            assert_domain_method_is_wired(&mut state, method, id, json!({}));
+        }
+
+        for (id, method) in [
+            (40u64, "create_tag"),
+            (41, "update_tag"),
+            (42, "delete_tag"),
+            (43, "get_tags_for_path"),
+            (44, "set_tags_for_path"),
+            (45, "get_files_with_tag"),
+            (46, "save_smart_folder"),
+            (47, "delete_smart_folder"),
+            (48, "get_git_status"),
+            (49, "get_git_file_statuses"),
+            (50, "git_pull"),
+            (51, "git_push"),
+            (52, "disk_cleanup"),
+            (53, "duplicate_check"),
+            (54, "discard_rar_install"),
+            (55, "install_rar"),
+            (56, "open_terminal"),
+            (57, "open_powershell_admin"),
+        ] {
+            assert_domain_method_is_wired(&mut state, method, id, json!({}));
+        }
+
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn tags_and_smart_folders_round_trip_through_core() {
+        let _lock = metadata_db_env_lock().lock().expect("env lock");
+        let db_path = temp_file("tags-smart-folders-db", b"");
+        fs::remove_file(&db_path).expect("remove seed temp file");
+        let app_data = db_path.with_file_name(format!(
+            "simplefile-app-data-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time")
+                .as_nanos()
+        ));
+        fs::create_dir_all(&app_data).expect("app data dir");
+        let _db_env = EnvVarGuard::set("SIMPLEFILE_METADATA_DB", &db_path);
+        let _app_env = EnvVarGuard::set("SIMPLEFILE_APP_DATA_DIR", &app_data);
+        let mut state = SessionState {
+            handshake_done: true,
+            ..SessionState::default()
+        };
+
+        let seeded = dispatch(&mut state, &request("get_all_tags", 60, json!({})));
+        let Dispatch::Reply(seeded_response) = seeded else {
+            panic!("expected seeded tags reply");
+        };
+        let seeded_tags = seeded_response.result.unwrap();
+        assert!(
+            seeded_tags.as_array().map(|tags| tags.len()).unwrap_or(0) >= 5,
+            "backend should seed default tags"
+        );
+
+        let created = dispatch(
+            &mut state,
+            &request(
+                "create_tag",
+                61,
+                json!({ "name": "Review", "color": "#123456" }),
+            ),
+        );
+        let Dispatch::Reply(created_response) = created else {
+            panic!("expected create_tag reply");
+        };
+        let created_tag = created_response.result.unwrap();
+        let tag_id = created_tag["id"].as_i64().expect("tag id");
+        assert_eq!(created_tag["name"], "Review");
+
+        let set_tags = dispatch(
+            &mut state,
+            &request(
+                "set_tags_for_path",
+                62,
+                json!({ "path": "C:\\file.txt", "tagIds": [tag_id] }),
+            ),
+        );
+        let Dispatch::Reply(set_tags_response) = set_tags else {
+            panic!("expected set_tags_for_path reply");
+        };
+        assert!(set_tags_response.error.is_none());
+
+        let path_tags = dispatch(
+            &mut state,
+            &request("get_tags_for_path", 63, json!({ "path": "C:\\file.txt" })),
+        );
+        let Dispatch::Reply(path_tags_response) = path_tags else {
+            panic!("expected get_tags_for_path reply");
+        };
+        assert_eq!(
+            path_tags_response.result.unwrap()[0]["id"].as_i64(),
+            Some(tag_id)
+        );
+
+        let save = dispatch(
+            &mut state,
+            &request(
+                "save_smart_folder",
+                64,
+                json!({
+                    "folder": {
+                        "id": "sf-review",
+                        "name": "Review",
+                        "icon": null,
+                        "search_options": {
+                            "query": "review",
+                            "search_path": "C:\\",
+                            "case_sensitive": false,
+                            "include_hidden": false,
+                            "file_types": [],
+                            "max_results": 200,
+                            "max_depth": 6,
+                            "search_id": null,
+                            "content_search": false,
+                            "min_size": null,
+                            "max_size": null,
+                            "date_after": null,
+                            "date_before": null
+                        }
+                    }
+                }),
+            ),
+        );
+        let Dispatch::Reply(save_response) = save else {
+            panic!("expected save_smart_folder reply");
+        };
+        assert!(save_response.error.is_none());
+
+        let loaded = dispatch(&mut state, &request("load_smart_folders", 65, json!({})));
+        let Dispatch::Reply(loaded_response) = loaded else {
+            panic!("expected load_smart_folders reply");
+        };
+        assert_eq!(loaded_response.result.unwrap()[0]["id"], "sf-review");
+
+        let git_status = dispatch(
+            &mut state,
+            &request(
+                "get_git_status",
+                66,
+                json!({ "path": std::env::temp_dir().to_string_lossy() }),
+            ),
+        );
+        let Dispatch::Reply(git_status_response) = git_status else {
+            panic!("expected get_git_status reply");
+        };
+        assert!(git_status_response.error.is_none());
+        assert_eq!(git_status_response.result.unwrap()["is_repo"], false);
+
+        let rar = dispatch(&mut state, &request("check_rar_installed", 67, json!({})));
+        let Dispatch::Reply(rar_response) = rar else {
+            panic!("expected check_rar_installed reply");
+        };
+        assert!(rar_response.result.unwrap().is_boolean());
+
+        let _ = fs::remove_file(db_path);
+        let _ = fs::remove_dir_all(app_data);
     }
 }

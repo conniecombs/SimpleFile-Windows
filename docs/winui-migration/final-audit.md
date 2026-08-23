@@ -46,11 +46,9 @@ Inspected with `rg` / `Get-Content` over `.yml`, `.json`, `.mjs`, `.ps1`, `.md`,
 
 | Item | Why |
 | --- | --- |
-| `src-tauri/src/*.rs` leftover domain | Tags, smart folders, git, cleanup, terminal, RAR, db, updater still wait to move into `simplefile-core`. Not unused glue. |
 | `ServiceLocator` `src-tauri/target/{debug,release}` candidates | Existing local service binaries may still live there |
 | `.gitignore` `/src-tauri/target/` | Same leftover build dir |
 | C# comments citing `frontend/src/...` | Provenance of the port, not live commands |
-| `ipc/schema/v1/{types,events}.json` `source` paths under `src-tauri/src` | Those leftover files still exist |
 | `events.json` `tauri://drag-*` | Host-only schema names, marked as such |
 | `docs/CHANGELOG.md` historical entries | Past release record |
 | `docs/RELEASE_1.1.0.md` | Notes for that shipped version |
@@ -89,5 +87,5 @@ Workflows:
 
 ## Residual risk (not stale artifacts)
 
-- Service dispatch still returns `method not available in IPC MVP` for some leftover-domain methods (tags, smart folders, git, cleanup, RAR, updater, terminal). WinUI has host-side coverage for several of those; a later extract should move the Rust implementations into `simplefile-core` and wire dispatch.
 - Unpackaged WinUI still requires `resources.pri` + `*.xbf` beside the exe (covered by the publish targets and `build-winui-release.ps1`).
+- In-app `install_update` stays blocked until installer signature verification is in place; `check_for_update` still reads `latest-winui.json`.

@@ -99,6 +99,7 @@ public sealed partial class SettingsDialog : ContentDialog
         settings.ColumnPreset = UiSettings.NormalizeColumnPreset(ColumnPreset);
         settings.ShowHidden = ShowHiddenSwitch.IsOn;
         settings.ConfirmDelete = ConfirmDeleteSwitch.IsOn;
+        settings.KeepFoldersOnTop = KeepFoldersOnTopSwitch.IsOn;
         settings.StartLocation = UiSettings.NormalizeStartLocation(
             ((ComboBoxItem?)StartLocationComboBox.SelectedItem)?.Tag?.ToString());
         settings.CustomPath = CustomPathBox.Text.Trim();
@@ -129,6 +130,7 @@ public sealed partial class SettingsDialog : ContentDialog
         ShowHiddenSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "showHidden", defaults.ShowHidden, cancellationToken).ConfigureAwait(true);
 
         ConfirmDeleteSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "confirmDelete", defaults.ConfirmDelete, cancellationToken).ConfigureAwait(true);
+        KeepFoldersOnTopSwitch.IsOn = await ReadBoolSettingAsync(fileOps, "keepFoldersOnTop", defaults.KeepFoldersOnTop, cancellationToken).ConfigureAwait(true);
 
         var startLoc = UiSettings.NormalizeStartLocation(
             await GetSettingOrDefaultAsync(fileOps, "startLocation", defaults.StartLocation, cancellationToken).ConfigureAwait(true));

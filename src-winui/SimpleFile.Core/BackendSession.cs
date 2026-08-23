@@ -114,7 +114,7 @@ public sealed class BackendSession : IExplorerBackend, IAsyncDisposable
         {
             try
             {
-                _service.Kill(entireProcessTree: true);
+                _service.Kill(entireProcessTree: false);
                 _service.WaitForExit(2000);
             }
             catch
@@ -251,7 +251,7 @@ public sealed class BackendSession : IExplorerBackend, IAsyncDisposable
             {
                 if (!_service.WaitForExit(1500))
                 {
-                    _service.Kill(entireProcessTree: true);
+                    _service.Kill(entireProcessTree: false);
                     _service.WaitForExit(1500);
                 }
             }

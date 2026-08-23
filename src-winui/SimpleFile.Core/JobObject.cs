@@ -3,8 +3,22 @@ using System.Runtime.InteropServices;
 
 namespace SimpleFile.Core;
 
+/// <summary>
+/// Owns <c>simplefile-service</c> so the backend dies with the UI, like Explorer
+/// owning its shell extensions — without dragging opened documents with it.
+/// <c>KILL_ON_JOB_CLOSE</c> still kills the service when the last job handle
+/// closes. <c>SILENT_BREAKAWAY_OK</c> keeps ShellExecute/Open With children
+/// (Notepad, viewers, players) out of the job so they survive SimpleFile exit.
+/// </summary>
 internal sealed class JobObject : IDisposable
 {
+    internal const uint JOB_OBJECT_LIMIT_BREAKAWAY_OK = 0x00000800;
+    internal const uint JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK = 0x00001000;
+    internal const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
+
+    internal const uint DefaultLimitFlags =
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK;
+
     private IntPtr _handle;
     private bool _disposed;
 
@@ -25,7 +39,7 @@ internal sealed class JobObject : IDisposable
         {
             BasicLimitInformation = new JOBOBJECT_BASIC_LIMIT_INFORMATION
             {
-                LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+                LimitFlags = DefaultLimitFlags,
             },
         };
 
@@ -46,6 +60,32 @@ internal sealed class JobObject : IDisposable
         }
 
         return new JobObject(handle);
+    }
+
+    internal uint? TryGetLimitFlags()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var size = Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>();
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (!QueryInformationJobObject(
+                    _handle,
+                    JobObjectExtendedLimitInformation,
+                    buffer,
+                    (uint)size,
+                    out _))
+            {
+                return null;
+            }
+
+            var info = Marshal.PtrToStructure<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>(buffer);
+            return info.BasicLimitInformation.LimitFlags;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     public bool TryAssign(Process process)
@@ -77,7 +117,6 @@ internal sealed class JobObject : IDisposable
     }
 
     private const int JobObjectExtendedLimitInformation = 9;
-    private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateJobObjectW(IntPtr lpJobAttributes, string? lpName);
@@ -88,6 +127,14 @@ internal sealed class JobObject : IDisposable
         int infoClass,
         IntPtr lpJobObjectInfo,
         uint cbJobObjectInfoLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool QueryInformationJobObject(
+        IntPtr hJob,
+        int infoClass,
+        IntPtr lpJobObjectInfo,
+        uint cbJobObjectInfoLength,
+        out uint lpReturnLength);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool AssignProcessToJobObject(IntPtr hJob, IntPtr hProcess);

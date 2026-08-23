@@ -66,7 +66,6 @@ public sealed partial class FileRowView : UserControl
     private void OnColumnsChanged(object? sender, EventArgs e)
     {
         ApplyColumns();
-        ApplyRow();
     }
 
     private void OnViewSettingsChanged(object? sender, EventArgs e)
@@ -143,16 +142,23 @@ public sealed partial class FileRowView : UserControl
 
         if (view != "details")
         {
+            MinWidth = 0;
+            RowGrid.Width = double.NaN;
+            RowGrid.HorizontalAlignment = HorizontalAlignment.Stretch;
             return;
         }
 
+        var total = 0.0;
         for (var index = 0; index < visible.Count && index < RowGrid.ColumnDefinitions.Count; index++)
         {
             var column = visible[index];
-            RowGrid.ColumnDefinitions[index].Width = column.Id == "name"
-                ? new GridLength(1, GridUnitType.Star)
-                : new GridLength(column.Width);
+            RowGrid.ColumnDefinitions[index].Width = new GridLength(column.Width);
+            total += column.Width;
         }
+
+        RowGrid.Width = total;
+        RowGrid.HorizontalAlignment = HorizontalAlignment.Left;
+        MinWidth = total;
     }
 
     private void ApplyIcon()
@@ -257,6 +263,7 @@ public sealed partial class FileRowView : UserControl
         RowGrid.Width = double.NaN;
         RowGrid.MinHeight = 28;
         RowGrid.ColumnSpacing = 10;
+        MinWidth = 0;
         RowGrid.RowSpacing = 0;
         _textCells.Clear();
         _tagPip = null;
@@ -269,17 +276,18 @@ public sealed partial class FileRowView : UserControl
     private void RebuildDetailsLayout(IReadOnlyList<FileListColumn> columns, int iconSize)
     {
         RowGrid.MinHeight = Math.Max(28, iconSize + 10);
-        RowGrid.ColumnSpacing = 10;
+        RowGrid.ColumnSpacing = 0;
+        RowGrid.HorizontalAlignment = HorizontalAlignment.Left;
 
+        var total = 0.0;
         for (var index = 0; index < columns.Count; index++)
         {
             var column = columns[index];
             RowGrid.ColumnDefinitions.Add(new ColumnDefinition
             {
-                Width = column.Id == "name"
-                    ? new GridLength(1, GridUnitType.Star)
-                    : new GridLength(column.Width),
+                Width = new GridLength(column.Width),
             });
+            total += column.Width;
 
             FrameworkElement cell = column.Id == "name"
                 ? CreateNameCell(iconSize, wrapName: false)
@@ -287,6 +295,9 @@ public sealed partial class FileRowView : UserControl
             Grid.SetColumn(cell, index);
             RowGrid.Children.Add(cell);
         }
+
+        RowGrid.Width = total;
+        MinWidth = total;
     }
 
     private void RebuildListLayout(int iconSize)
@@ -442,9 +453,10 @@ public sealed partial class FileRowView : UserControl
         };
     }
 
-    private TextBlock CreateTextCell(string id)
+    private FrameworkElement CreateTextCell(string id)
     {
         var text = CreateMetadataText();
+        text.Margin = new Thickness(10, 0, 8, 0);
         _textCells[id] = text;
         return text;
     }

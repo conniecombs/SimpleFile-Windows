@@ -1,3 +1,4 @@
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -6,6 +7,8 @@ using SimpleFile.Ipc;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.System;
+using Windows.UI.Core;
 
 namespace SimpleFile.App;
 
@@ -826,16 +829,17 @@ public sealed partial class MainWindow
 
     private void OnColumnThumbPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is not FrameworkElement element || element.Tag is not string id)
+        if (sender is not FrameworkElement element || element.Tag is not ColumnResizeTarget target)
         {
             return;
         }
 
         _columnDragging = true;
-        _columnDragId = id;
+        _columnDragId = target.ColumnId;
         _columnDragStartX = e.GetCurrentPoint(RootGrid).Position.X;
         _columnDragStartWidth = ColumnLayoutHost.Shared.WidthOf(_columnDragId);
         element.CapturePointer(e.Pointer);
+        e.Handled = true;
     }
 
     private void OnColumnThumbMoved(object sender, PointerRoutedEventArgs e)
@@ -849,15 +853,49 @@ public sealed partial class MainWindow
         var columns = _workspace?.Columns ?? ColumnLayoutHost.Shared;
         columns.Resize(_columnDragId, _columnDragStartWidth + delta);
         ApplyColumnWidths();
+        e.Handled = true;
     }
 
-    private void OnColumnThumbReleased(object sender, PointerRoutedEventArgs e)
+    private async void OnColumnThumbReleased(object sender, PointerRoutedEventArgs e)
     {
+        if (!_columnDragging)
+        {
+            return;
+        }
+
         _columnDragging = false;
         _columnDragId = null;
         if (sender is FrameworkElement element)
         {
             element.ReleasePointerCapture(e.Pointer);
+        }
+
+        e.Handled = true;
+        if (_workspace is not null)
+        {
+            await RunUiActionAsync("Resize columns", () => _workspace.SaveUiSettingsAsync());
+        }
+    }
+
+    private void OnColumnThumbDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.Tag is not ColumnResizeTarget target)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _columnDragging = false;
+        _columnDragId = null;
+        var shift = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+            .HasFlag(CoreVirtualKeyStates.Down);
+        if (shift)
+        {
+            SizeAllColumnsToFit(target.Pane);
+        }
+        else
+        {
+            SizeColumnToFit(target.ColumnId, target.Pane, save: true);
         }
     }
 
@@ -866,5 +904,18 @@ public sealed partial class MainWindow
         var columns = _workspace?.Columns ?? ColumnLayoutHost.Shared;
         ApplyColumnHeader(PrimaryColumnHeader, columns, PaneId.Primary, ref _primaryColumnHeaderKey);
         ApplyColumnHeader(SecondaryColumnHeader, columns, PaneId.Secondary, ref _secondaryColumnHeaderKey);
+        ApplyDetailsItemMinWidths(PrimaryFileList, columns.VisibleWidth);
+        ApplyDetailsItemMinWidths(SecondaryFileList, columns.VisibleWidth);
+    }
+
+    private static void ApplyDetailsItemMinWidths(ListView list, double width)
+    {
+        for (var index = 0; index < list.Items.Count; index++)
+        {
+            if (list.ContainerFromIndex(index) is ListViewItem item)
+            {
+                item.MinWidth = width;
+            }
+        }
     }
 }

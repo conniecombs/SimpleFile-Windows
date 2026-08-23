@@ -19,8 +19,8 @@ Use Node.js 24 or newer, stable Rust, and .NET SDK 8 or newer.
 - `src-winui/SimpleFile.Core` owns workspace, menus, transfers, and settings.
 - `src-winui/SimpleFile.Ipc` is the named-pipe JSON-RPC client.
 - `crates/simplefile-service` is the shipping Rust backend process.
-- `crates/simplefile-core` holds reusable domain logic.
-- Leftover `src-tauri/src` modules stay until they are extracted into core.
+- `crates/simplefile-core` holds reusable domain logic, including tags, smart
+  folders, git, cleanup, RAR, updater, and terminal.
 - `scripts/` contains release and parity checks.
 
 ## Backend Boundaries

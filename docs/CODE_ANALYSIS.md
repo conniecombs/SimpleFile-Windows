@@ -12,10 +12,9 @@ SimpleFile is split across a WinUI 3 host and a Rust IPC service.
 ## Backend
 
 - `crates/simplefile-service` is the shipping named-pipe process.
-- `crates/simplefile-core` holds reusable filesystem, archive, preview, and settings domain.
+- `crates/simplefile-core` holds reusable filesystem, archive, preview, settings,
+  tags, smart folders, git, cleanup, RAR, updater, and terminal domain.
 - `crates/simplefile-ipc` holds framing, protocol constants, and schema tests.
-- Leftover `src-tauri/src` modules remain until tags, smart folders, git,
-  cleanup, terminal, RAR, and db live solely in `simplefile-core`.
 
 ## Important Contracts
 

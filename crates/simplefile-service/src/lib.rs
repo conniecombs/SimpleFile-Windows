@@ -1,6 +1,4 @@
 //! Named-pipe JSON-RPC service used by the WinUI host.
-//!
-//! The Tauri/Svelte app is unchanged and does not speak this protocol.
 
 pub mod dispatch;
 pub mod progress;

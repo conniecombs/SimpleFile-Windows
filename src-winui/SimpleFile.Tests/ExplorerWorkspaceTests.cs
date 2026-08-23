@@ -682,6 +682,26 @@ public class ExplorerWorkspaceTests
         Assert.Equal(48, workspace.IconSizeFor(PaneId.Primary));
     }
 
+    [Fact]
+    public async Task KeepFoldersOnTop_CanBeTurnedOffToMixFiles()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        backend.Listings[@"C:\Users\test"].Entries =
+        [
+            new FileEntry { Name = "zoo", Path = @"C:\Users\test\zoo", IsDir = true },
+            new FileEntry { Name = "alpha.txt", Path = @"C:\Users\test\alpha.txt" },
+            new FileEntry { Name = "beta", Path = @"C:\Users\test\beta", IsDir = true },
+        ];
+        var workspace = new ExplorerWorkspace(backend);
+        await workspace.InitializeAsync();
+        Assert.True(workspace.Settings.KeepFoldersOnTop);
+        Assert.Equal(["beta", "zoo", "alpha.txt"], workspace.VisibleEntries.Select(entry => entry.Name));
+
+        workspace.Settings.KeepFoldersOnTop = false;
+        workspace.ApplyUiSettings(workspace.Settings, applyViewDefaultsToPanes: false);
+        Assert.Equal(["alpha.txt", "beta", "zoo"], workspace.VisibleEntries.Select(entry => entry.Name));
+    }
+
 }
 internal sealed class FakeExplorerBackend : IExplorerBackend
 {

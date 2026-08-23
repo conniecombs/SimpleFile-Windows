@@ -25,6 +25,8 @@ public sealed class FileListColumn
 /// </summary>
 public sealed class ColumnLayout
 {
+    public const double UnboundedMaxWidth = 10000;
+
     public static readonly string[] DefaultVisible = ["name", "size", "date", "type"];
 
     public static readonly IReadOnlyDictionary<string, string[]> Presets = new Dictionary<string, string[]>(StringComparer.Ordinal)
@@ -40,16 +42,16 @@ public sealed class ColumnLayout
     {
         Columns =
         [
-            new("name", "Name", "name", 240, 120, 720),
-            new("size", "Size", "size", 100, 72, 220),
-            new("items", "Items", "items", 86, 64, 160),
-            new("date", "Modified", "date", 160, 112, 260),
-            new("type", "Type", "type", 100, 84, 260),
-            new("extension", "Ext", "extension", 72, 56, 120),
-            new("git", "Git", "git", 92, 72, 180),
-            new("symlink", "Link target", "symlink", 180, 100, 420),
-            new("path", "Path", "path", 220, 140, 640),
-            new("parent", "Parent", "parent", 180, 120, 480),
+            new("name", "Name", "name", 240, 80, UnboundedMaxWidth),
+            new("size", "Size", "size", 100, 36, UnboundedMaxWidth),
+            new("items", "Items", "items", 86, 36, UnboundedMaxWidth),
+            new("date", "Modified", "date", 160, 36, UnboundedMaxWidth),
+            new("type", "Type", "type", 100, 36, UnboundedMaxWidth),
+            new("extension", "Ext", "extension", 72, 36, UnboundedMaxWidth),
+            new("git", "Git", "git", 92, 36, UnboundedMaxWidth),
+            new("symlink", "Link target", "symlink", 180, 36, UnboundedMaxWidth),
+            new("path", "Path", "path", 220, 36, UnboundedMaxWidth),
+            new("parent", "Parent", "parent", 180, 36, UnboundedMaxWidth),
         ];
         VisibleIds = [.. DefaultVisible];
     }
@@ -66,6 +68,8 @@ public sealed class ColumnLayout
             .Where(column => column is not null)
             .Cast<FileListColumn>()
             .ToList();
+
+    public double VisibleWidth => VisibleColumns.Sum(column => column.Width);
 
     public bool IsVisible(string id)
     {

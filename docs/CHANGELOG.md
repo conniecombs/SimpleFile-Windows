@@ -9,12 +9,26 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 ## [Unreleased]
 
 ### Changed
+- Settings → Behavior now has “Keep folders on top when sorting” (on by
+  default, matching Explorer). Turning it off mixes files and folders in
+  one column order.
+- Details-view columns now resize like Windows File Explorer: each column,
+  including Name, has its own width; drag a header divider to resize the
+  column on the left; double-click a divider to size that column to fit
+  (Shift+double-click sizes all); right-click a header for Size Column/All
+  Columns to Fit; extra-wide columns scroll horizontally with the header.
 - Shipping UI is now the WinUI 3 host plus the Rust `simplefile-service` IPC
   process. The Svelte/Tauri renderer, Tauri packaging hooks, and unused Tauri
-  glue have been retired. Reusable Rust domain remains in `crates/` and leftover
-  `src-tauri/src` modules.
+  glue have been retired. Reusable Rust domain lives in `crates/simplefile-core`.
+- Tags, smart folders, git, cleanup, RAR, updater, and terminal commands now
+  live in `simplefile-core` and are dispatched by `simplefile-service`. Unknown
+  methods return a normal method-not-found error instead of the leftover IPC
+  MVP stub.
 
 ### Fixed
+- Closing SimpleFile no longer closes files opened in external programs
+  (Notepad, image viewers, video players). The service job still dies with
+  the UI; shell children break away, matching Explorer.
 - Cancelling a copy/move no longer races operation history into "Completed".
   History stays cancelled, partial results can be undone, and success toasts are
   suppressed. The backend returns any completed items with a `cancelled`

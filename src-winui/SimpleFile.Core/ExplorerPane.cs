@@ -41,14 +41,19 @@ public sealed class ExplorerPane
 
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => BreadcrumbBuilder.FromPath(Path);
 
-    public IReadOnlyList<FileEntry> VisibleEntries(string sortBy, bool sortAscending, bool showHidden, string filterQuery)
+    public IReadOnlyList<FileEntry> VisibleEntries(
+        string sortBy,
+        bool sortAscending,
+        bool showHidden,
+        string filterQuery,
+        bool keepFoldersOnTop = true)
     {
-        return EntryPresentation.VisibleEntries(Entries, filterQuery, showHidden, sortBy, sortAscending);
+        return EntryPresentation.VisibleEntries(Entries, filterQuery, showHidden, sortBy, sortAscending, keepFoldersOnTop);
     }
 
-    public IReadOnlyList<FileEntry> VisibleEntries(bool showHidden, string filterQuery)
+    public IReadOnlyList<FileEntry> VisibleEntries(bool showHidden, string filterQuery, bool keepFoldersOnTop = true)
     {
-        return VisibleEntries(SortBy, SortAscending, showHidden, filterQuery);
+        return VisibleEntries(SortBy, SortAscending, showHidden, filterQuery, keepFoldersOnTop);
     }
 
     public void ApplyViewDefaults(UiSettings settings)

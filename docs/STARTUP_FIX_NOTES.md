@@ -7,7 +7,8 @@ and Rust IPC service.
 
 - `src-winui/SimpleFile.App` is the unpackaged WinUI 3 window.
 - `BackendSession` starts `simplefile-service` under a job object
-  (`KILL_ON_JOB_CLOSE`) and completes `ipc.handshake` before UI work.
+  (`KILL_ON_JOB_CLOSE` plus silent breakaway so opened documents survive)
+  and completes `ipc.handshake` before UI work.
 - Unpackaged launches need `resources.pri` and `*.xbf` beside `SimpleFile.exe`.
   `scripts/build-winui-release.ps1` stages those in `dist/winui/payload`.
 - Override the service path with `SIMPLEFILE_SERVICE_PATH` when needed.

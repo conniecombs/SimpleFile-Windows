@@ -44,7 +44,7 @@ if (!gate.includes('Retirement completed')) {
   fail(`${gatePath} must record that Svelte/Tauri retirement completed.`);
 }
 if (!gate.includes('frontend/') || !gate.includes('src-tauri/')) {
-  fail(`${gatePath} must name retired frontend/ and leftover src-tauri domain.`);
+  fail(`${gatePath} must name retired frontend/ and src-tauri/ domain.`);
 }
 if (!gate.includes('crates/simplefile-core') || !gate.includes('crates/simplefile-service')) {
   fail(`${gatePath} must keep reusable Rust crates named.`);

@@ -112,7 +112,7 @@ public sealed class ExplorerWorkspace
     public IReadOnlyList<string> History => Primary.History;
     public int HistoryIndex => Primary.HistoryIndex;
     public IReadOnlyList<FileEntry> VisibleEntries =>
-        Primary.VisibleEntries(ShowHiddenFiles, FilterQueryFor(PaneId.Primary));
+        Primary.VisibleEntries(ShowHiddenFiles, FilterQueryFor(PaneId.Primary), Settings.KeepFoldersOnTop);
     public IReadOnlyList<BreadcrumbSegment> Breadcrumbs => Primary.Breadcrumbs;
     public bool IsNavigating => Primary.IsNavigating;
     public bool ListingInProgress => Primary.ListingInProgress;
@@ -1091,7 +1091,7 @@ public sealed class ExplorerWorkspace
         var selectionCleared = false;
         if (!string.IsNullOrEmpty(state.SelectedPath))
         {
-            var visible = state.VisibleEntries(ShowHiddenFiles, normalized);
+            var visible = state.VisibleEntries(ShowHiddenFiles, normalized, Settings.KeepFoldersOnTop);
             if (!visible.Any(entry => PathRules.PathsEqual(entry.Path, state.SelectedPath)))
             {
                 state.SelectedPath = null;
@@ -1325,9 +1325,14 @@ public sealed class ExplorerWorkspace
     {
         var target = Normalize(pane);
         var state = Pane(target);
-        var entries = state.ListingInProgress
+        var keepFoldersOnTop = Settings.KeepFoldersOnTop;
+        var canUsePresorted = state.ListingInProgress
+            && keepFoldersOnTop
+            && string.Equals(state.SortBy, "name", StringComparison.OrdinalIgnoreCase)
+            && state.SortAscending;
+        var entries = canUsePresorted
             ? EntryPresentation.VisibleEntriesPreSorted(state.Entries, FilterQueryFor(target), ShowHiddenFiles)
-            : state.VisibleEntries(ShowHiddenFiles, FilterQueryFor(target));
+            : state.VisibleEntries(ShowHiddenFiles, FilterQueryFor(target), keepFoldersOnTop);
 
         if (ActiveTagFilter is long tagId)
         {
@@ -1737,6 +1742,7 @@ public sealed class ExplorerWorkspace
         await FileOps.SetSettingAsync("defaultIconSize", Settings.DefaultIconSize.ToString(System.Globalization.CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("showHidden", Settings.ShowHidden ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("confirmDelete", Settings.ConfirmDelete ? "true" : "false", cancellationToken).ConfigureAwait(false);
+        await FileOps.SetSettingAsync("keepFoldersOnTop", Settings.KeepFoldersOnTop ? "true" : "false", cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("startLocation", Settings.StartLocation, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("customPath", Settings.CustomPath, cancellationToken).ConfigureAwait(false);
         await FileOps.SetSettingAsync("openInNewTab", Settings.OpenInNewTab ? "true" : "false", cancellationToken).ConfigureAwait(false);
@@ -1857,6 +1863,7 @@ public sealed class ExplorerWorkspace
             Settings.DefaultIconSize = UiSettings.NormalizeIconSize(await FileOps.GetSettingAsync("defaultIconSize", cancellationToken).ConfigureAwait(false));
             Settings.ShowHidden = await ReadBoolSettingAsync("showHidden", false, cancellationToken).ConfigureAwait(false);
             Settings.ConfirmDelete = await ReadBoolSettingAsync("confirmDelete", true, cancellationToken).ConfigureAwait(false);
+            Settings.KeepFoldersOnTop = await ReadBoolSettingAsync("keepFoldersOnTop", true, cancellationToken).ConfigureAwait(false);
             Settings.StartLocation = UiSettings.NormalizeStartLocation(
                 await FileOps.GetSettingAsync("startLocation", cancellationToken).ConfigureAwait(false));
             Settings.CustomPath = await FileOps.GetSettingAsync("customPath", cancellationToken).ConfigureAwait(false) ?? "";
