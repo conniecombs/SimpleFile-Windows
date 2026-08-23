@@ -193,7 +193,7 @@ internal static class FileListThumbnailHost
     }
 
     private static int ThumbnailSizeFor(int iconSize) =>
-        Math.Clamp(iconSize <= 32 ? 64 : iconSize * 2, 64, 256);
+        Math.Clamp(iconSize <= 32 ? 64 : iconSize * 2, 64, UiSettings.IconSizeMax * 2);
 
     private static string ExtensionFor(FileRow row)
     {

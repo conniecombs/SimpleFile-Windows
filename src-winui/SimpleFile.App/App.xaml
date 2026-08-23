@@ -171,11 +171,10 @@
             </Style>
 
             <Style x:Key="SfFileTileItemStyle" TargetType="ListViewItem" BasedOn="{StaticResource SfFileListItemStyle}">
-                <Setter Property="Width" Value="236" />
                 <Setter Property="MinHeight" Value="76" />
                 <Setter Property="Margin" Value="2" />
                 <Setter Property="HorizontalAlignment" Value="Left" />
-                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
             </Style>
 
             <ItemsPanelTemplate x:Key="SfStackItemsPanelTemplate">

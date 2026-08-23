@@ -185,6 +185,9 @@ public static class ContextMenuBuilder
                     Item("icon:32", "Medium icons"),
                     Item("icon:48", "Large icons"),
                     Item("icon:96", "Extra large icons"),
+                    Item("icon:128", "Jumbo icons"),
+                    Item("icon:192", "Huge icons"),
+                    Item("icon:256", "Maximum icons"),
                 ],
             });
         }

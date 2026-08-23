@@ -151,6 +151,26 @@ public class ExplorerWorkspaceTests
     }
 
     [Fact]
+    public async Task OpenPath_FilePreservesAndPersistsPaneViewOptions()
+    {
+        var backend = FakeExplorerBackend.Typical();
+        var settingsIpc = new WorkspaceSettingsIpc();
+        var workspace = new ExplorerWorkspace(backend, new FileOperationService(settingsIpc));
+        await workspace.InitializeAsync();
+        workspace.SetFileListView(PaneId.Primary, "tiles");
+        workspace.SetFileListIconSize(PaneId.Primary, 224);
+
+        await workspace.OpenPathAsync(@"C:\Users\test\notes.txt", isDirectory: false, PaneId.Primary);
+        await workspace.SaveWorkspaceLayoutAsync();
+
+        Assert.Equal([@"C:\Users\test\notes.txt"], settingsIpc.OpenedFiles);
+        Assert.Equal("tiles", workspace.ViewFor(PaneId.Primary));
+        Assert.Equal(224, workspace.IconSizeFor(PaneId.Primary));
+        Assert.Contains("\"view\":\"tiles\"", settingsIpc.Settings[WorkspaceLayout.SettingsKey]);
+        Assert.Contains("\"iconSize\":224", settingsIpc.Settings[WorkspaceLayout.SettingsKey]);
+    }
+
+    [Fact]
     public async Task ApplyGitStatuses_UpdatesPaneEntriesWhenEnabled()
     {
         var backend = FakeExplorerBackend.Typical();

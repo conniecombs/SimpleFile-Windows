@@ -13,6 +13,9 @@ public sealed class UiSettings
     public const double DualPaneMaxPercent = 80;
     public const double FilePaneMinWidth = 180;
     public const double DualPaneDividerWidth = 8;
+    public const int IconSizeMin = 16;
+    public const int IconSizeMax = 256;
+    public const int IconSizeStep = 8;
 
     public string Theme { get; set; } = "system";
     public string DefaultView { get; set; } = "details";
@@ -61,6 +64,9 @@ public sealed class UiSettings
         (32, "Medium icons"),
         (48, "Large icons"),
         (96, "Extra large icons"),
+        (128, "Jumbo icons"),
+        (192, "Huge icons"),
+        (256, "Maximum icons"),
     ];
 
     public static string NormalizeTheme(string? theme)
@@ -108,14 +114,13 @@ public sealed class UiSettings
     {
         if (iconSize is null)
         {
-            return 16;
+            return IconSizeMin;
         }
 
-        return IconSizeOptions
-            .OrderBy(option => Math.Abs(option.Size - iconSize.Value))
-            .ThenBy(option => option.Size)
-            .First()
-            .Size;
+        var clamped = Math.Clamp(iconSize.Value, IconSizeMin, IconSizeMax);
+        var snappedOffset = (int)Math.Round((clamped - IconSizeMin) / (double)IconSizeStep, MidpointRounding.AwayFromZero)
+            * IconSizeStep;
+        return Math.Clamp(IconSizeMin + snappedOffset, IconSizeMin, IconSizeMax);
     }
 
     public static int NormalizeIconSize(string? iconSize)

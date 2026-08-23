@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Media.Imaging;
+using SimpleFile.Core;
 
 namespace SimpleFile.App;
 
@@ -117,24 +118,7 @@ internal static class ShellIconLoader
     }
 
     private static int NormalizeIconSize(int iconSize)
-    {
-        if (iconSize <= 16)
-        {
-            return 16;
-        }
-
-        if (iconSize <= 32)
-        {
-            return 32;
-        }
-
-        if (iconSize <= 48)
-        {
-            return 48;
-        }
-
-        return 96;
-    }
+        => UiSettings.NormalizeIconSize(iconSize);
 
     private static bool ShouldUseActualFileIcon(string path)
     {
@@ -152,7 +136,7 @@ internal static class ShellIconLoader
 
     private static BitmapImage CreateFallbackIcon(string path, bool isDirectory, int iconSize)
     {
-        var size = Math.Clamp(iconSize, 16, 128);
+        var size = Math.Clamp(iconSize, UiSettings.IconSizeMin, UiSettings.IconSizeMax);
         using var bitmap = new Bitmap(size, size);
         using var graphics = Graphics.FromImage(bitmap);
         graphics.SmoothingMode = SmoothingMode.AntiAlias;
@@ -387,7 +371,7 @@ internal static class ShellIconLoader
 
     private static Bitmap NormalizeIconBitmap(Bitmap source, int iconSize)
     {
-        var outputSize = Math.Clamp(iconSize, 16, 128);
+        var outputSize = Math.Clamp(iconSize, UiSettings.IconSizeMin, UiSettings.IconSizeMax);
         var content = FindOpaqueBounds(source);
         if (content.IsEmpty)
         {

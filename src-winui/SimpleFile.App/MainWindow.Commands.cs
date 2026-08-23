@@ -13,6 +13,9 @@ namespace SimpleFile.App;
 public sealed partial class MainWindow
 {
     private bool _commandPaletteOpen;
+    private bool _syncingViewOptionsFlyout;
+    private int _viewIconSizeSaveToken;
+    private readonly SemaphoreSlim _viewIconSizeSaveGate = new(1, 1);
     private List<AppCommand> _paletteCommands = [];
 
     private void OnCommandPaletteAccelerator(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs e)
@@ -496,6 +499,15 @@ public sealed partial class MainWindow
             case "icon-size-extra-large":
                 await ApplyViewOptionAsync("icon:96");
                 break;
+            case "icon-size-jumbo":
+                await ApplyViewOptionAsync("icon:128");
+                break;
+            case "icon-size-huge":
+                await ApplyViewOptionAsync("icon:192");
+                break;
+            case "icon-size-maximum":
+                await ApplyViewOptionAsync("icon:256");
+                break;
             case "search":
                 FocusSearchUi();
                 break;
@@ -599,9 +611,9 @@ public sealed partial class MainWindow
     private void OnPrimaryMoreMenuOpening(object sender, object e) =>
         PopulatePaneMoreMenu(sender as MenuFlyout, ActiveUiPane);
 
-    private void OnViewOptionsMenuOpening(object sender, object e)
+    private void OnViewOptionsFlyoutOpening(object sender, object e)
     {
-        if (sender is not MenuFlyout flyout || _workspace is null)
+        if (_workspace is null)
         {
             return;
         }
@@ -610,97 +622,137 @@ public sealed partial class MainWindow
         var currentView = _workspace.ViewFor(pane);
         var currentIconSize = _workspace.IconSizeFor(pane);
 
-        flyout.Items.Clear();
+        _syncingViewOptionsFlyout = true;
+        try
+        {
+            ViewDualPaneText.Text = _workspace.DualPaneEnabled ? "Close right pane" : "Open second pane";
+            ViewDualPaneIcon.Glyph = _workspace.DualPaneEnabled ? "\uE711" : "\uE8A7";
+            ViewApplyBothButton.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
+            SelectViewStyle(currentView);
 
-        var dualPaneItem = new MenuFlyoutItem
-        {
-            Text = _workspace.DualPaneEnabled ? "Close right pane" : "Open second pane",
-            Tag = "pane:dual",
-            KeyboardAcceleratorTextOverride = "F6",
-            Icon = CreateMenuIcon(_workspace.DualPaneEnabled ? "\uE711" : "\uE8A7"),
-        };
-        dualPaneItem.Click += OnViewOptionClicked;
-        flyout.Items.Add(dualPaneItem);
-        flyout.Items.Add(new MenuFlyoutSeparator());
-
-        var styleMenu = new MenuFlyoutSubItem
-        {
-            Text = "Display style",
-            Icon = CreateMenuIcon("\uE8A9"),
-        };
-        AddViewStyleItem(styleMenu, "details", "Details", "\uE8FD", currentView);
-        AddViewStyleItem(styleMenu, "list", "List", "\uEA37", currentView);
-        AddViewStyleItem(styleMenu, "tiles", "Tiles", "\uECA5", currentView);
-        AddViewStyleItem(styleMenu, "content", "Content", "\uE8A5", currentView);
-        flyout.Items.Add(styleMenu);
-
-        var sizeMenu = new MenuFlyoutSubItem
-        {
-            Text = "Icon size",
-            Icon = CreateMenuIcon("\uE8B9"),
-        };
-        foreach (var option in UiSettings.IconSizeOptions)
-        {
-            AddIconSizeItem(sizeMenu, option.Size, option.Label, currentIconSize);
+            ViewIconSizeSlider.Minimum = UiSettings.IconSizeMin;
+            ViewIconSizeSlider.Maximum = UiSettings.IconSizeMax;
+            ViewIconSizeSlider.SmallChange = UiSettings.IconSizeStep;
+            ViewIconSizeSlider.LargeChange = UiSettings.IconSizeStep * 2;
+            ViewIconSizeSlider.StepFrequency = UiSettings.IconSizeStep;
+            ViewIconSizeSlider.Value = currentIconSize;
+            UpdateViewIconSizeValueText(currentIconSize);
         }
-
-        flyout.Items.Add(sizeMenu);
-
-        if (_workspace.DualPaneEnabled)
+        finally
         {
-            flyout.Items.Add(new MenuFlyoutSeparator());
-            var applyBothItem = new MenuFlyoutItem
+            _syncingViewOptionsFlyout = false;
+        }
+    }
+
+    private void SelectViewStyle(string currentView)
+    {
+        for (var index = 0; index < ViewStyleRadioButtons.Items.Count; index++)
+        {
+            if (ViewStyleRadioButtons.Items[index] is RadioButton item
+                && string.Equals(item.Tag?.ToString(), currentView, StringComparison.Ordinal))
             {
-                Text = "Apply view options to both panes",
-                Tag = "pane:apply-view-to-both",
-                Icon = CreateMenuIcon("\uE8A7"),
-            };
-            applyBothItem.Click += OnViewOptionClicked;
-            flyout.Items.Add(applyBothItem);
+                ViewStyleRadioButtons.SelectedIndex = index;
+                return;
+            }
         }
+
+        ViewStyleRadioButtons.SelectedIndex = 0;
     }
 
-    private void AddViewStyleItem(
-        MenuFlyoutSubItem menu,
-        string view,
-        string label,
-        string iconGlyph,
-        string currentView)
+    private async void OnViewStyleSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var item = new RadioMenuFlyoutItem
-        {
-            Text = label,
-            Tag = $"view:{view}",
-            GroupName = "file-list-display-style",
-            IsChecked = string.Equals(view, currentView, StringComparison.Ordinal),
-            Icon = CreateMenuIcon(iconGlyph),
-        };
-        item.Click += OnViewOptionClicked;
-        menu.Items.Add(item);
-    }
-
-    private void AddIconSizeItem(MenuFlyoutSubItem menu, int size, string label, int currentIconSize)
-    {
-        var item = new RadioMenuFlyoutItem
-        {
-            Text = label,
-            Tag = $"icon:{size}",
-            GroupName = "file-list-icon-size",
-            IsChecked = size == currentIconSize,
-            KeyboardAcceleratorTextOverride = $"{size}px",
-        };
-        item.Click += OnViewOptionClicked;
-        menu.Items.Add(item);
-    }
-
-    private async void OnViewOptionClicked(object sender, RoutedEventArgs e)
-    {
-        if (sender is not MenuFlyoutItem item || item.Tag is not string tag)
+        if (_syncingViewOptionsFlyout
+            || _workspace is null
+            || ViewStyleRadioButtons.SelectedItem is not RadioButton item
+            || item.Tag is not string view)
         {
             return;
         }
 
-        await RunUiActionAsync("View options", () => ApplyViewOptionAsync(tag));
+        await RunUiActionAsync("View options", () => ApplyViewOptionAsync($"view:{view}"));
+    }
+
+    private async void OnViewDualPaneClicked(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync("View options", () => ApplyViewOptionAsync("pane:dual"));
+    }
+
+    private async void OnViewApplyBothClicked(object sender, RoutedEventArgs e)
+    {
+        await RunUiActionAsync("View options", () => ApplyViewOptionAsync("pane:apply-view-to-both"));
+    }
+
+    private void OnViewIconSizeSliderChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        var iconSize = UiSettings.NormalizeIconSize((int)Math.Round(e.NewValue));
+        if (sender is Slider slider && Math.Abs(slider.Value - iconSize) > 0.01)
+        {
+            var wasSyncing = _syncingViewOptionsFlyout;
+            _syncingViewOptionsFlyout = true;
+            slider.Value = iconSize;
+            _syncingViewOptionsFlyout = wasSyncing;
+        }
+
+        UpdateViewIconSizeValueText(iconSize);
+        if (_syncingViewOptionsFlyout || _workspace is null)
+        {
+            return;
+        }
+
+        _workspace.SetFileListIconSize(ActiveUiPane, iconSize);
+        QueueViewIconSizeSave();
+    }
+
+    private void UpdateViewIconSizeValueText(int iconSize)
+    {
+        ViewIconSizeValueText.Text = $"{UiSettings.NormalizeIconSize(iconSize)} px";
+    }
+
+    private void QueueViewIconSizeSave()
+    {
+        var token = Interlocked.Increment(ref _viewIconSizeSaveToken);
+        _ = SaveViewIconSizeAsync(token, delay: true);
+    }
+
+    private Task SaveViewIconSizeNowAsync()
+    {
+        var token = Interlocked.Increment(ref _viewIconSizeSaveToken);
+        return SaveViewIconSizeAsync(token, delay: false);
+    }
+
+    private async Task SaveViewIconSizeAsync(int token, bool delay)
+    {
+        if (delay)
+        {
+            await Task.Delay(350);
+        }
+
+        if (token != Volatile.Read(ref _viewIconSizeSaveToken))
+        {
+            return;
+        }
+
+        await _viewIconSizeSaveGate.WaitAsync();
+        try
+        {
+            if (token != Volatile.Read(ref _viewIconSizeSaveToken) || _workspace is null)
+            {
+                return;
+            }
+
+            await _workspace.SaveWorkspaceLayoutAsync();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            ShowMessage("Icon size", exception.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            _viewIconSizeSaveGate.Release();
+        }
     }
 
     private async Task ApplyViewOptionAsync(string tag)

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using SimpleFile.Core;
 using SimpleFile.Ipc;
 using Windows.Storage.Pickers;
@@ -19,6 +20,7 @@ public sealed partial class SettingsDialog : ContentDialog
     {
         InitializeComponent();
         CategoryList.SelectedIndex = 0;
+        UpdateDefaultIconSizeValueText(DefaultIconSize);
     }
 
     private void OnCategorySelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -77,9 +79,7 @@ public sealed partial class SettingsDialog : ContentDialog
 
     public string Theme => ((ComboBoxItem?)ThemeComboBox.SelectedItem)?.Tag?.ToString() ?? "System";
     public string DefaultView => ((ComboBoxItem?)DefaultViewComboBox.SelectedItem)?.Tag?.ToString() ?? "details";
-    public int DefaultIconSize => int.TryParse(((ComboBoxItem?)DefaultIconSizeComboBox.SelectedItem)?.Tag?.ToString(), out var size)
-        ? size
-        : 16;
+    public int DefaultIconSize => UiSettings.NormalizeIconSize((int)Math.Round(DefaultIconSizeSlider.Value));
     public string ColumnPreset => ((ComboBoxItem?)ColumnPresetComboBox.SelectedItem)?.Tag?.ToString() ?? "default";
     public bool ShowHidden => ShowHiddenSwitch.IsOn;
     public bool SidebarVisible => ShowSideMenuSwitch.IsOn;
@@ -175,10 +175,25 @@ public sealed partial class SettingsDialog : ContentDialog
     private void SelectDefaultIconSize(string? iconSize)
     {
         var normalized = UiSettings.NormalizeIconSize(iconSize);
-        var selected = DefaultIconSizeComboBox.Items
-            .OfType<ComboBoxItem>()
-            .FirstOrDefault(item => int.TryParse(item.Tag?.ToString(), out var size) && size == normalized);
-        DefaultIconSizeComboBox.SelectedItem = selected ?? DefaultIconSizeComboBox.Items[0];
+        DefaultIconSizeSlider.Value = normalized;
+        UpdateDefaultIconSizeValueText(normalized);
+    }
+
+    private void OnDefaultIconSizeSliderChanged(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        var normalized = UiSettings.NormalizeIconSize((int)Math.Round(e.NewValue));
+        if (sender is Slider slider && Math.Abs(slider.Value - normalized) > 0.01)
+        {
+            slider.Value = normalized;
+            return;
+        }
+
+        UpdateDefaultIconSizeValueText(normalized);
+    }
+
+    private void UpdateDefaultIconSizeValueText(int iconSize)
+    {
+        DefaultIconSizeValueText.Text = $"{UiSettings.NormalizeIconSize(iconSize)} px";
     }
 
     private void SelectTheme(string? theme)

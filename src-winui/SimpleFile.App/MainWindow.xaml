@@ -703,7 +703,81 @@
                                     AutomationProperties.Name="View options"
                                     ToolTipService.ToolTip="View options">
                                     <Button.Flyout>
-                                        <MenuFlyout Opening="OnViewOptionsMenuOpening" />
+                                        <Flyout Opening="OnViewOptionsFlyoutOpening">
+                                            <StackPanel
+                                                MinWidth="280"
+                                                Padding="4"
+                                                Spacing="12">
+                                                <Button
+                                                    x:Name="ViewDualPaneButton"
+                                                    Style="{StaticResource SfGhostButtonStyle}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left"
+                                                    Click="OnViewDualPaneClicked">
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <FontIcon
+                                                            x:Name="ViewDualPaneIcon"
+                                                            FontFamily="{StaticResource SfIconFont}"
+                                                            FontSize="14" />
+                                                        <TextBlock x:Name="ViewDualPaneText" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <RadioButtons
+                                                    x:Name="ViewStyleRadioButtons"
+                                                    Header="Display style"
+                                                    MaxColumns="2"
+                                                    SelectionChanged="OnViewStyleSelectionChanged">
+                                                    <RadioButton Content="Details" Tag="details" />
+                                                    <RadioButton Content="List" Tag="list" />
+                                                    <RadioButton Content="Tiles" Tag="tiles" />
+                                                    <RadioButton Content="Content" Tag="content" />
+                                                </RadioButtons>
+                                                <StackPanel Spacing="6">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Icon size" />
+                                                        <TextBlock
+                                                            x:Name="ViewIconSizeValueText"
+                                                            Grid.Column="1"
+                                                            Foreground="{ThemeResource SfTextMutedBrush}" />
+                                                    </Grid>
+                                                    <Slider
+                                                        x:Name="ViewIconSizeSlider"
+                                                        HorizontalAlignment="Stretch"
+                                                        LargeChange="16"
+                                                        Maximum="256"
+                                                        Minimum="16"
+                                                        SmallChange="8"
+                                                        StepFrequency="8"
+                                                        ValueChanged="OnViewIconSizeSliderChanged" />
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock
+                                                            FontSize="11"
+                                                            Foreground="{ThemeResource SfTextMutedBrush}"
+                                                            Text="16 px" />
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            FontSize="11"
+                                                            Foreground="{ThemeResource SfTextMutedBrush}"
+                                                            Text="256 px" />
+                                                    </Grid>
+                                                </StackPanel>
+                                                <Button
+                                                    x:Name="ViewApplyBothButton"
+                                                    Style="{StaticResource SfGhostButtonStyle}"
+                                                    HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Left"
+                                                    Click="OnViewApplyBothClicked"
+                                                    Content="Apply view options to both panes" />
+                                            </StackPanel>
+                                        </Flyout>
                                     </Button.Flyout>
                                     <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A9;" />
                                 </Button>

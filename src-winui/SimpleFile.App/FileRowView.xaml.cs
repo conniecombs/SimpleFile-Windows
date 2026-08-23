@@ -140,6 +140,15 @@ public sealed partial class FileRowView : UserControl
             _renderedColumnKey = key;
         }
 
+        if (view == "tiles")
+        {
+            var tileWidth = FileTileLayoutMetrics.ContentWidthFor(iconSize);
+            RowGrid.Width = tileWidth;
+            RowGrid.HorizontalAlignment = HorizontalAlignment.Left;
+            MinWidth = tileWidth;
+            return;
+        }
+
         if (view != "details")
         {
             MinWidth = 0;
@@ -331,9 +340,16 @@ public sealed partial class FileRowView : UserControl
 
     private void RebuildTileLayout(int iconSize)
     {
-        RowGrid.Width = Math.Max(188, iconSize + 140);
-        RowGrid.MinHeight = Math.Max(72, iconSize + 24);
+        if (FileTileLayoutMetrics.UsesStackedLayout(iconSize))
+        {
+            RebuildStackedTileLayout(iconSize);
+            return;
+        }
+
+        RowGrid.Width = FileTileLayoutMetrics.ContentWidthFor(iconSize);
+        RowGrid.MinHeight = FileTileLayoutMetrics.MinHeightFor(iconSize);
         RowGrid.ColumnSpacing = 10;
+        RowGrid.HorizontalAlignment = HorizontalAlignment.Left;
         RowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         RowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -359,6 +375,51 @@ public sealed partial class FileRowView : UserControl
         stack.Children.Add(_metadataText);
         stack.Children.Add(_secondaryText);
         Grid.SetColumn(stack, 1);
+        RowGrid.Children.Add(stack);
+    }
+
+    private void RebuildStackedTileLayout(int iconSize)
+    {
+        RowGrid.Width = FileTileLayoutMetrics.ContentWidthFor(iconSize);
+        RowGrid.MinHeight = FileTileLayoutMetrics.MinHeightFor(iconSize);
+        RowGrid.ColumnSpacing = 0;
+        RowGrid.RowSpacing = 7;
+        RowGrid.HorizontalAlignment = HorizontalAlignment.Left;
+        RowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        RowGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        RowGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var iconHost = new Grid
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        _iconImage = CreateIcon(iconSize);
+        iconHost.Children.Add(_iconImage);
+        _tagPip = CreateTagPip();
+        _tagPip.HorizontalAlignment = HorizontalAlignment.Right;
+        _tagPip.VerticalAlignment = VerticalAlignment.Top;
+        iconHost.Children.Add(_tagPip);
+        Grid.SetRow(iconHost, 0);
+        RowGrid.Children.Add(iconHost);
+
+        var stack = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Spacing = 2,
+        };
+        _nameText = CreateNameText(wrapName: true);
+        _nameText.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _nameText.TextAlignment = TextAlignment.Center;
+        _metadataText = CreateMetadataText();
+        _metadataText.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _metadataText.TextAlignment = TextAlignment.Center;
+        _secondaryText = CreateMetadataText(opacity: 0.74);
+        _secondaryText.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _secondaryText.TextAlignment = TextAlignment.Center;
+        stack.Children.Add(_nameText);
+        stack.Children.Add(_metadataText);
+        stack.Children.Add(_secondaryText);
+        Grid.SetRow(stack, 1);
         RowGrid.Children.Add(stack);
     }
 

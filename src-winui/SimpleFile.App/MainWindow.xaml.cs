@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window
     private string? _secondaryColumnHeaderKey;
     private ScrollViewer? _primaryFileListScroller;
     private ScrollViewer? _secondaryFileListScroller;
+    private readonly Dictionary<int, Style> _tileItemStyles = new();
     private string? _columnEnrichmentSignature;
     private CancellationTokenSource? _columnEnrichmentCts;
     private int _columnEnrichmentToken;
@@ -933,11 +934,11 @@ public sealed partial class MainWindow : Window
         PrimaryColumnHeaderScroller.Visibility = primaryView == "details" ? Visibility.Visible : Visibility.Collapsed;
         SecondaryColumnHeaderScroller.Visibility = secondaryView == "details" ? Visibility.Visible : Visibility.Collapsed;
 
-        ApplyFileListPresentation(PrimaryFileList, primaryView);
-        ApplyFileListPresentation(SecondaryFileList, secondaryView);
+        ApplyFileListPresentation(PrimaryFileList, primaryView, primaryIconSize);
+        ApplyFileListPresentation(SecondaryFileList, secondaryView, secondaryIconSize);
     }
 
-    private void ApplyFileListPresentation(ListView list, string view)
+    private void ApplyFileListPresentation(ListView list, string view, int iconSize)
     {
         var usesTiles = view == "tiles";
         var usesDetails = view == "details";
@@ -948,7 +949,7 @@ public sealed partial class MainWindow : Window
                 : "SfFileListItemStyle";
         var itemsPanelKey = usesTiles ? "SfWrapItemsPanelTemplate" : "SfStackItemsPanelTemplate";
 
-        var style = ChromeStyle(itemStyleKey);
+        var style = usesTiles ? TileItemStyleFor(iconSize) : ChromeStyle(itemStyleKey);
         if (style is not null && !ReferenceEquals(list.ItemContainerStyle, style))
         {
             list.ItemContainerStyle = style;
@@ -958,6 +959,13 @@ public sealed partial class MainWindow : Window
         if (itemsPanel is not null && !ReferenceEquals(list.ItemsPanel, itemsPanel))
         {
             list.ItemsPanel = itemsPanel;
+        }
+
+        list.Loaded -= OnTileFileListLoaded;
+        if (usesTiles)
+        {
+            list.Loaded += OnTileFileListLoaded;
+            ApplyTileItemsPanelMetrics(list, iconSize);
         }
 
         list.Padding = usesTiles
@@ -977,6 +985,71 @@ public sealed partial class MainWindow : Window
         {
             list.ContainerContentChanging += OnFileListContainerContentChanging;
             HookFileListColumnScroll(list);
+        }
+    }
+
+    private Style? TileItemStyleFor(int iconSize)
+    {
+        var normalized = UiSettings.NormalizeIconSize(iconSize);
+        if (_tileItemStyles.TryGetValue(normalized, out var cached))
+        {
+            return cached;
+        }
+
+        var baseStyle = ChromeStyle("SfFileTileItemStyle");
+        if (baseStyle is null)
+        {
+            return null;
+        }
+
+        var style = new Style(typeof(ListViewItem))
+        {
+            BasedOn = baseStyle,
+        };
+        style.Setters.Add(new Setter(FrameworkElement.WidthProperty, FileTileLayoutMetrics.ContainerWidthFor(normalized)));
+        _tileItemStyles[normalized] = style;
+        return style;
+    }
+
+    private void OnTileFileListLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ListView list || _workspace is null)
+        {
+            return;
+        }
+
+        var pane = ReferenceEquals(list, SecondaryFileList) ? PaneId.Secondary : PaneId.Primary;
+        if (_workspace.ViewFor(pane) == "tiles")
+        {
+            ApplyTileItemsPanelMetrics(list, _workspace.IconSizeFor(pane));
+        }
+    }
+
+    private void ApplyTileItemsPanelMetrics(ListView list, int iconSize, bool deferIfMissing = true)
+    {
+        if (FindDescendant<ItemsWrapGrid>(list) is { } panel)
+        {
+            ApplyTileItemsPanelMetrics(panel, iconSize);
+            return;
+        }
+
+        if (deferIfMissing)
+        {
+            _ = DispatcherQueue.TryEnqueue(() => ApplyTileItemsPanelMetrics(list, iconSize, deferIfMissing: false));
+        }
+    }
+
+    private static void ApplyTileItemsPanelMetrics(ItemsWrapGrid panel, int iconSize)
+    {
+        SetPanelDimension(panel.ItemWidth, FileTileLayoutMetrics.ContainerWidthFor(iconSize), value => panel.ItemWidth = value);
+        SetPanelDimension(panel.ItemHeight, FileTileLayoutMetrics.ContainerHeightFor(iconSize), value => panel.ItemHeight = value);
+    }
+
+    private static void SetPanelDimension(double current, double next, Action<double> assign)
+    {
+        if (double.IsNaN(current) || Math.Abs(current - next) > 0.1)
+        {
+            assign(next);
         }
     }
 
@@ -1590,6 +1663,7 @@ public sealed partial class MainWindow : Window
     {
         if (_workspace is not null && list.SelectedItem is FileRow row)
         {
+            await SaveViewIconSizeNowAsync();
             await _workspace.OpenEntryAsync(
                 new FileEntry { Name = row.Name, Path = row.Path, IsDir = row.IsDir },
                 pane);
@@ -2169,6 +2243,7 @@ public sealed partial class MainWindow : Window
         var utilityCts = BeginUtilityOperation();
         try
         {
+            await SaveViewIconSizeNowAsync();
             await fileOps.OpenFileWithAsync(row.Path, input.Text.Trim(), utilityCts.Token);
         }
         catch (OperationCanceledException)
@@ -2612,17 +2687,20 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private static ScrollViewer? FindDescendantScrollViewer(DependencyObject root)
+    private static ScrollViewer? FindDescendantScrollViewer(DependencyObject root) =>
+        FindDescendant<ScrollViewer>(root);
+
+    private static T? FindDescendant<T>(DependencyObject root) where T : class
     {
-        if (root is ScrollViewer scroller)
+        if (root is T match)
         {
-            return scroller;
+            return match;
         }
 
         var count = VisualTreeHelper.GetChildrenCount(root);
         for (var index = 0; index < count; index++)
         {
-            var found = FindDescendantScrollViewer(VisualTreeHelper.GetChild(root, index));
+            var found = FindDescendant<T>(VisualTreeHelper.GetChild(root, index));
             if (found is not null)
             {
                 return found;
@@ -3199,6 +3277,7 @@ public sealed partial class MainWindow : Window
         Interlocked.Increment(ref _watchRequestToken);
         Interlocked.Increment(ref _backendReconnectToken);
         Interlocked.Increment(ref _folderRefreshToken);
+        Interlocked.Increment(ref _viewIconSizeSaveToken);
         _folderRefreshCts?.Cancel();
         _folderRefreshCts = null;
         Interlocked.Increment(ref _previewToken);

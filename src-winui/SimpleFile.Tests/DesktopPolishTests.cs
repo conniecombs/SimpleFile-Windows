@@ -15,6 +15,7 @@ public class DesktopPolishTests
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "keyboard-help");
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "view-tiles");
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "icon-size-extra-large");
+        Assert.Contains(AppCommandCatalog.All, command => command.Id == "icon-size-maximum");
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "clear-recent-history");
         Assert.Contains(AppCommandCatalog.All, command => command.Id == "toggle-side-menu");
         Assert.Equal("Go home", AppCommandCatalog.Find("go-home")?.Label);
@@ -26,7 +27,7 @@ public class DesktopPolishTests
         var git = AppCommandCatalog.Filter("git");
         Assert.Equal(2, git.Count);
         Assert.All(git, command => Assert.StartsWith("git-", command.Id, StringComparison.Ordinal));
-        Assert.Equal(4, AppCommandCatalog.Filter("icon size").Count);
+        Assert.Equal(7, AppCommandCatalog.Filter("icon size").Count);
         Assert.Equal("toggle-side-menu", Assert.Single(AppCommandCatalog.Filter("side menu")).Id);
         Assert.Equal("settings", AppCommandCatalog.Find("settings")?.Id);
         Assert.Null(AppCommandCatalog.Find("missing"));
@@ -369,6 +370,42 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void TileLayout_StacksLargeIconsAndKeepsContainerWidthDynamic()
+    {
+        var root = FindRepoRoot();
+        var metrics = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "FileTileLayoutMetrics.cs"));
+        var fileRowView = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "FileRowView.xaml.cs"));
+        var mainWindow = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "MainWindow.xaml.cs"));
+        var app = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "App.xaml"));
+
+        Assert.Contains("StackedIconThreshold = 128", metrics);
+        Assert.Contains("ContainerHeightFor", metrics);
+        Assert.Contains("UsesStackedLayout", fileRowView);
+        Assert.Contains("RebuildStackedTileLayout(iconSize)", fileRowView);
+        Assert.Contains("TileItemStyleFor(iconSize)", mainWindow);
+        Assert.Contains("ContainerWidthFor(normalized)", mainWindow);
+        Assert.Contains("ApplyTileItemsPanelMetrics(list, iconSize)", mainWindow);
+        Assert.Contains("FindDescendant<ItemsWrapGrid>(list)", mainWindow);
+        Assert.Contains("panel.ItemWidth", mainWindow);
+        Assert.Contains("panel.ItemHeight", mainWindow);
+        Assert.Contains("HorizontalContentAlignment\" Value=\"Left", app);
+        Assert.DoesNotContain("<Setter Property=\"Width\" Value=\"236\" />", app);
+    }
+
+    [Fact]
+    public void OpeningFiles_FlushesPendingIconSizePersistence()
+    {
+        var root = FindRepoRoot();
+        var mainWindow = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "MainWindow.xaml.cs"));
+        var commands = File.ReadAllText(Path.Combine(root, "SimpleFile.App", "MainWindow.Commands.cs"));
+
+        Assert.Contains("await SaveViewIconSizeNowAsync();", mainWindow);
+        Assert.Contains("SaveViewIconSizeAsync(token, delay: false)", commands);
+        Assert.Contains("_viewIconSizeSaveGate.WaitAsync()", commands);
+        Assert.Contains("Volatile.Read(ref _viewIconSizeSaveToken)", commands);
+    }
+
+    [Fact]
     public void ColumnLayout_ClampsResizeAndAppliesPresets()
     {
         var columns = new ColumnLayout();
@@ -539,7 +576,9 @@ public class DesktopPolishTests
         Assert.Equal("details", UiSettings.NormalizeDefaultView("nope"));
         Assert.Equal(16, UiSettings.NormalizeIconSize((int?)null));
         Assert.Equal(32, UiSettings.NormalizeIconSize("33"));
-        Assert.Equal(96, UiSettings.NormalizeIconSize(120));
+        Assert.Equal(120, UiSettings.NormalizeIconSize(120));
+        Assert.Equal(16, UiSettings.NormalizeIconSize(3));
+        Assert.Equal(256, UiSettings.NormalizeIconSize(900));
         Assert.Equal(UiSettings.SidebarDefaultWidth, UiSettings.NormalizeSidebarWidth(double.NaN));
         Assert.Equal(UiSettings.SidebarMinWidth, UiSettings.NormalizeSidebarWidth(120));
         Assert.Equal(312, UiSettings.NormalizeSidebarWidth("312"));
