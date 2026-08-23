@@ -64,7 +64,6 @@ function Get-ReleaseVersion {
 function Find-ServiceExecutable {
     $candidates = @(
         (Join-Path $root "target\release\simplefile-service.exe"),
-        (Join-Path $root "src-tauri\target\release\simplefile-service.exe"),
         (Join-Path $root "target\x86_64-pc-windows-msvc\release\simplefile-service.exe")
     )
     foreach ($candidate in $candidates) {
@@ -301,16 +300,13 @@ if (-not $SkipInstaller) {
 
 $signature = ""
 $signingKey = $env:SIMPLEFILE_SIGNING_PRIVATE_KEY
-if (-not $signingKey) { $signingKey = $env:TAURI_SIGNING_PRIVATE_KEY }
 if ($builtSetup -and $signingKey) {
     Write-Step "Sign WinUI setup for latest-winui.json"
     try {
-        if (Get-Command cargo-tauri -ErrorAction SilentlyContinue) {
-            Invoke-Native cargo @("tauri", "signer", "sign", "-f", $setupPath)
-        }
-        else {
-            Write-Warning "cargo-tauri signer is not installed; latest-winui.json will ship without a signature."
-        }
+        # TODO: Replace with minisign or Ed25519 signing when implemented.
+        # For now, the signing step is a placeholder that will warn when
+        # no signing tool is available.
+        Write-Warning "Updater payload signing is not yet implemented; latest-winui.json will ship without a signature."
         $sigFile = Get-ChildItem -Path "$setupPath*.sig" -File -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($sigFile) {
             Copy-Item -LiteralPath $sigFile.FullName -Destination $distRoot -Force

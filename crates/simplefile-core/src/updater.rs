@@ -1,10 +1,9 @@
 #![allow(dead_code, unused_imports)]
 use crate::models::{AppAboutInfo, UpdateInfo};
-use crate::utils::hidden_command;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::io;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const APP_NAME: &str = "SimpleFile";
@@ -135,73 +134,24 @@ fn update_installer_path(url: &str) -> Result<PathBuf, String> {
 }
 
 fn download_text(url: &str) -> Result<String, String> {
-    let script = r#"
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-(Invoke-WebRequest -Uri $args[0]).Content
-"#;
-    let output = hidden_command("powershell")
-        .arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-Command")
-        .arg(script)
-        .arg(url)
-        .output()
+    let response = ureq::get(url)
+        .call()
         .map_err(|error| format!("Failed to check for updates: {error}"))?;
-
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).to_string())
-    } else {
-        Err(format!(
-            "Failed to check for updates: {}",
-            command_detail(&output)
-        ))
-    }
+    response
+        .into_body()
+        .read_to_string()
+        .map_err(|error| format!("Failed to read update response: {error}"))
 }
 
 fn download_file(url: &str, path: &Path) -> Result<(), String> {
-    let script = r#"
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-Invoke-WebRequest -Uri $args[0] -OutFile $args[1]
-"#;
-    let output = hidden_command("powershell")
-        .arg("-NoProfile")
-        .arg("-NonInteractive")
-        .arg("-ExecutionPolicy")
-        .arg("Bypass")
-        .arg("-Command")
-        .arg(script)
-        .arg(url)
-        .arg(path)
-        .output()
+    let response = ureq::get(url)
+        .call()
         .map_err(|error| format!("Failed to download update: {error}"))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Failed to download update: {}",
-            command_detail(&output)
-        ))
-    }
-}
-
-fn command_detail(output: &std::process::Output) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if !stderr.is_empty() {
-        stderr
-    } else if !stdout.is_empty() {
-        stdout
-    } else {
-        "PowerShell returned an error without details".to_string()
-    }
+    let mut file = std::fs::File::create(path)
+        .map_err(|error| format!("Failed to create update file: {error}"))?;
+    std::io::copy(&mut response.into_body().into_reader(), &mut file)
+        .map_err(|error| format!("Failed to write update file: {error}"))?;
+    Ok(())
 }
 
 #[cfg(test)]

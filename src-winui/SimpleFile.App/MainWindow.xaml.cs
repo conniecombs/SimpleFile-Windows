@@ -23,6 +23,9 @@ public sealed partial class MainWindow : Window
     private BackendSession? _backend;
     private ExplorerWorkspace? _workspace;
     private int _backendReconnectToken;
+    private SearchViewModel? _search;
+    private TransferViewModel? _transfer;
+    private ToolbarViewModel? _toolbar;
     private bool _quickAccessCollapsed;
     private bool _myPcCollapsed;
     private bool _editingPrimaryPath;
@@ -122,6 +125,10 @@ public sealed partial class MainWindow : Window
                 ?? throw new InvalidOperationException("IPC service started without an active client.");
             var fileOps = new FileOperationService(client);
             _workspace = new ExplorerWorkspace(_backend, fileOps);
+            AppServices.Configure(_workspace);
+            _search = AppServices.GetRequired<SearchViewModel>();
+            _transfer = AppServices.GetRequired<TransferViewModel>();
+            _toolbar = AppServices.GetRequired<ToolbarViewModel>();
             FileListThumbnailHost.Configure(LoadFileListImageThumbnailAsync);
             ColumnLayoutHost.Attach(_workspace.Columns);
             _workspace.Changed += OnWorkspaceChanged;

@@ -37,31 +37,41 @@ public sealed partial class MainWindow
         e.Data.SetText($"{InternalDragFormat}|{string.Join('\n', _dragPaths)}");
         e.Data.RequestedOperation = DataPackageOperation.Copy | DataPackageOperation.Move;
 
-        // Provide StorageItems so files can be dragged to Windows Explorer and other apps.
-        var storageItems = new List<IStorageItem>();
-        foreach (var path in _dragPaths)
+        // Defer StorageItem resolution so we don't block the UI thread on slow/network paths.
+        // The provider callback runs asynchronously when an external drop target requests the data.
+        var paths = _dragPaths;
+        e.Data.SetDataProvider(StandardDataFormats.StorageItems, async request =>
         {
+            var deferral = request.GetDeferral();
             try
             {
-                if (Directory.Exists(path))
+                var storageItems = new List<IStorageItem>();
+                foreach (var path in paths)
                 {
-                    storageItems.Add(StorageFolder.GetFolderFromPathAsync(path).AsTask().GetAwaiter().GetResult());
+                    try
+                    {
+                        if (Directory.Exists(path))
+                        {
+                            storageItems.Add(await StorageFolder.GetFolderFromPathAsync(path));
+                        }
+                        else if (File.Exists(path))
+                        {
+                            storageItems.Add(await StorageFile.GetFileFromPathAsync(path));
+                        }
+                    }
+                    catch
+                    {
+                        // Skip items that cannot be resolved to StorageItems (e.g. permission issues).
+                    }
                 }
-                else if (File.Exists(path))
-                {
-                    storageItems.Add(StorageFile.GetFileFromPathAsync(path).AsTask().GetAwaiter().GetResult());
-                }
-            }
-            catch
-            {
-                // Skip items that cannot be resolved to StorageItems (e.g. permission issues).
-            }
-        }
 
-        if (storageItems.Count > 0)
-        {
-            e.Data.SetStorageItems(storageItems);
-        }
+                request.SetData(storageItems);
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        });
     }
 
     private void OnFileDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs e)
