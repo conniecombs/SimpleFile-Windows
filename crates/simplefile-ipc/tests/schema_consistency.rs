@@ -67,6 +67,10 @@ fn commands_cover_seventy_six_domain_methods_plus_handshake() {
         .as_object()
         .unwrap()
         .contains_key("path"));
+    assert!(methods["list_directory"]["params"]
+        .as_object()
+        .unwrap()
+        .contains_key("finalEntries"));
     assert!(!methods["list_directory"]["params"]
         .as_object()
         .unwrap()

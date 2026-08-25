@@ -6,6 +6,15 @@ public static class Protocol
     public const string JsonRpc = "2.0";
     public const uint MaxFrameBytes = 80 * 1024 * 1024;
     public const int DomainMethodCount = 76;
+    public const byte BinaryFrameVersion = 1;
+    public const byte BinaryListDirectoryChunk = 1;
+    public const byte BinaryListDirectoryResult = 2;
+    public const byte BinarySearchResultsBatch = 3;
+    public const byte BinarySearchResultsResult = 4;
+    public const byte BinaryOperationProgress = 5;
+    public const byte BinaryFileChange = 6;
+    public const byte BinaryThumbnailResult = 7;
+    public const byte BinaryThumbnailsResult = 8;
 
     public const string HandshakeMethod = "ipc.handshake";
     public const string HealthMethod = "ipc.health";

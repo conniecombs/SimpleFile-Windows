@@ -12,5 +12,6 @@ public interface IExplorerBackend
     Task<DirectoryListing> ListDirectoryAsync(
         string path,
         Action<DirectoryListingChunk>? onChunk = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        ListDirectoryOptions? options = null);
 }

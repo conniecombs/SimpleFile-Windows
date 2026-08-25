@@ -1,7 +1,9 @@
 //! Named-pipe JSON-RPC service used by the WinUI host.
 
+mod binary;
 pub mod dispatch;
 pub mod progress;
+mod scheduler;
 pub mod search;
 pub mod session;
 pub mod shell;

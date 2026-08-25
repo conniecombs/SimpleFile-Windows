@@ -386,6 +386,8 @@ public class ExplorerWorkspaceTests
         await workspace.NavigateToAsync(@"C:\Users\test");
         Assert.True(paints >= 1);
         Assert.Equal(2, workspace.VisibleEntries.Count);
+        Assert.Equal("light", backend.LastListDirectoryOptions?.Mode);
+        Assert.False(backend.LastListDirectoryOptions?.FinalEntries ?? true);
     }
 
     [Fact]
@@ -733,6 +735,7 @@ internal sealed class FakeExplorerBackend : IExplorerBackend
     public bool ThrowTooLargeAfterChunks { get; set; }
     public int ListDirectoryCalls { get; private set; }
     public int ListDrivesCalls { get; private set; }
+    public ListDirectoryOptions? LastListDirectoryOptions { get; private set; }
     public Func<CancellationToken, Task<IReadOnlyList<DriveInfo>>>? ListDrivesHandler { get; set; }
     public Func<string, CancellationToken, Task<DirectoryListing>?>? ListDirectoryHandler { get; set; }
 
@@ -793,10 +796,12 @@ internal sealed class FakeExplorerBackend : IExplorerBackend
     public async Task<DirectoryListing> ListDirectoryAsync(
         string path,
         Action<DirectoryListingChunk>? onChunk = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ListDirectoryOptions? options = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         ListDirectoryCalls += 1;
+        LastListDirectoryOptions = options;
         var handled = ListDirectoryHandler?.Invoke(path, cancellationToken);
         if (handled is not null)
         {
@@ -914,7 +919,7 @@ internal sealed class WorkspaceSettingsIpc : ISimpleFileIpc
     public Task<HandshakeResult> HandshakeAsync(string authToken, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<TResult> InvokeAsync<TResult>(string method, object? args, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task InvokeAsync(string method, object? args, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<DirectoryListing> ListDirectoryAsync(string path, Action<DirectoryListingChunk>? onChunk = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<DirectoryListing> ListDirectoryAsync(string path, Action<DirectoryListingChunk>? onChunk = null, CancellationToken cancellationToken = default, ListDirectoryOptions? options = null) => throw new NotImplementedException();
     public Task<HealthResult> HealthAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<string> GetAppVersionAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<string> GetHomeDirAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();

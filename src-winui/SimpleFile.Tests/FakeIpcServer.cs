@@ -98,9 +98,19 @@ internal sealed class FakeIpcServer : IAsyncDisposable
             cancellationToken);
     }
 
+    public Task SendBinaryFrameAsync(byte[] payload, CancellationToken cancellationToken = default)
+    {
+        return WritePayloadAsync(payload, cancellationToken);
+    }
+
     private async Task WriteAsync<T>(T value, CancellationToken cancellationToken)
     {
         var payload = JsonSerializer.SerializeToUtf8Bytes(value, IpcJson.Options);
+        await WritePayloadAsync(payload, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task WritePayloadAsync(byte[] payload, CancellationToken cancellationToken)
+    {
         var frame = FrameCodec.Encode(payload);
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try

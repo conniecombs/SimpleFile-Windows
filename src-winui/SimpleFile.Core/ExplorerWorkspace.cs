@@ -438,7 +438,8 @@ public sealed class ExplorerWorkspace
 
                             RaiseChanged();
                         },
-                        cancellationToken)
+                        cancellationToken,
+                        BuildStreamedListingOptions(state))
                     .ConfigureAwait(false);
             }
             catch (IpcException exception) when (exception.IsResultTooLarge && progressive.Count > 0)
@@ -616,7 +617,8 @@ public sealed class ExplorerWorkspace
 
                         RaiseChanged();
                     },
-                    cancellationToken)
+                    cancellationToken,
+                    BuildStreamedListingOptions(state))
                 .ConfigureAwait(false);
 
             lock (_gate)
@@ -1344,6 +1346,18 @@ public sealed class ExplorerWorkspace
         }
 
         return entries;
+    }
+
+    private static ListDirectoryOptions BuildStreamedListingOptions(ExplorerPane pane)
+    {
+        return new ListDirectoryOptions
+        {
+            Mode = "light",
+            FinalEntries = false,
+            SortBy = pane.SortBy,
+            SortAscending = pane.SortAscending,
+            IncludeHidden = true,
+        };
     }
 
     public string FilterQueryFor(PaneId pane)

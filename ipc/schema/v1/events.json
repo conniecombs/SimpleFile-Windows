@@ -3,16 +3,19 @@
   "emitted": {
     "file-change": {
       "params": "FileChangeEvent",
-      "source": "crates/simplefile-service/src/watcher.rs"
+      "source": "crates/simplefile-service/src/watcher.rs",
+      "binaryFrameTag": 6
     },
     "operation-progress": {
       "params": "ProgressUpdate",
       "source": ["crates/simplefile-service/src/progress.rs", "crates/simplefile-service/src/session.rs"],
-      "statusValues": ["running", "completed", "error", "cancelled"]
+      "statusValues": ["running", "completed", "error", "cancelled"],
+      "binaryFrameTag": 5
     },
     "search-results-batch": {
       "params": { "type": "array", "items": "SearchResult" },
-      "source": "crates/simplefile-service/src/search.rs"
+      "source": "crates/simplefile-service/src/search.rs",
+      "binaryFrameTag": 3
     },
     "search-complete": {
       "params": { "type": "number", "meaning": "result count" },
@@ -27,7 +30,8 @@
     "list_directory.chunk": {
       "params": "DirectoryListingChunkNotification",
       "source": "replaces tauri::ipc::Channel on list_directory",
-      "chunkSizes": { "first": 96, "later": 256 }
+      "chunkSizes": { "first": 96, "later": 256 },
+      "binaryFrameTag": 1
     }
   },
   "typedNotEmitted": {

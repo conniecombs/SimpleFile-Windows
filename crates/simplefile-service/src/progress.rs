@@ -11,14 +11,15 @@ use std::fs;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 const NETWORK_BUFFER_SIZE: usize = 1024 * 1024;
 const LOCAL_BUFFER_SIZE: usize = 1024 * 1024;
 const NETWORK_MAX_RETRIES: u32 = 3;
 const PROGRESS_BYTE_STEP: u64 = 4 * 1024 * 1024;
+const PROGRESS_MIN_INTERVAL: Duration = Duration::from_millis(80);
 
 #[derive(Debug, Serialize, Clone)]
 pub struct TransferResult {
@@ -274,6 +275,7 @@ struct ProgressContext<'a> {
     total_bytes: &'a Arc<AtomicU64>,
     total_files: &'a Arc<AtomicU64>,
     completed_files: &'a Arc<AtomicU64>,
+    last_running_emit: StdMutex<Instant>,
 }
 
 impl ProgressContext<'_> {
@@ -299,6 +301,20 @@ impl ProgressContext<'_> {
         status: &str,
         error: Option<String>,
     ) {
+        if status == "running" && !self.should_emit_running() {
+            return;
+        }
+        self.emit_now(current, total, current_item, status, error);
+    }
+
+    fn emit_now(
+        &self,
+        current: u64,
+        total: u64,
+        current_item: String,
+        status: &str,
+        error: Option<String>,
+    ) {
         (self.emit)(ProgressUpdate {
             operation_id: self.operation_id.to_string(),
             operation_type: self.operation_type.to_string(),
@@ -310,6 +326,18 @@ impl ProgressContext<'_> {
             status: status.to_string(),
             error,
         });
+    }
+
+    fn should_emit_running(&self) -> bool {
+        let now = Instant::now();
+        let Ok(mut last) = self.last_running_emit.lock() else {
+            return true;
+        };
+        if now.duration_since(*last) < PROGRESS_MIN_INTERVAL {
+            return false;
+        }
+        *last = now;
+        true
     }
 
     fn complete_file(&self, current: u64, current_item: String) {
@@ -764,9 +792,10 @@ pub fn transfer_with_progress_blocking(
         total_bytes: &total_bytes,
         total_files: &total_files,
         completed_files: &completed_files,
+        last_running_emit: StdMutex::new(Instant::now()),
     };
 
-    progress.emit_with_total(0, 0, "Calculating size...".to_string(), "running", None);
+    progress.emit_now(0, 0, "Calculating size...".to_string(), "running", None);
     let estimated = match estimate_transfer(&mut plans, &cancel) {
         Ok(value) => value,
         Err(error) if error == "Operation cancelled" => {
@@ -906,13 +935,13 @@ pub fn transfer_with_progress_blocking(
 
 #[cfg(test)]
 mod tests {
-    use super::{prepare_transfer_inputs, transfer_with_progress_blocking};
+    use super::{prepare_transfer_inputs, transfer_with_progress_blocking, ProgressContext};
     use simplefile_core::models::ProgressUpdate;
     use std::fs;
     use std::path::PathBuf;
-    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::{AtomicBool, AtomicU64};
     use std::sync::{Arc, Mutex};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
     fn unique_temp_path(name: &str) -> PathBuf {
         let nanos = SystemTime::now()
@@ -1086,5 +1115,33 @@ mod tests {
 
         let _ = fs::remove_dir_all(&src_dir);
         let _ = fs::remove_dir_all(&dst_dir);
+    }
+
+    #[test]
+    fn progress_context_throttles_running_but_not_terminal_updates() {
+        let total_bytes = Arc::new(AtomicU64::new(100));
+        let total_files = Arc::new(AtomicU64::new(1));
+        let completed_files = Arc::new(AtomicU64::new(0));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let updates = Arc::new(Mutex::new(Vec::<ProgressUpdate>::new()));
+        let updates_target = updates.clone();
+        let emit = |update| updates_target.lock().unwrap().push(update);
+        let progress = ProgressContext {
+            emit: &emit,
+            operation_id: "op_throttle_test",
+            operation_type: "copy",
+            cancel: &cancel,
+            total_bytes: &total_bytes,
+            total_files: &total_files,
+            completed_files: &completed_files,
+            last_running_emit: Mutex::new(Instant::now()),
+        };
+
+        progress.emit_with_total(1, 100, "first".to_string(), "running", None);
+        progress.emit_with_total(100, 100, String::new(), "completed", None);
+
+        let updates = updates.lock().unwrap();
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].status, "completed");
     }
 }

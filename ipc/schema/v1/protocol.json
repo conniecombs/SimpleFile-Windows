@@ -4,7 +4,24 @@
   "identifier": "com.simplefile.desktop",
   "transport": {
     "kind": "windows-named-pipe",
-    "framing": "uint32-le-length-prefixed-utf8",
+    "framing": "uint32-le-length-prefixed-json-or-binary",
+    "jsonFrames": "UTF-8 JSON-RPC 2.0 requests, responses, and fallback notifications",
+    "binaryFrames": {
+      "magic": "SFB1",
+      "version": 1,
+      "negotiatedBy": "ipc.handshake.params.binaryHotFrames",
+      "layout": "magic[4] version:u8 tag:u8 payload",
+      "tags": {
+        "1": "list_directory.chunk notification",
+        "2": "list_directory result response",
+        "3": "search-results-batch notification",
+        "4": "search_files result response",
+        "5": "operation-progress notification",
+        "6": "file-change notification",
+        "7": "generate_thumbnail result response",
+        "8": "generate_thumbnails result response"
+      }
+    },
     "maxFrameBytes": 83886080,
     "batchRequests": false,
     "paramsStyle": "object"
@@ -18,8 +35,8 @@
   "handshake": {
     "method": "ipc.handshake",
     "mustBeFirst": true,
-    "params": ["protocolVersion", "clientName", "authToken"],
-    "result": ["protocolVersion", "appVersion", "identifier", "methodCount"]
+    "params": ["protocolVersion", "clientName", "authToken", "binaryHotFrames"],
+    "result": ["protocolVersion", "appVersion", "identifier", "methodCount", "binaryHotFrames", "binaryFrameVersion"]
   },
   "controlMethods": ["ipc.health", "ipc.shutdown"],
   "errors": {
@@ -46,6 +63,13 @@
   "outboundOversize": {
     "previewMethods": ["read_file_preview", "generate_thumbnail", "generate_thumbnails"],
     "unboundedArrayAction": "return -32000 RESULT_TOO_LARGE and keep the pipe"
+  },
+  "hotPathOptions": {
+    "listDirectory": {
+      "mode": ["full", "light"],
+      "finalEntriesFalse": "chunks carry entries; final result carries path, parent, is_network, and entries: []",
+      "lightMode": "entries may omit repeated path text and derived extension text; clients reconstruct them from the listing path and entry name"
+    }
   },
   "cancellation": {
     "jsonrpcCancel": false,

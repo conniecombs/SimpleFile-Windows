@@ -7,6 +7,7 @@
   },
   "enums": {
     "ConflictAction": ["error", "skip", "replace", "rename", "keep-both", "keep_both"],
+    "ListDirectoryMode": ["full", "light"],
     "ProgressStatus": ["running", "completed", "error", "cancelled"],
     "FileChangeKind": ["create", "modify", "remove", "rename"],
     "ArchiveFormat": ["zip", "tar", "tar.gz", "tgz", "rar"]
@@ -23,7 +24,13 @@
     },
     "DirectoryListing": {
       "source": "crates/simplefile-core/src/models.rs",
-      "fields": ["path", "parent", "entries", "is_network"]
+      "fields": ["path", "parent", "entries", "is_network"],
+      "notes": "entries can be empty on successful streamed requests when list_directory.params.finalEntries is false."
+    },
+    "ListDirectoryOptions": {
+      "source": "crates/simplefile-core/src/dir_list.rs",
+      "fields": ["mode", "finalEntries", "sortBy", "sortAscending", "filter", "includeHidden"],
+      "optional": ["mode", "finalEntries", "sortBy", "sortAscending", "filter", "includeHidden"]
     },
     "DirectoryListingChunk": {
       "source": "crates/simplefile-core/src/models.rs",

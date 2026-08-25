@@ -4,11 +4,18 @@ using System.Text.Json;
 
 namespace SimpleFile.Ipc;
 
+internal readonly record struct IpcResultPayload(string? Json, object? TypedValue, bool HasTypedValue)
+{
+    public static IpcResultPayload FromJson(string json) => new(json, null, false);
+
+    public static IpcResultPayload FromTyped(object? value) => new(null, value, true);
+}
+
 public sealed class NamedPipeJsonClient : ISimpleFileIpc
 {
     private readonly NamedPipeClientStream _pipe;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
-    private readonly ConcurrentDictionary<int, TaskCompletionSource<string>> _pending = new();
+    private readonly ConcurrentDictionary<int, TaskCompletionSource<IpcResultPayload>> _pending = new();
     private readonly object _handlersLock = new();
     private readonly Dictionary<string, List<Subscription>> _handlers = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _loopCts = new();
@@ -342,9 +349,11 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
     public async Task<DirectoryListing> ListDirectoryAsync(
         string path,
         Action<DirectoryListingChunk>? onChunk = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ListDirectoryOptions? options = null)
     {
         var requestId = AllocateId();
+        var streamedEntries = new List<FileEntry>();
         IDisposable? subscription = null;
         if (onChunk is not null)
         {
@@ -354,19 +363,38 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
                 {
                     if (notification.RequestId == requestId)
                     {
-                        onChunk(notification.ToChunk());
+                        var chunk = NormalizeListingChunk(notification.ToChunk());
+                        if (options?.FinalEntries == false)
+                        {
+                            lock (streamedEntries)
+                            {
+                                streamedEntries.AddRange(chunk.Entries);
+                            }
+                        }
+
+                        onChunk(chunk);
                     }
                 });
         }
 
         try
         {
-            return await InvokeAllocatedAsync<DirectoryListing>(
+            var listing = await InvokeAllocatedAsync<DirectoryListing>(
                     requestId,
                     Protocol.ListDirectoryMethod,
-                    new PathParams { Path = path },
+                    BuildListDirectoryParams(path, options),
                     cancellationToken)
                 .ConfigureAwait(false);
+            NormalizeListing(listing);
+            if (options?.FinalEntries == false && listing.Entries.Count == 0)
+            {
+                lock (streamedEntries)
+                {
+                    listing.Entries = [.. streamedEntries];
+                }
+            }
+
+            return listing;
         }
         finally
         {
@@ -394,14 +422,28 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
         ArgumentException.ThrowIfNullOrWhiteSpace(eventName);
         ArgumentNullException.ThrowIfNull(handler);
 
-        var subscription = new Subscription(this, eventName, payload =>
-        {
-            var value = payload.Deserialize<T>(IpcJson.Options);
-            if (value is not null)
+        var subscription = new Subscription(
+            this,
+            eventName,
+            payload =>
             {
-                handler(value);
-            }
-        });
+                var value = payload.Deserialize<T>(IpcJson.Options);
+                if (value is not null)
+                {
+                    handler(value);
+                }
+            },
+            value =>
+            {
+                if (value is T typed)
+                {
+                    handler(typed);
+                }
+                else if (value is null && default(T) is null)
+                {
+                    handler(default!);
+                }
+            });
 
         lock (_handlersLock)
         {
@@ -429,7 +471,7 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
             throw IpcException.Transport("IPC client is not connected.");
         }
 
-        var completion = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<IpcResultPayload>(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_pending.TryAdd(id, completion))
         {
             throw new IpcException(Protocol.ErrInternal, $"Duplicate IPC request id {id}.");
@@ -459,8 +501,8 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
                 Method = method,
                 Params = args,
             };
-            var payload = JsonSerializer.SerializeToUtf8Bytes(request, IpcJson.Options);
-            await WriteFrameAsync(payload, _loopCts.Token).ConfigureAwait(false);
+            var requestPayload = JsonSerializer.SerializeToUtf8Bytes(request, IpcJson.Options);
+            await WriteFrameAsync(requestPayload, _loopCts.Token).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -473,10 +515,10 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
             throw;
         }
 
-        string raw;
+        IpcResultPayload resultPayload;
         try
         {
-            raw = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            resultPayload = await completion.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -488,11 +530,29 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
             throw;
         }
 
-        return DeserializeResult<TResult>(method, raw);
+        return DeserializeResult<TResult>(method, resultPayload);
     }
 
-    private static TResult DeserializeResult<TResult>(string method, string raw)
+    private static TResult DeserializeResult<TResult>(string method, IpcResultPayload payload)
     {
+        if (payload.HasTypedValue)
+        {
+            if (payload.TypedValue is TResult typed)
+            {
+                return typed;
+            }
+
+            if (payload.TypedValue is null && default(TResult) is null)
+            {
+                return default!;
+            }
+
+            throw new IpcException(
+                Protocol.ErrInternal,
+                $"IPC method '{method}' returned binary {payload.TypedValue?.GetType().Name ?? "null"}, not {typeof(TResult).Name}.");
+        }
+
+        var raw = payload.Json ?? "null";
         using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "null" : raw);
         var element = document.RootElement;
         if (element.ValueKind == JsonValueKind.Null)
@@ -520,6 +580,70 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
     private int AllocateId()
     {
         return Interlocked.Increment(ref _nextId);
+    }
+
+    private static object BuildListDirectoryParams(string path, ListDirectoryOptions? options)
+    {
+        if (options is null)
+        {
+            return new PathParams { Path = path };
+        }
+
+        return new ListDirectoryParams
+        {
+            Path = path,
+            Mode = options.Mode,
+            FinalEntries = options.FinalEntries,
+            SortBy = options.SortBy,
+            SortAscending = options.SortAscending,
+            Filter = options.Filter,
+            IncludeHidden = options.IncludeHidden,
+        };
+    }
+
+    private static DirectoryListingChunk NormalizeListingChunk(DirectoryListingChunk chunk)
+    {
+        NormalizeEntries(chunk.Path, chunk.Entries);
+        return chunk;
+    }
+
+    private static void NormalizeListing(DirectoryListing listing)
+    {
+        NormalizeEntries(listing.Path, listing.Entries);
+    }
+
+    private static void NormalizeEntries(string basePath, List<FileEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            if (string.IsNullOrEmpty(entry.Path))
+            {
+                entry.Path = JoinEntryPath(basePath, entry.Name);
+            }
+
+            if (!entry.IsDir && string.IsNullOrEmpty(entry.Extension))
+            {
+                entry.Extension = System.IO.Path.GetExtension(entry.Name).TrimStart('.');
+            }
+        }
+    }
+
+    private static string JoinEntryPath(string basePath, string name)
+    {
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return name;
+        }
+
+        var trimmed = basePath.Trim();
+        if (trimmed == "/")
+        {
+            return "/" + name;
+        }
+
+        var clean = trimmed.TrimEnd('\\', '/');
+        var separator = clean.Contains('/') && !clean.Contains('\\') ? '/' : '\\';
+        return $"{clean}{separator}{name}";
     }
 
     private async Task ReceiveLoopAsync()
@@ -565,6 +689,12 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
 
     private void HandlePayload(byte[] payload)
     {
+        if (BinaryFrameCodec.TryDecode(payload, out var binaryMessage))
+        {
+            HandleBinaryPayload(binaryMessage!);
+            return;
+        }
+
         using var document = JsonDocument.Parse(payload);
         var root = document.RootElement;
 
@@ -603,7 +733,25 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
         var raw = root.TryGetProperty("result", out var resultElement)
             ? resultElement.GetRawText()
             : "null";
-        pending.TrySetResult(raw);
+        pending.TrySetResult(IpcResultPayload.FromJson(raw));
+    }
+
+    private void HandleBinaryPayload(BinaryFrameMessage message)
+    {
+        if (message.ResponseId is int responseId)
+        {
+            if (_pending.TryRemove(responseId, out var pending))
+            {
+                pending.TrySetResult(IpcResultPayload.FromTyped(message.Payload));
+            }
+
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(message.EventName))
+        {
+            DispatchTypedNotification(message.EventName, message.Payload);
+        }
     }
 
     private static bool IsNotification(JsonElement root)
@@ -651,6 +799,32 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
             try
             {
                 subscription.Invoke(paramsElement);
+            }
+            catch
+            {
+                // A handler must not tear down the receive loop.
+            }
+        }
+    }
+
+    private void DispatchTypedNotification(string eventName, object? payload)
+    {
+        Subscription[] snapshot;
+        lock (_handlersLock)
+        {
+            if (!_handlers.TryGetValue(eventName, out var list) || list.Count == 0)
+            {
+                return;
+            }
+
+            snapshot = [.. list];
+        }
+
+        foreach (var subscription in snapshot)
+        {
+            try
+            {
+                subscription.Invoke(payload);
             }
             catch
             {
@@ -758,14 +932,20 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
     private sealed class Subscription : IDisposable
     {
         private readonly NamedPipeJsonClient _client;
-        private readonly Action<JsonElement> _handler;
+        private readonly Action<JsonElement> _jsonHandler;
+        private readonly Action<object?> _typedHandler;
         private int _disposed;
 
-        public Subscription(NamedPipeJsonClient client, string eventName, Action<JsonElement> handler)
+        public Subscription(
+            NamedPipeJsonClient client,
+            string eventName,
+            Action<JsonElement> jsonHandler,
+            Action<object?> typedHandler)
         {
             _client = client;
             EventName = eventName;
-            _handler = handler;
+            _jsonHandler = jsonHandler;
+            _typedHandler = typedHandler;
         }
 
         public string EventName { get; }
@@ -777,7 +957,17 @@ public sealed class NamedPipeJsonClient : ISimpleFileIpc
                 return;
             }
 
-            _handler(payload);
+            _jsonHandler(payload);
+        }
+
+        public void Invoke(object? payload)
+        {
+            if (_disposed != 0)
+            {
+                return;
+            }
+
+            _typedHandler(payload);
         }
 
         public void Dispose()

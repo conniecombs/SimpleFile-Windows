@@ -53,6 +53,27 @@ public sealed class DirectoryListing
     public bool IsNetwork { get; set; }
 }
 
+public sealed class ListDirectoryOptions
+{
+    [JsonPropertyName("mode")]
+    public string Mode { get; init; } = "full";
+
+    [JsonPropertyName("finalEntries")]
+    public bool? FinalEntries { get; init; }
+
+    [JsonPropertyName("sortBy")]
+    public string? SortBy { get; init; }
+
+    [JsonPropertyName("sortAscending")]
+    public bool? SortAscending { get; init; }
+
+    [JsonPropertyName("filter")]
+    public string? Filter { get; init; }
+
+    [JsonPropertyName("includeHidden")]
+    public bool? IncludeHidden { get; init; }
+}
+
 public sealed class DirectoryListingChunk
 {
     [JsonPropertyName("path")]

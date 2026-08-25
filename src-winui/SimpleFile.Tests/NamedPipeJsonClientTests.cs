@@ -19,6 +19,7 @@ public class NamedPipeJsonClientTests
         Assert.Equal(1, request.Id);
         var parameters = Assert.IsType<JsonElement>(request.Params);
         Assert.Equal("secret-token", parameters.GetProperty("authToken").GetString());
+        Assert.True(parameters.GetProperty("binaryHotFrames").GetBoolean());
 
         await server.SendResultAsync(
             request.Id,
@@ -132,6 +133,112 @@ public class NamedPipeJsonClientTests
     }
 
     [Fact]
+    public async Task ListDirectory_LightStreamedRequestMergesMetadataOnlyResult()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var seen = new List<DirectoryListingChunk>();
+        var listingTask = client.ListDirectoryAsync(
+            @"C:\Users\Public",
+            seen.Add,
+            options: new ListDirectoryOptions
+            {
+                Mode = "light",
+                FinalEntries = false,
+                SortBy = "name",
+                SortAscending = true,
+                IncludeHidden = true,
+            });
+        var request = await server.ReadRequestAsync();
+        var parameters = Assert.IsType<JsonElement>(request.Params);
+        Assert.Equal("light", parameters.GetProperty("mode").GetString());
+        Assert.False(parameters.GetProperty("finalEntries").GetBoolean());
+        Assert.Equal("name", parameters.GetProperty("sortBy").GetString());
+        Assert.True(parameters.GetProperty("sortAscending").GetBoolean());
+        Assert.True(parameters.GetProperty("includeHidden").GetBoolean());
+
+        await server.SendNotificationAsync(
+            Protocol.ListDirectoryChunkEvent,
+            new DirectoryListingChunkNotification
+            {
+                RequestId = request.Id,
+                Path = @"C:\Users\Public",
+                Parent = @"C:\Users",
+                Entries =
+                [
+                    new FileEntry { Name = "notes.txt", Size = 42 },
+                ],
+                ChunkIndex = 0,
+                Done = true,
+            });
+        await server.SendResultAsync(
+            request.Id,
+            new DirectoryListing
+            {
+                Path = @"C:\Users\Public",
+                Parent = @"C:\Users",
+                Entries = [],
+            });
+
+        var listing = await listingTask;
+        var entry = Assert.Single(listing.Entries);
+        Assert.Equal(@"C:\Users\Public\notes.txt", entry.Path);
+        Assert.Equal("txt", entry.Extension);
+        Assert.Single(seen);
+        Assert.Equal(@"C:\Users\Public\notes.txt", seen[0].Entries[0].Path);
+    }
+
+    [Fact]
+    public async Task BinaryListDirectory_DeliversChunksAndResult()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var seen = new List<DirectoryListingChunk>();
+        var listingTask = client.ListDirectoryAsync(@"C:\Users\Public", seen.Add);
+        var request = await server.ReadRequestAsync();
+
+        var entry = new FileEntry
+        {
+            Name = "notes.txt",
+            Path = @"C:\Users\Public\notes.txt",
+            Extension = "txt",
+            Size = 42,
+            Modified = "2026-08-25 12:00",
+        };
+
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeDirectoryListingChunk(
+            new DirectoryListingChunkNotification
+            {
+                RequestId = request.Id,
+                Path = @"C:\Users\Public",
+                Parent = @"C:\Users",
+                Entries = [entry],
+                ChunkIndex = 0,
+                Done = true,
+                IsNetwork = false,
+            }));
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeDirectoryListingResult(
+            request.Id,
+            new DirectoryListing
+            {
+                Path = @"C:\Users\Public",
+                Parent = @"C:\Users",
+                Entries = [entry],
+                IsNetwork = false,
+            }));
+
+        var listing = await listingTask;
+        Assert.Single(seen);
+        Assert.True(seen[0].Done);
+        Assert.Equal(@"C:\Users\Public", listing.Path);
+        Assert.Equal("notes.txt", listing.Entries[0].Name);
+    }
+
+    [Fact]
     public async Task On_DeliversNotificationsAndUnsubscribeStopsThem()
     {
         var (server, client) = await FakeIpcServer.ConnectAsync();
@@ -159,6 +266,44 @@ public class NamedPipeJsonClientTests
         await after;
 
         Assert.Equal([@"C:\a.txt"], seen);
+    }
+
+    [Fact]
+    public async Task BinaryNotifications_DeliverFileChangeAndProgress()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var changes = new List<FileChangeEvent>();
+        var progress = new List<ProgressUpdate>();
+        using var changeSubscription = client.On<FileChangeEvent>(Protocol.FileChangeEvent, changes.Add);
+        using var progressSubscription = client.On<ProgressUpdate>(Protocol.OperationProgressEvent, progress.Add);
+
+        var invoke = client.HealthAsync();
+        var request = await server.ReadRequestAsync();
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeFileChange(
+            new FileChangeEvent { Path = @"C:\a.txt", Kind = "modify" }));
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeProgressUpdate(
+            new ProgressUpdate
+            {
+                OperationId = "op_1",
+                OperationType = "copy",
+                Current = 4,
+                Total = 8,
+                CurrentFiles = 1,
+                TotalFiles = 2,
+                CurrentItem = @"C:\a.txt",
+                Status = "running",
+            }));
+        await server.SendResultAsync(request.Id, new HealthResult { Ok = true, ProtocolVersion = 1 });
+        await invoke;
+
+        Assert.Single(changes);
+        Assert.Equal(@"C:\a.txt", changes[0].Path);
+        Assert.Single(progress);
+        Assert.Equal("op_1", progress[0].OperationId);
+        Assert.Equal(8ul, progress[0].Total);
     }
 
     [Fact]
@@ -221,6 +366,65 @@ public class NamedPipeJsonClientTests
 
         Assert.Single(batches);
         Assert.Equal([1], completions);
+    }
+
+    [Fact]
+    public async Task BinarySearchFiles_StreamsBatchesAndResult()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var batches = new List<SearchResult[]>();
+        var search = client.SearchFilesAsync(
+            new SearchOptions
+            {
+                Query = "alpha",
+                SearchPath = @"C:\Users\Public",
+                SearchId = "search-test",
+            },
+            batches.Add);
+
+        var request = await server.ReadRequestAsync();
+        var result = new SearchResult
+        {
+            Name = "alpha.txt",
+            Path = @"C:\Users\Public\alpha.txt",
+            Extension = "txt",
+            MatchType = "name",
+            Modified = "2026-08-25 12:00",
+        };
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeSearchResultsBatch([result]));
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeSearchResultsResult(request.Id, [result]));
+
+        var results = await search;
+        Assert.Single(batches);
+        Assert.Equal("alpha.txt", batches[0][0].Name);
+        Assert.Single(results);
+        Assert.Equal(@"C:\Users\Public\alpha.txt", results[0].Path);
+    }
+
+    [Fact]
+    public async Task BinaryThumbnailResponses_ResolvePendingCalls()
+    {
+        var (server, client) = await FakeIpcServer.ConnectAsync();
+        await using var serverLifetime = server;
+        await using var clientLifetime = client;
+
+        var single = client.GenerateThumbnailAsync(@"C:\img\a.jpg", 128);
+        var singleRequest = await server.ReadRequestAsync();
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeThumbnailResult(singleRequest.Id, "abc123"));
+        Assert.Equal("abc123", await single);
+
+        var batch = client.GenerateThumbnailsAsync([@"C:\img\a.jpg"], 128);
+        var batchRequest = await server.ReadRequestAsync();
+        await server.SendBinaryFrameAsync(BinaryFrameCodec.EncodeThumbnailResultsResult(
+            batchRequest.Id,
+            [new ThumbnailResult { Path = @"C:\img\a.jpg", Data = "abc123" }]));
+
+        var results = await batch;
+        Assert.Single(results);
+        Assert.Equal("abc123", results[0].Data);
     }
 
     [Fact]

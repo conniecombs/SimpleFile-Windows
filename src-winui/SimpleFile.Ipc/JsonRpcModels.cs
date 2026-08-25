@@ -64,6 +64,9 @@ public sealed class HandshakeParams
 
     [JsonPropertyName("authToken")]
     public string AuthToken { get; set; } = "";
+
+    [JsonPropertyName("binaryHotFrames")]
+    public bool BinaryHotFrames { get; set; } = true;
 }
 
 public sealed class HandshakeResult
@@ -79,6 +82,12 @@ public sealed class HandshakeResult
 
     [JsonPropertyName("methodCount")]
     public int MethodCount { get; set; }
+
+    [JsonPropertyName("binaryHotFrames")]
+    public bool BinaryHotFrames { get; set; }
+
+    [JsonPropertyName("binaryFrameVersion")]
+    public int BinaryFrameVersion { get; set; }
 }
 
 public sealed class HealthResult
@@ -97,6 +106,30 @@ public sealed class PathParams
 {
     [JsonPropertyName("path")]
     public required string Path { get; init; }
+}
+
+public sealed class ListDirectoryParams
+{
+    [JsonPropertyName("path")]
+    public required string Path { get; init; }
+
+    [JsonPropertyName("mode")]
+    public string? Mode { get; init; }
+
+    [JsonPropertyName("finalEntries")]
+    public bool? FinalEntries { get; init; }
+
+    [JsonPropertyName("sortBy")]
+    public string? SortBy { get; init; }
+
+    [JsonPropertyName("sortAscending")]
+    public bool? SortAscending { get; init; }
+
+    [JsonPropertyName("filter")]
+    public string? Filter { get; init; }
+
+    [JsonPropertyName("includeHidden")]
+    public bool? IncludeHidden { get; init; }
 }
 
 public sealed class SelectDirectoryParams

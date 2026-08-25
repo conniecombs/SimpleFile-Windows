@@ -8,6 +8,17 @@ pub const JSONRPC_VERSION: &str = "2.0";
 pub const MAX_FRAME_BYTES: u32 = 80 * 1024 * 1024;
 pub const DOMAIN_METHOD_COUNT: usize = 76;
 
+pub const BINARY_FRAME_MAGIC: [u8; 4] = *b"SFB1";
+pub const BINARY_FRAME_VERSION: u8 = 1;
+pub const BINARY_LIST_DIRECTORY_CHUNK: u8 = 1;
+pub const BINARY_LIST_DIRECTORY_RESULT: u8 = 2;
+pub const BINARY_SEARCH_RESULTS_BATCH: u8 = 3;
+pub const BINARY_SEARCH_RESULTS_RESULT: u8 = 4;
+pub const BINARY_OPERATION_PROGRESS: u8 = 5;
+pub const BINARY_FILE_CHANGE: u8 = 6;
+pub const BINARY_THUMBNAIL_RESULT: u8 = 7;
+pub const BINARY_THUMBNAILS_RESULT: u8 = 8;
+
 pub const ERR_APPLICATION: i32 = -32000;
 pub const ERR_HOST_OWNED: i32 = -32001;
 pub const ERR_INVALID_REQUEST: i32 = -32600;

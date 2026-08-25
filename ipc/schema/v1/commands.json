@@ -4,8 +4,8 @@
   "methods": {
     "ipc.handshake": {
       "kind": "handshake",
-      "params": { "protocolVersion": "number", "clientName": "string", "authToken": "string" },
-      "result": { "protocolVersion": "number", "appVersion": "string", "identifier": "string", "methodCount": "number" }
+      "params": { "protocolVersion": "number", "clientName": "string", "authToken": "string", "binaryHotFrames": "boolean optional" },
+      "result": { "protocolVersion": "number", "appVersion": "string", "identifier": "string", "methodCount": "number", "binaryHotFrames": "boolean", "binaryFrameVersion": "number optional" }
     },
     "ipc.health": {
       "kind": "control",
@@ -25,10 +25,20 @@
     },
     "list_drives": { "params": null, "result": "DriveInfo[]" },
     "list_directory": {
-      "params": { "path": "string" },
+      "params": {
+        "path": "string",
+        "mode": "ListDirectoryMode optional",
+        "finalEntries": "boolean optional",
+        "sortBy": "string optional",
+        "sortAscending": "boolean optional",
+        "filter": "string optional",
+        "includeHidden": "boolean optional"
+      },
       "result": "DirectoryListing",
       "omittedFromParams": ["onChunk"],
-      "streams": "list_directory.chunk"
+      "streams": "list_directory.chunk",
+      "notes": "When finalEntries is false, streamed chunks carry the entries and the final result may return entries: [].",
+      "binaryFrameTags": { "chunk": 1, "result": 2 }
     },
     "list_subdirectories": { "params": { "path": "string" }, "result": "TreeNode[]" },
     "create_directory": { "params": { "path": "string", "name": "string" }, "result": "string" },
@@ -72,8 +82,8 @@
     "watch_directory": { "params": { "path": "string" }, "result": "null" },
     "unwatch_directory": { "params": null, "result": "null" },
     "read_file_preview": { "params": { "path": "string", "maxSize": "number?" }, "result": "FilePreview" },
-    "generate_thumbnail": { "params": { "path": "string", "size": "number" }, "result": "string" },
-    "generate_thumbnails": { "params": { "paths": "string[]", "size": "number" }, "result": "ThumbnailResult[]" },
+    "generate_thumbnail": { "params": { "path": "string", "size": "number" }, "result": "string", "binaryFrameTag": 7 },
+    "generate_thumbnails": { "params": { "paths": "string[]", "size": "number" }, "result": "ThumbnailResult[]", "binaryFrameTag": 8 },
     "calculate_folder_size": { "params": { "path": "string" }, "result": "number" },
     "count_folder_items": { "params": { "path": "string" }, "result": "number" },
     "get_folder_metrics": {
@@ -103,7 +113,7 @@
     "git_push": { "params": { "path": "string" }, "result": "string" },
     "open_terminal": { "params": { "path": "string" }, "result": "null" },
     "open_powershell_admin": { "params": { "path": "string" }, "result": "null" },
-    "search_files": { "params": { "options": "SearchOptions" }, "result": "SearchResult[]" },
+    "search_files": { "params": { "options": "SearchOptions" }, "result": "SearchResult[]", "binaryFrameTags": { "batch": 3, "result": 4 } },
     "cancel_search": { "params": { "searchId": "string" }, "result": "null", "cancellation": true },
     "load_smart_folders": { "params": null, "result": "SmartFolder[]" },
     "save_smart_folder": { "params": { "folder": "SmartFolder" }, "result": "SmartFolder[]" },

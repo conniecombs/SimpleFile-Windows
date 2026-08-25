@@ -5,6 +5,8 @@
     "protocolVersion": 1,
     "appVersion": "1.1.0",
     "identifier": "com.simplefile.desktop",
-    "methodCount": 76
+    "methodCount": 76,
+    "binaryHotFrames": true,
+    "binaryFrameVersion": 1
   }
 }

@@ -91,10 +91,11 @@ public sealed class BackendSession : IExplorerBackend, IAsyncDisposable
     public Task<DirectoryListing> ListDirectoryAsync(
         string path,
         Action<DirectoryListingChunk>? onChunk = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ListDirectoryOptions? options = null)
     {
         return UseClientAsync(
-            client => client.ListDirectoryAsync(path, onChunk, cancellationToken),
+            client => client.ListDirectoryAsync(path, onChunk, cancellationToken, options),
             cancellationToken);
     }
 

@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
+use simplefile_core::dir_list::{ListDirectoryOptions, ListingMode};
 use simplefile_core::models::SearchOptions;
 use simplefile_core::utils::dirs_home;
 use simplefile_ipc::rpc::{JsonRpcRequest, JsonRpcResponse};
@@ -16,6 +17,7 @@ const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Debug, Default)]
 pub struct SessionState {
     pub handshake_done: bool,
+    pub binary_hot_frames: Arc<AtomicBool>,
     pub expected_token: Option<String>,
     pub shutdown: bool,
     pub duplicate_check_cancel: Arc<AtomicBool>,
@@ -31,6 +33,7 @@ pub(crate) enum Dispatch {
     ListDirectory {
         id: Option<Value>,
         path: String,
+        options: Option<ListDirectoryOptions>,
     },
     CopyWithProgress {
         id: Option<Value>,
@@ -81,6 +84,16 @@ pub(crate) enum Dispatch {
     InstallUpdate {
         id: Option<Value>,
     },
+    GenerateThumbnail {
+        id: Option<Value>,
+        path: String,
+        size: Option<u32>,
+    },
+    GenerateThumbnails {
+        id: Option<Value>,
+        paths: Vec<String>,
+        size: Option<u32>,
+    },
     CalculateFolderSize {
         id: Option<Value>,
         path: String,
@@ -108,11 +121,60 @@ struct HandshakeParams {
     client_name: Option<String>,
     #[serde(rename = "authToken")]
     auth_token: Option<String>,
+    #[serde(rename = "binaryHotFrames", default)]
+    binary_hot_frames: bool,
 }
 
 #[derive(Debug, Deserialize)]
 struct PathParams {
     path: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ListDirectoryParams {
+    path: String,
+    #[serde(default)]
+    mode: Option<String>,
+    #[serde(rename = "finalEntries", default)]
+    final_entries: Option<bool>,
+    #[serde(rename = "sortBy", default)]
+    sort_by: Option<String>,
+    #[serde(rename = "sortAscending", default)]
+    sort_ascending: Option<bool>,
+    #[serde(default)]
+    filter: Option<String>,
+    #[serde(rename = "includeHidden", default)]
+    include_hidden: Option<bool>,
+}
+
+impl ListDirectoryParams {
+    fn into_options(self) -> (String, Option<ListDirectoryOptions>) {
+        let has_options = self.mode.is_some()
+            || self.final_entries.is_some()
+            || self.sort_by.is_some()
+            || self.sort_ascending.is_some()
+            || self.filter.is_some()
+            || self.include_hidden.is_some();
+        if !has_options {
+            return (self.path, None);
+        }
+
+        let mode = match self.mode.as_deref() {
+            Some("light") => ListingMode::Light,
+            _ => ListingMode::Full,
+        };
+        (
+            self.path,
+            Some(ListDirectoryOptions {
+                mode,
+                final_entries: self.final_entries.unwrap_or(true),
+                sort_by: self.sort_by.unwrap_or_else(|| "name".to_string()),
+                sort_ascending: self.sort_ascending.unwrap_or(true),
+                filter: self.filter,
+                include_hidden: self.include_hidden.unwrap_or(true),
+            }),
+        )
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -403,11 +465,15 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             },
             Err(response) => Dispatch::Reply(response),
         },
-        "list_directory" => match parse_path_params(request) {
-            Ok(path) => Dispatch::ListDirectory {
-                id: request.id.clone(),
-                path,
-            },
+        "list_directory" => match parse_params::<ListDirectoryParams>(request) {
+            Ok(params) => {
+                let (path, options) = params.into_options();
+                Dispatch::ListDirectory {
+                    id: request.id.clone(),
+                    path,
+                    options,
+                }
+            }
             Err(response) => Dispatch::Reply(response),
         },
         "select_directory" => Dispatch::Reply(JsonRpcResponse::error(
@@ -708,22 +774,19 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
             Err(r) => Dispatch::Reply(r),
         },
         "generate_thumbnail" => match parse_params::<ThumbnailParams>(request) {
-            Ok(p) => match simplefile_core::preview::generate_thumbnail(p.path, p.size) {
-                Ok(r) => Dispatch::Reply(JsonRpcResponse::result(request.id.clone(), json!(r))),
-                Err(m) => {
-                    Dispatch::Reply(JsonRpcResponse::application_error(request.id.clone(), m))
-                }
+            Ok(p) => Dispatch::GenerateThumbnail {
+                id: request.id.clone(),
+                path: p.path,
+                size: p.size,
             },
             Err(r) => Dispatch::Reply(r),
         },
         "generate_thumbnails" => match parse_params::<ThumbnailBatchParams>(request) {
-            Ok(p) => Dispatch::Reply(JsonRpcResponse::result(
-                request.id.clone(),
-                serde_json::to_value(simplefile_core::preview::generate_thumbnails(
-                    p.paths, p.size,
-                ))
-                .unwrap_or(Value::Null),
-            )),
+            Ok(p) => Dispatch::GenerateThumbnails {
+                id: request.id.clone(),
+                paths: p.paths,
+                size: p.size,
+            },
             Err(r) => Dispatch::Reply(r),
         },
         "compute_checksum" => match parse_params::<PathParams>(request) {
@@ -1063,6 +1126,9 @@ fn handshake(state: &mut SessionState, request: &JsonRpcRequest) -> JsonRpcRespo
     }
 
     state.handshake_done = true;
+    state
+        .binary_hot_frames
+        .store(params.binary_hot_frames, Ordering::Relaxed);
     JsonRpcResponse::result(
         request.id.clone(),
         json!({
@@ -1070,6 +1136,8 @@ fn handshake(state: &mut SessionState, request: &JsonRpcRequest) -> JsonRpcRespo
             "appVersion": APP_VERSION,
             "identifier": APP_IDENTIFIER,
             "methodCount": DOMAIN_METHOD_COUNT,
+            "binaryHotFrames": params.binary_hot_frames,
+            "binaryFrameVersion": simplefile_ipc::BINARY_FRAME_VERSION,
         }),
     )
 }
