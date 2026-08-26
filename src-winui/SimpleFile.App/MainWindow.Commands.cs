@@ -626,7 +626,9 @@ public sealed partial class MainWindow
         try
         {
             ViewDualPaneText.Text = _workspace.DualPaneEnabled ? "Close right pane" : "Open second pane";
-            ViewDualPaneIcon.Glyph = _workspace.DualPaneEnabled ? "\uE711" : "\uE8A7";
+            ViewDualPaneIcon.Glyph = _workspace.DualPaneEnabled
+                ? ContextMenuIconCatalog.ClosePane
+                : ContextMenuIconCatalog.OpenPane;
             ViewApplyBothButton.Visibility = _workspace.DualPaneEnabled ? Visibility.Visible : Visibility.Collapsed;
             SelectViewStyle(currentView);
 
@@ -831,6 +833,7 @@ public sealed partial class MainWindow
         IReadOnlyList<FileRow> selected,
         IReadOnlyCollection<string>? overflowedToolbarIds = null)
     {
+        var selectedFile = selected.Count == 1 && !selected[0].IsDir ? selected[0] : null;
         return new ContextMenuRequest
         {
             SelectionCount = selected.Count,
@@ -843,6 +846,8 @@ public sealed partial class MainWindow
             AllSelectedAreFiles = selected.Count > 0 && selected.All(row => !row.IsDir),
             SelectedIsArchive = selected.Count == 1 && !selected[0].IsDir && ArchivePaths.IsArchiveFile(selected[0].Path),
             ArchiveExtractFolderName = selected.Count == 1 ? ArchivePaths.ExtractFolderName(selected[0].Name) : null,
+            SelectedExtension = selectedFile?.Extension,
+            OpenWithApplications = selectedFile is null ? [] : OpenWithApplicationsForPath(selectedFile.Path),
             OverflowedToolbarIds = overflowedToolbarIds ?? [],
         };
     }
@@ -865,7 +870,7 @@ public sealed partial class MainWindow
 
         if (entry.Children.Count > 0)
         {
-            var sub = new MenuFlyoutSubItem { Text = entry.Label, Tag = entry.Id };
+            var sub = new MenuFlyoutSubItem { Text = entry.Label, Tag = entry };
             if (!string.IsNullOrWhiteSpace(entry.IconGlyph))
             {
                 sub.Icon = CreateMenuIcon(entry.IconGlyph);
@@ -882,7 +887,7 @@ public sealed partial class MainWindow
         var item = new MenuFlyoutItem
         {
             Text = entry.Label,
-            Tag = entry.Id,
+            Tag = entry,
             Name = entry.Id,
             KeyboardAcceleratorTextOverride = entry.Shortcut ?? "",
         };
@@ -907,21 +912,34 @@ public sealed partial class MainWindow
 
     private async void OnContextMenuItemClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not MenuFlyoutItem item || item.Tag is not string id)
+        if (sender is not MenuFlyoutItem item)
         {
             return;
         }
 
-        await RunUiActionAsync("Context menu", () => RunContextCommandAsync(id));
+        var entry = item.Tag as ContextMenuEntry;
+        var id = entry?.Id ?? item.Tag as string;
+        if (string.IsNullOrWhiteSpace(id))
+        {
+            return;
+        }
+
+        await RunUiActionAsync("Context menu", () => RunContextCommandAsync(id, entry?.CommandParameter));
     }
 
-    private async Task RunContextCommandAsync(string id)
+    private async Task RunContextCommandAsync(string id, string? commandParameter = null)
     {
         if (id.StartsWith("view:", StringComparison.Ordinal)
             || id.StartsWith("icon:", StringComparison.Ordinal)
             || id == "pane:dual")
         {
             await ApplyViewOptionAsync(id);
+            return;
+        }
+
+        if (id.StartsWith("ctx-open-with-app-", StringComparison.Ordinal))
+        {
+            await OpenSelectedWithApplicationAsync(commandParameter);
             return;
         }
 
@@ -949,6 +967,7 @@ public sealed partial class MainWindow
                 await OpenSelectedFile(ActiveFileList, _workspace?.ActivePane ?? PaneId.Primary);
                 break;
             case "ctx-open-with":
+            case "ctx-open-with-choose":
                 await OpenSelectedWithAsync();
                 break;
             case "ctx-preview":

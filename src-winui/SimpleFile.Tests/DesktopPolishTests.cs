@@ -70,6 +70,142 @@ public class DesktopPolishTests
     }
 
     [Fact]
+    public void ContextMenu_UsesCatalogIconsAndKeepsSubmenuChildrenQuiet()
+    {
+        var selected = ContextMenuBuilder.Build(new ContextMenuRequest
+        {
+            SelectionCount = 1,
+            SelectedIsArchive = true,
+            ArchiveExtractFolderName = "pack",
+            DualPaneEnabled = true,
+            OtherPaneHasPath = true,
+            HasClipboard = true,
+        });
+
+        Assert.Equal(ContextMenuIconCatalog.OpenFile, Assert.Single(selected, entry => entry.Id == "ctx-open").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.OpenWith, Assert.Single(selected, entry => entry.Id == "ctx-open-with").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.Preview, Assert.Single(selected, entry => entry.Id == "ctx-preview").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.SelectAll, Assert.Single(selected, entry => entry.Id == "ctx-duplicates").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.Edit, Assert.Single(selected, entry => entry.Id == "ctx-advanced-rename").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.MoveToFolder, Assert.Single(selected, entry => entry.Id == "ctx-move-to-pane").IconGlyph);
+
+        var rename = Assert.Single(selected, entry => entry.Id == "ctx-rename");
+        var advancedRename = Assert.Single(selected, entry => entry.Id == "ctx-advanced-rename");
+        var copy = Assert.Single(selected, entry => entry.Id == "ctx-copy");
+        var duplicates = Assert.Single(selected, entry => entry.Id == "ctx-duplicates");
+        Assert.NotEqual(rename.IconGlyph, advancedRename.IconGlyph);
+        Assert.NotEqual(copy.IconGlyph, duplicates.IconGlyph);
+
+        var extract = Assert.Single(selected, entry => entry.Id == "ctx-extract-menu");
+        Assert.Equal(ContextMenuIconCatalog.Import, extract.IconGlyph);
+        Assert.All(extract.Children, entry => Assert.True(string.IsNullOrWhiteSpace(entry.IconGlyph)));
+
+        var delete = Assert.Single(selected, entry => entry.Id == "ctx-delete-menu");
+        Assert.Equal(ContextMenuIconCatalog.Delete, delete.IconGlyph);
+        Assert.All(delete.Children, entry => Assert.True(string.IsNullOrWhiteSpace(entry.IconGlyph)));
+    }
+
+    [Fact]
+    public void ContextMenu_OpenWithBuildsApplicationSubmenu()
+    {
+        var apps = new[]
+        {
+            OpenWithApplication.FromPath(@"C:\Program Files\Microsoft VS Code\Code.exe", "Visual Studio Code", "favorite"),
+            OpenWithApplication.FromPath(@"C:\Program Files\Notepad++\notepad++.exe", "Notepad++", "suggested"),
+        };
+
+        var selected = ContextMenuBuilder.Build(new ContextMenuRequest
+        {
+            SelectionCount = 1,
+            AllSelectedAreFiles = true,
+            SelectedExtension = ".txt",
+            OpenWithApplications = apps,
+        });
+
+        var openWith = Assert.Single(selected, entry => entry.Id == "ctx-open-with");
+        Assert.Equal("Open with", openWith.Label);
+        Assert.Equal(ContextMenuIconCatalog.OpenWith, openWith.IconGlyph);
+
+        var code = Assert.Single(openWith.Children, entry => entry.Id == "ctx-open-with-app-0");
+        Assert.Equal("Visual Studio Code", code.Label);
+        Assert.Equal(@"C:\Program Files\Microsoft VS Code\Code.exe", code.CommandParameter);
+        Assert.Equal(ContextMenuIconCatalog.OpenWith, code.IconGlyph);
+        Assert.Contains(openWith.Children, entry => entry.Kind == ContextMenuKind.Divider);
+
+        var choose = Assert.Single(openWith.Children, entry => entry.Id == "ctx-open-with-choose");
+        Assert.Equal("Choose another app...", choose.Label);
+        Assert.Equal(ContextMenuIconCatalog.OpenWith, choose.IconGlyph);
+    }
+
+    [Fact]
+    public void OpenWithPreferences_ComposesPinnedRecentAndDiscoveredAppsInOrder()
+    {
+        var preferences = new OpenWithPreferences();
+        var pinned = OpenWithApplication.FromPath(@"C:\Program Files\Pinned\App.exe", "Pinned App", "custom");
+        var recent = OpenWithApplication.FromPath(@"C:\Program Files\Recent\App.exe", "Recent App", "custom");
+        var discovered = OpenWithApplication.FromPath(@"C:\Program Files\Suggested\App.exe", "Suggested App", "suggested");
+
+        preferences.RecordRecent("TXT", recent);
+        preferences.PinForExtension("txt", pinned);
+        var apps = preferences.ComposeMenuApplications(".txt", [recent, discovered]);
+
+        Assert.Collection(
+            apps,
+            app =>
+            {
+                Assert.Equal("Pinned App", app.DisplayName);
+                Assert.True(app.IsFavorite);
+                Assert.False(app.IsRecent);
+            },
+            app =>
+            {
+                Assert.Equal("Recent App", app.DisplayName);
+                Assert.False(app.IsFavorite);
+                Assert.True(app.IsRecent);
+            },
+            app =>
+            {
+                Assert.Equal("Suggested App", app.DisplayName);
+                Assert.Equal("suggested", app.Source);
+            });
+    }
+
+    [Fact]
+    public void OpenWithPreferences_CapsRecentsAndRoundTripsJson()
+    {
+        var preferences = new OpenWithPreferences();
+        for (var index = 0; index < OpenWithPreferences.MaxRecentApplications + 2; index++)
+        {
+            preferences.RecordRecent(
+                ".log",
+                OpenWithApplication.FromPath($@"C:\Program Files\App{index}\app.exe", $"App {index}", "custom"));
+        }
+
+        var roundTripped = OpenWithPreferences.FromJson(preferences.ToJson());
+        var apps = roundTripped.ComposeMenuApplications("log", []);
+
+        Assert.Equal(OpenWithPreferences.MaxRecentApplications, apps.Count);
+        Assert.Equal("App 9", apps[0].DisplayName);
+        Assert.Equal("App 2", apps[^1].DisplayName);
+        Assert.All(apps, app => Assert.True(app.IsRecent));
+    }
+
+    [Fact]
+    public void OpenWithPreferences_UnpinsFavoritesForExtension()
+    {
+        var preferences = new OpenWithPreferences();
+        var favorite = OpenWithApplication.FromPath(@"C:\Program Files\Pinned\App.exe", "Pinned App", "custom");
+
+        preferences.PinForExtension(".md", favorite);
+        Assert.Contains(preferences.ComposeMenuApplications("md", []), app => app.IsFavorite);
+
+        preferences.UnpinForExtension("md", favorite);
+
+        Assert.DoesNotContain(preferences.ComposeMenuApplications("md", []), app => app.IsFavorite);
+        Assert.False(preferences.FavoritesByExtension.ContainsKey(".md"));
+    }
+
+    [Fact]
     public void ContextMenu_CompareRequiresTwoFiles()
     {
         var oneFile = ContextMenuBuilder.Build(new ContextMenuRequest
@@ -128,6 +264,28 @@ public class DesktopPolishTests
         Assert.Contains(archive, entry => entry.Id == "ctx-view-archive");
         Assert.Contains(archive, entry => entry.Id == "ctx-extract-to" && entry.Label == "Extract archive...");
         Assert.Contains(archive, entry => entry.Id == "ctx-compress" && entry.Label == "Create archive...");
+    }
+
+    [Fact]
+    public void PaneMoreMenu_UsesPaneAndArchiveGlyphsFromCatalog()
+    {
+        var dualPane = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            DualPaneEnabled = true,
+        });
+
+        Assert.Equal(ContextMenuIconCatalog.ClosePane, Assert.Single(dualPane, entry => entry.Id == "ctx-close-left-pane").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.ClosePane, Assert.Single(dualPane, entry => entry.Id == "ctx-close-dual-pane").IconGlyph);
+
+        var archive = ContextMenuBuilder.BuildPaneMoreMenu(new ContextMenuRequest
+        {
+            SelectionCount = 1,
+            SelectedIsArchive = true,
+        });
+
+        Assert.Equal(ContextMenuIconCatalog.Package, Assert.Single(archive, entry => entry.Id == "ctx-view-archive").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.Import, Assert.Single(archive, entry => entry.Id == "ctx-extract-to").IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.Package, Assert.Single(archive, entry => entry.Id == "ctx-compress").IconGlyph);
     }
 
     [Fact]
@@ -306,6 +464,9 @@ public class DesktopPolishTests
         Assert.Equal("Open second pane", overflowed[4].Label);
         Assert.Equal("overflow-view", overflowed[5].Id);
         Assert.Equal("overflow-settings", overflowed[6].Id);
+        Assert.Equal(ContextMenuIconCatalog.OpenPane, overflowed[4].IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.ViewAll, overflowed[5].IconGlyph);
+        Assert.Equal(ContextMenuIconCatalog.Settings, overflowed[6].IconGlyph);
         Assert.Contains(overflowed[5].Children, child => child.Id == "view:details");
         Assert.Contains(overflowed, entry => entry.Id == "ctx-duplicates");
         Assert.DoesNotContain(overflowed, entry => entry.Id == "ctx-close-dual-pane");

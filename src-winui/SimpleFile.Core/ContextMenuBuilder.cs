@@ -13,6 +13,7 @@ public sealed class ContextMenuEntry
     public string Label { get; init; } = "";
     public string? Shortcut { get; init; }
     public string? IconGlyph { get; init; }
+    public string? CommandParameter { get; init; }
     public bool Disabled { get; init; }
     public bool Hidden { get; init; }
     public IReadOnlyList<ContextMenuEntry> Children { get; init; } = [];
@@ -30,6 +31,8 @@ public sealed class ContextMenuRequest
     public bool AllSelectedAreFiles { get; init; }
     public bool SelectedIsArchive { get; init; }
     public string? ArchiveExtractFolderName { get; init; }
+    public string? SelectedExtension { get; init; }
+    public IReadOnlyList<OpenWithApplication> OpenWithApplications { get; init; } = [];
     public IReadOnlyCollection<string> OverflowedToolbarIds { get; init; } = [];
 }
 
@@ -49,47 +52,47 @@ public static class ContextMenuBuilder
 
         var entries = new List<ContextMenuEntry>
         {
-            Item("ctx-open", "Open", request.SelectionCount != 1, "Enter", "\uE8E5"),
-            Item("ctx-open-with", "Open with...", request.SelectionCount != 1 || request.SelectedIsDirectory, null, "\uE8A7"),
-            Item("ctx-preview", "Quick Look", request.SelectionCount != 1, "Space", "\uE890"),
-            Item("ctx-compare", "Compare files", !canCompare, null, "\uE8AB"),
-            Item("ctx-terminal", "Open terminal here", false, "F4", "\uE756"),
-            Item("ctx-powershell-admin", "Open PowerShell as administrator", false, null, "\uE7EF"),
+            Item("ctx-open", "Open", request.SelectionCount != 1, "Enter"),
+            OpenWithMenu(request),
+            Item("ctx-preview", "Quick Look", request.SelectionCount != 1, "Space"),
+            Item("ctx-compare", "Compare files", !canCompare),
+            Item("ctx-terminal", "Open terminal here", false, "F4"),
+            Item("ctx-powershell-admin", "Open PowerShell as administrator"),
             Divider(),
-            Item("ctx-color-label", "Set color label...", request.SelectionCount == 0, null, "\uE790"),
-            Item("ctx-folder-metrics", "Folder metrics", !request.HasFolderSelection, null, "\uE9D2"),
-            Item("ctx-cleanup", "Disk cleanup here...", false, null, "\uE75C"),
-            Item("ctx-duplicates", "Find duplicates here...", false, null, "\uE8C8"),
+            Item("ctx-color-label", "Set color label...", request.SelectionCount == 0),
+            Item("ctx-folder-metrics", "Folder metrics", !request.HasFolderSelection),
+            Item("ctx-cleanup", "Disk cleanup here..."),
+            Item("ctx-duplicates", "Find duplicates here..."),
             Divider(),
-            Item("ctx-rename", "Rename", request.SelectionCount != 1, "F2", "\uE8AC"),
-            Item("ctx-advanced-rename", "Advanced rename...", request.SelectionCount == 0, null, "\uE8AC"),
-            Item("ctx-copy", "Copy", request.SelectionCount == 0, "Ctrl+C", "\uE8C8"),
-            Item("ctx-cut", "Cut", request.SelectionCount == 0, "Ctrl+X", "\uE8C6"),
-            Item("ctx-paste", "Paste", !request.HasClipboard, "Ctrl+V", "\uE77F"),
-            Item("ctx-copy-to-pane", "Copy to other pane", request.SelectionCount == 0 || !hasOtherPane, "Ctrl+Alt+C", "\uE8C8"),
-            Item("ctx-move-to-pane", "Move to other pane", request.SelectionCount == 0 || !hasOtherPane, "Ctrl+Alt+M", "\uE8B4"),
+            Item("ctx-rename", "Rename", request.SelectionCount != 1, "F2"),
+            Item("ctx-advanced-rename", "Advanced rename...", request.SelectionCount == 0),
+            Item("ctx-copy", "Copy", request.SelectionCount == 0, "Ctrl+C"),
+            Item("ctx-cut", "Cut", request.SelectionCount == 0, "Ctrl+X"),
+            Item("ctx-paste", "Paste", !request.HasClipboard, "Ctrl+V"),
+            Item("ctx-copy-to-pane", "Copy to other pane", request.SelectionCount == 0 || !hasOtherPane, "Ctrl+Alt+C"),
+            Item("ctx-move-to-pane", "Move to other pane", request.SelectionCount == 0 || !hasOtherPane, "Ctrl+Alt+M"),
             Divider(),
-            Item("ctx-pack", "Pack into folder...", request.SelectionCount == 0, null, "\uE8B7"),
-            Item("ctx-unpack", "Unpack folder here", !canUnpack, null, "\uE8B7"),
-            Item("ctx-compress", "Create archive...", request.SelectionCount == 0, null, "\uE8B7"),
+            Item("ctx-pack", "Pack into folder...", request.SelectionCount == 0),
+            Item("ctx-unpack", "Unpack folder here", !canUnpack),
+            Item("ctx-compress", "Create archive...", request.SelectionCount == 0),
             new ContextMenuEntry
             {
                 Kind = ContextMenuKind.Item,
                 Id = "ctx-extract-menu",
                 Label = "Extract",
                 Disabled = !request.SelectedIsArchive,
-                IconGlyph = "\uE8B7",
+                IconGlyph = ContextMenuIconCatalog.GlyphFor("ctx-extract-menu"),
                 Children =
                 [
-                    Item("ctx-extract-folder", extractFolder, !request.SelectedIsArchive, null, "\uE8B7"),
-                    Item("ctx-extract", "Extract here", !request.SelectedIsArchive, null, "\uE8B7"),
-                    Item("ctx-extract-to", "Extract to...", !request.SelectedIsArchive, null, "\uE8B7"),
+                    Item("ctx-extract-folder", extractFolder, !request.SelectedIsArchive, showIcon: false),
+                    Item("ctx-extract", "Extract here", !request.SelectedIsArchive, showIcon: false),
+                    Item("ctx-extract-to", "Extract to...", !request.SelectedIsArchive, showIcon: false),
                 ],
             },
             Divider(),
             DeleteMenu(request.SelectionCount == 0),
             Divider(),
-            Item("ctx-info", "Properties", request.SelectionCount != 1, "Alt+Enter", "\uE946"),
+            Item("ctx-info", "Properties", request.SelectionCount != 1, "Alt+Enter"),
         };
 
         return VisibleEntries(entries);
@@ -109,22 +112,22 @@ public static class ContextMenuBuilder
 
         entries.AddRange(
         [
-            Item("ctx-close-left-pane", "Close left pane", !request.DualPaneEnabled || request.MenuPane != PaneId.Primary, null, "\uE711"),
-            Item("ctx-close-dual-pane", "Close right pane", !request.DualPaneEnabled, "F6", "\uE711"),
+            Item("ctx-close-left-pane", "Close left pane", !request.DualPaneEnabled || request.MenuPane != PaneId.Primary),
+            Item("ctx-close-dual-pane", "Close right pane", !request.DualPaneEnabled, "F6"),
             Divider(),
-            Item("ctx-rename", "Rename", !singleSelection, "F2", "\uE8AC"),
+            Item("ctx-rename", "Rename", !singleSelection, "F2"),
             DeleteMenu(!hasSelection),
-            Item("ctx-color-label", "Set color label...", !hasSelection, null, "\uE790"),
+            Item("ctx-color-label", "Set color label...", !hasSelection),
             Divider(),
-            Item("ctx-view-archive", "View archive contents", !request.SelectedIsArchive, null, "\uE8B7"),
-            Item("ctx-extract-to", "Extract archive...", !request.SelectedIsArchive, null, "\uE8B7"),
-            Item("ctx-compress", "Create archive...", !hasSelection, null, "\uE8B7"),
+            Item("ctx-view-archive", "View archive contents", !request.SelectedIsArchive),
+            Item("ctx-extract-to", "Extract archive...", !request.SelectedIsArchive),
+            Item("ctx-compress", "Create archive...", !hasSelection),
             Divider(),
-            Item("ctx-folder-metrics", "Folder metrics", !request.HasFolderSelection, null, "\uE9D2"),
-            Item("ctx-duplicates", "Find duplicates here...", false, null, "\uE8C8"),
-            Item("ctx-cleanup", "Disk cleanup here...", false, null, "\uE75C"),
+            Item("ctx-folder-metrics", "Folder metrics", !request.HasFolderSelection),
+            Item("ctx-duplicates", "Find duplicates here..."),
+            Item("ctx-cleanup", "Disk cleanup here..."),
             Divider(),
-            Item("ctx-terminal", "Open terminal here", false, "F4", "\uE756"),
+            Item("ctx-terminal", "Open terminal here", false, "F4"),
         ]);
 
         return VisibleEntries(entries);
@@ -144,27 +147,27 @@ public static class ContextMenuBuilder
         var items = new List<ContextMenuEntry>();
         if (Has(ToolbarOverflowPlanner.Search))
         {
-            items.Add(Item("overflow-search", "Search", shortcut: "Ctrl+F", iconGlyph: "\uE721"));
+            items.Add(Item("overflow-search", "Search", shortcut: "Ctrl+F"));
         }
 
         if (Has(ToolbarOverflowPlanner.Filter))
         {
-            items.Add(Item("overflow-filter", "Filter", iconGlyph: "\uE71C"));
+            items.Add(Item("overflow-filter", "Filter"));
         }
 
         if (Has(ToolbarOverflowPlanner.NewFolder))
         {
-            items.Add(Item("overflow-new-folder", "New folder", shortcut: "Ctrl+Shift+N", iconGlyph: "\uE8F4"));
+            items.Add(Item("overflow-new-folder", "New folder", shortcut: "Ctrl+Shift+N"));
         }
 
         if (Has(ToolbarOverflowPlanner.NewFile))
         {
-            items.Add(Item("overflow-new-file", "New file", shortcut: "Ctrl+N", iconGlyph: "\uE8A5"));
+            items.Add(Item("overflow-new-file", "New file", shortcut: "Ctrl+N"));
         }
 
         if (Has(ToolbarOverflowPlanner.DualPane) && !request.DualPaneEnabled)
         {
-            items.Add(Item("overflow-dual-pane", "Open second pane", shortcut: "F6", iconGlyph: "\uE8A7"));
+            items.Add(Item("overflow-dual-pane", "Open second pane", shortcut: "F6"));
         }
 
         if (Has(ToolbarOverflowPlanner.ViewOptions))
@@ -173,13 +176,13 @@ public static class ContextMenuBuilder
             {
                 Id = "overflow-view",
                 Label = "View options",
-                IconGlyph = "\uE8A9",
+                IconGlyph = ContextMenuIconCatalog.GlyphFor("overflow-view"),
                 Children =
                 [
-                    Item("view:details", "Details", iconGlyph: "\uE8FD"),
-                    Item("view:list", "List", iconGlyph: "\uEA37"),
-                    Item("view:tiles", "Tiles", iconGlyph: "\uECA5"),
-                    Item("view:content", "Content", iconGlyph: "\uE8A5"),
+                    Item("view:details", "Details"),
+                    Item("view:list", "List"),
+                    Item("view:tiles", "Tiles"),
+                    Item("view:content", "Content"),
                     Divider(),
                     Item("icon:16", "Small icons"),
                     Item("icon:32", "Medium icons"),
@@ -194,7 +197,7 @@ public static class ContextMenuBuilder
 
         if (Has(ToolbarOverflowPlanner.Settings))
         {
-            items.Add(Item("overflow-settings", "Settings", shortcut: "Ctrl+Shift+S", iconGlyph: "\uE713"));
+            items.Add(Item("overflow-settings", "Settings", shortcut: "Ctrl+Shift+S"));
         }
 
         return items;
@@ -235,6 +238,7 @@ public static class ContextMenuBuilder
                     Label = entry.Label,
                     Shortcut = entry.Shortcut,
                     IconGlyph = entry.IconGlyph,
+                    CommandParameter = entry.CommandParameter,
                     Children = children,
                 });
                 continue;
@@ -256,7 +260,9 @@ public static class ContextMenuBuilder
         string label,
         bool disabled = false,
         string? shortcut = null,
-        string? iconGlyph = null)
+        string? iconGlyph = null,
+        string? commandParameter = null,
+        bool showIcon = true)
     {
         return new ContextMenuEntry
         {
@@ -264,8 +270,44 @@ public static class ContextMenuBuilder
             Id = id,
             Label = label,
             Shortcut = shortcut,
-            IconGlyph = iconGlyph,
+            IconGlyph = showIcon ? iconGlyph ?? ContextMenuIconCatalog.GlyphFor(id) : null,
+            CommandParameter = commandParameter,
             Disabled = disabled,
+        };
+    }
+
+    private static ContextMenuEntry OpenWithMenu(ContextMenuRequest request)
+    {
+        if (request.SelectionCount != 1 || request.SelectedIsDirectory)
+        {
+            return Item("ctx-open-with", "Open with...", disabled: true);
+        }
+
+        var children = new List<ContextMenuEntry>();
+        var index = 0;
+        foreach (var app in request.OpenWithApplications.Take(OpenWithPreferences.MaxMenuApplications))
+        {
+            children.Add(Item(
+                $"ctx-open-with-app-{index}",
+                app.MenuLabel,
+                iconGlyph: ContextMenuIconCatalog.OpenWith,
+                commandParameter: app.ApplicationPath));
+            index++;
+        }
+
+        if (children.Count > 0)
+        {
+            children.Add(Divider());
+        }
+
+        children.Add(Item("ctx-open-with-choose", "Choose another app...", iconGlyph: ContextMenuIconCatalog.OpenWith));
+
+        return new ContextMenuEntry
+        {
+            Id = "ctx-open-with",
+            Label = "Open with",
+            IconGlyph = ContextMenuIconCatalog.GlyphFor("ctx-open-with"),
+            Children = children,
         };
     }
 
@@ -282,11 +324,11 @@ public static class ContextMenuBuilder
             Id = "ctx-delete-menu",
             Label = "Delete:",
             Disabled = disabled,
-            IconGlyph = "\uE74D",
+            IconGlyph = ContextMenuIconCatalog.GlyphFor("ctx-delete-menu"),
             Children =
             [
-                Item("ctx-delete-recycle", "Move to Recycle Bin", disabled, "Delete", "\uE74D"),
-                Item("ctx-delete-permanent", "Delete Permanently", disabled, "Shift+Delete", "\uE74D"),
+                Item("ctx-delete-recycle", "Move to Recycle Bin", disabled, "Delete", showIcon: false),
+                Item("ctx-delete-permanent", "Delete Permanently", disabled, "Shift+Delete", showIcon: false),
             ],
         };
     }

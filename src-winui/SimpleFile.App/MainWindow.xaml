@@ -686,7 +686,7 @@
                                     AutomationProperties.Name="Open second pane"
                                     Click="OnToggleDualPane"
                                     ToolTipService.ToolTip="Open second pane (F6)">
-                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A7;" />
+                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE8A0;" />
                                 </Button>
                                 <Button
                                     x:Name="ClosePrimaryPaneButton"
@@ -695,7 +695,7 @@
                                     Click="OnClosePrimaryPane"
                                     ToolTipService.ToolTip="Close left pane"
                                     Visibility="Collapsed">
-                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="12" Glyph="&#xE711;" />
+                                    <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="12" Glyph="&#xE89F;" />
                                 </Button>
                                 <Button
                                     x:Name="PrimaryViewButton"
@@ -1262,7 +1262,7 @@
                                         Click="OnPreviewOpenWithClick"
                                         IsEnabled="False"
                                         ToolTipService.ToolTip="Open with">
-                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE838;" />
+                                        <FontIcon FontFamily="{StaticResource SfIconFont}" FontSize="14" Glyph="&#xE7AC;" />
                                     </Button>
                                     <Button
                                         x:Name="PreviewRevealButton"
@@ -1386,7 +1386,7 @@
                             <FontIcon
                                 FontFamily="{StaticResource SfIconFont}"
                                 FontSize="12"
-                                Glyph="&#xE8A7;" />
+                                Glyph="&#xE8FF;" />
                             <TextBlock FontSize="12" Text="Preview" />
                         </StackPanel>
                     </Button>

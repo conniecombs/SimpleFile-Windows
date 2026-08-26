@@ -135,6 +135,7 @@ public sealed partial class MainWindow : Window
             _workspace.Changed += OnWorkspaceChanged;
             _fileChangeSubscription = client.On<FileChangeEvent>(Protocol.FileChangeEvent, OnFileChange);
             await _workspace.InitializeAsync();
+            await LoadOpenWithPreferencesAsync(fileOps, CancellationToken.None);
             ApplyTheme(_workspace.Settings.Theme);
             SyncSidebarCollapseStateFromSettings();
             ApplyPreviewVisibility();
@@ -2209,54 +2210,7 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenSelectedWithAsync()
     {
-        var workspace = _workspace;
-        var fileOps = workspace?.FileOps;
-        if (workspace is null || fileOps is null || ActiveSelectedRow is not { IsDir: false } row)
-        {
-            return;
-        }
-
-        var input = new TextBox
-        {
-            PlaceholderText = "Application name or full path",
-        };
-        var dialog = new ContentDialog
-        {
-            Title = "Open With",
-            Content = input,
-            PrimaryButtonText = "Open",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Content.XamlRoot,
-        };
-
-        var result = await dialog.ShowAsync();
-        if (result != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(input.Text))
-        {
-            return;
-        }
-        if (!ReferenceEquals(_workspace, workspace))
-        {
-            return;
-        }
-
-        var utilityCts = BeginUtilityOperation();
-        try
-        {
-            await SaveViewIconSizeNowAsync();
-            await fileOps.OpenFileWithAsync(row.Path, input.Text.Trim(), utilityCts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception exception)
-        {
-            ShowMessage("Open With", exception.Message, InfoBarSeverity.Error);
-        }
-        finally
-        {
-            FinishUtilityOperation(utilityCts);
-        }
+        await ShowOpenWithChooserAsync();
     }
 
     private async void OnPreviewChecksumClick(object sender, RoutedEventArgs e)
