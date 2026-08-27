@@ -491,6 +491,43 @@ public class FileOperationServiceTests
     }
 
     [Fact]
+    public async Task CopyAsync_TokenCancel_CallsBackendCancel()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? copyOperationId = null;
+        string? cancelled = null;
+        var stub = new StubIpc
+        {
+            CopyWithProgressHandler = async (sources, destination, operationId, conflictAction, ct) =>
+            {
+                copyOperationId = operationId;
+                started.SetResult();
+                await Task.Delay(Timeout.Infinite, ct);
+                return Array.Empty<TransferResult>();
+            },
+            CancelOperationHandler = (operationId, ct) =>
+            {
+                cancelled = operationId;
+                return Task.CompletedTask;
+            }
+        };
+        var service = new FileOperationService(stub);
+        using var cts = new CancellationTokenSource();
+
+        var copyTask = service.CopyAsync(
+            [@"C:\a.txt"],
+            @"C:\dest",
+            "skip",
+            ct: cts.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => copyTask);
+        Assert.Equal(copyOperationId, cancelled);
+        Assert.False(string.IsNullOrEmpty(cancelled));
+    }
+
+    [Fact]
     public async Task SearchAsync_StreamsEventsAndDisposesSubscriptions()
     {
         var batches = new List<SearchResult[]>();

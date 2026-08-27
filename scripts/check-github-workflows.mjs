@@ -74,6 +74,8 @@ for (const snippet of ciSnippets) {
     requireSnippet(ciWorkflow, ciPath, snippet);
 }
 
+requireOccurrenceCount(ciWorkflow, ciPath, "branches: [main, 'C#']", 2);
+
 const releaseSnippets = [
     'tags:',
     "'v*'",

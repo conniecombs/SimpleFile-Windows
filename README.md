@@ -50,7 +50,7 @@ If Windows File Explorer feels limited for power workflows — dual panes, tabs 
 | Inspect before you open | Preview pane + spacebar Quick Look for images, media, code, PDF, Markdown |
 | Clean and organize | Advanced rename, tags/labels, smart folders, duplicates, disk cleanup |
 | Stay Windows-native | Drive list, mapped network shares, Recycle Bin, Open With, terminal launch |
-| Ship with confidence | NSIS + MSI installers, signed auto-updater, CI and installer smoke tests |
+| Ship with confidence | NSIS + MSI installers, in-app update check, CI and installer smoke tests |
 
 **Current release:** `1.1.0` (see [docs/RELEASE_1.1.0.md](docs/RELEASE_1.1.0.md) and [docs/CHANGELOG.md](docs/CHANGELOG.md)).
 
@@ -172,7 +172,7 @@ If Windows File Explorer feels limited for power workflows — dual panes, tabs 
 
 - **Duplicate file finder** with progress and cancellation
 - **Disk cleanup** helpers for large/old clutter workflows
-- Built-in **auto-updater** with signed update verification (after first manual install)
+- In-app **update check** against `latest-winui.json`. Install stays on GitHub Releases until Ed25519 verification lands
 
 ### Productivity surfaces
 
@@ -197,7 +197,7 @@ Download the latest Windows installer or portable package from **[GitHub Release
 
 **Requirements:** Windows 10 or later, x64.
 
-After the first manual install, check for later versions from **Settings → Updates**.
+After the first manual install, **Settings → Updates** can check for a newer version. In-app install is disabled until installer signatures are verified, so download new releases from GitHub.
 
 ### What the release ships
 
@@ -353,7 +353,7 @@ Run from the **repository root** with `npm run <script>`.
 | `build:winui` | `dotnet build src-winui/SimpleFile.sln` |
 | `check` | IPC schema, updater, workflows, packaging, parity gate |
 | `check:winui` | WinUI xUnit tests |
-| `check:ipc-schema` | 74-command schema vs Rust/C# |
+| `check:ipc-schema` | 76-command schema vs Rust/C# |
 | `check:updater` | WinUI updater metadata wiring |
 | `check:workflows` | GitHub workflow sanity checks |
 | `check:provider-surface` | Guards out-of-scope provider/mount surfaces |
@@ -427,7 +427,7 @@ SimpleFile uses a **WinUI 3 UI process** plus a **Rust IPC service**:
 
 ### Design rules that matter in practice
 
-- **Typed IPC surface** — `SimpleFile.Ipc.Protocol` and `ipc/schema/v1` stay aligned with the 74 domain commands.
+- **Typed IPC surface** — `SimpleFile.Ipc.Protocol` and `ipc/schema/v1` stay aligned with the 76 domain commands.
 - **Transfer safety** — copy/cut/paste/drag/drop/dual-pane transfers share a transfer manager with stable operation IDs, progress events, cancel, and conflict resolution.
 - **Host-owned pickers** — folder browse is WinUI `FolderPicker`; the service returns `HOST_OWNED:`.
 - **Windows-first filesystem APIs** — drive labels, mapped shares, trash, and process launching stay in dedicated Rust modules.
@@ -462,7 +462,7 @@ The `check` pipeline also enforces project invariants:
 
 - Out-of-scope provider/mount management surfaces stay excluded
 - Packaging assets and bundle targets stay Windows-only
-- The 74-command IPC schema stays aligned with C# / leftover Rust command names
+- The 76-command IPC schema stays aligned with C# / leftover Rust command names
 - WinUI parity-gate required rows stay `PASS` or `WAIVED`
 
 > **Note:** Full installer packaging is intentionally slow. PR CI focuses on fast gates; run the **Installer Smoke** workflow (nightly or manual) or `npm run release:build` before cutting a release.
@@ -496,7 +496,8 @@ Production builds publish updater metadata to:
 
 `https://github.com/conniecombs/SimpleFile-Windows/releases/latest/download/latest-winui.json`
 
-Users install the first release manually, then use **Settings → Updates**.  
+**Settings → Updates** checks that manifest. In-app **Download & Install is disabled** until Ed25519 verification of the downloaded installer exists (`install_update` fail-closes). Users download NSIS/MSI/portable artifacts from GitHub Releases.
+
 Operational details: [docs/UPDATER_RELEASE.md](docs/UPDATER_RELEASE.md).
 
 ### Release workflows
@@ -558,7 +559,7 @@ This repository targets a **Windows-only local file manager**.
 - Local disks, removable media, and mapped network drives
 - Dual pane, per-pane tabs, search, smart folders, previews, metadata
 - Archives, Git status/actions, cleanup tools
-- NSIS/MSI packaging and signed updater metadata
+- NSIS/MSI packaging and `latest-winui.json` updater metadata (check-only until Ed25519 install)
 
 ### Out of scope (for this branch)
 

@@ -3770,6 +3770,11 @@ public sealed partial class MainWindow : Window
         {
             _transferProgressWindow = null;
         }
+
+        if (_currentOperationId is not null || _transferCts is not null)
+        {
+            OnFileProgressCancelRequested(sender, EventArgs.Empty);
+        }
     }
 
     private void CloseTransferProgressWindow()

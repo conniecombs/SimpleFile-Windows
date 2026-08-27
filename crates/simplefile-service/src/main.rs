@@ -16,19 +16,7 @@ async fn run() -> Result<(), String> {
         env!("CARGO_PKG_VERSION")
     );
 
-    let auth_token = if args.auth_token.is_some() {
-        args.auth_token
-    } else {
-        // Read the auth token from stdin (written by the parent process).
-        let mut token = String::new();
-        std::io::stdin().read_line(&mut token).ok();
-        let token = token.trim().to_string();
-        if token.is_empty() {
-            None
-        } else {
-            Some(token)
-        }
-    };
+    let auth_token = read_required_auth_token()?;
 
     #[cfg(windows)]
     {
@@ -39,6 +27,8 @@ async fn run() -> Result<(), String> {
             .reject_remote_clients(true)
             .create(&pipe)
             .map_err(|error| format!("failed to create named pipe {pipe}: {error}"))?;
+
+        apply_creator_only_dacl(&server)?;
 
         server
             .connect()
@@ -52,7 +42,7 @@ async fn run() -> Result<(), String> {
         }
 
         let state = SessionState {
-            expected_token: auth_token,
+            expected_token: Some(auth_token),
             ..SessionState::default()
         };
         let (reader, writer) = tokio::io::split(server);
@@ -92,16 +82,98 @@ async fn monitor_parent_liveness(parent_pid: u32) {
     }
 }
 
+fn read_required_auth_token() -> Result<String, String> {
+    let mut token = String::new();
+    std::io::stdin()
+        .read_line(&mut token)
+        .map_err(|error| format!("failed to read auth token from stdin: {error}"))?;
+    let token = token.trim().to_string();
+    if token.is_empty() {
+        return Err("auth token is required on stdin; refusing to listen".to_string());
+    }
+    Ok(token)
+}
+
+#[cfg(windows)]
+fn apply_creator_only_dacl(server: &tokio::net::windows::named_pipe::NamedPipeServer) -> Result<(), String> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{LocalFree, HANDLE};
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER, DACL_SECURITY_INFORMATION,
+        PSECURITY_DESCRIPTOR, SetKernelObjectSecurity,
+    };
+    use windows_sys::Win32::Security::Authorization::{
+        ConvertSidToStringSidW, ConvertStringSecurityDescriptorToSecurityDescriptorW,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    unsafe {
+        let mut token: HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            return Err("failed to open process token for pipe DACL".to_string());
+        }
+
+        let mut needed = 0u32;
+        GetTokenInformation(token, TokenUser, std::ptr::null_mut(), 0, &mut needed);
+        let mut buffer = vec![0u8; needed.max(1) as usize];
+        if GetTokenInformation(
+            token,
+            TokenUser,
+            buffer.as_mut_ptr().cast(),
+            needed,
+            &mut needed,
+        ) == 0
+        {
+            windows_sys::Win32::Foundation::CloseHandle(token);
+            return Err("failed to query process user SID for pipe DACL".to_string());
+        }
+        windows_sys::Win32::Foundation::CloseHandle(token);
+
+        let user = &*(buffer.as_ptr() as *const TOKEN_USER);
+        let mut sid_string = std::ptr::null_mut();
+        if ConvertSidToStringSidW(user.User.Sid, &mut sid_string) == 0 {
+            return Err("failed to convert user SID for pipe DACL".to_string());
+        }
+        let sid = {
+            let mut len = 0usize;
+            while *sid_string.add(len) != 0 {
+                len += 1;
+            }
+            String::from_utf16_lossy(std::slice::from_raw_parts(sid_string, len))
+        };
+        LocalFree(sid_string.cast());
+
+        let sddl = format!("D:P(A;;GA;;;{sid})");
+        let sddl_wide: Vec<u16> = sddl.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut sd: PSECURITY_DESCRIPTOR = std::ptr::null_mut();
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl_wide.as_ptr(), 1, &mut sd, std::ptr::null_mut())
+            == 0
+        {
+            return Err("failed to build creator-only security descriptor".to_string());
+        }
+
+        let ok = SetKernelObjectSecurity(
+            server.as_raw_handle() as HANDLE,
+            DACL_SECURITY_INFORMATION,
+            sd,
+        );
+        LocalFree(sd.cast());
+        if ok == 0 {
+            return Err("failed to apply creator-only DACL to named pipe".to_string());
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
 struct Args {
     pipe_name: String,
-    auth_token: Option<String>,
     parent_pid: Option<u32>,
 }
 
 impl Args {
     fn parse(args: impl IntoIterator<Item = String>) -> Result<Self, String> {
         let mut pipe_name = format!("SimpleFile.dev.{}", std::process::id());
-        let mut auth_token = None;
         let mut parent_pid = None;
         let mut items = args.into_iter();
         while let Some(arg) = items.next() {
@@ -112,10 +184,8 @@ impl Args {
                         .ok_or_else(|| "missing value for --pipe-name".to_string())?;
                 }
                 "--auth-token" => {
-                    auth_token = Some(
-                        items
-                            .next()
-                            .ok_or_else(|| "missing value for --auth-token".to_string())?,
+                    return Err(
+                        "--auth-token is no longer accepted; write the token to stdin".to_string(),
                     );
                 }
                 "--parent-pid" => {
@@ -130,7 +200,7 @@ impl Args {
                 }
                 "--help" | "-h" => {
                     eprintln!(
-                        "Usage: simplefile-service [--pipe-name NAME] [--auth-token TOKEN] [--parent-pid PID]"
+                        "Usage: simplefile-service [--pipe-name NAME] [--parent-pid PID]"
                     );
                     std::process::exit(0);
                 }
@@ -139,8 +209,18 @@ impl Args {
         }
         Ok(Self {
             pipe_name,
-            auth_token,
             parent_pid,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Args;
+
+    #[test]
+    fn rejects_auth_token_cli_flag() {
+        let error = Args::parse(["--auth-token".to_string(), "secret".to_string()]).unwrap_err();
+        assert!(error.contains("stdin"), "{error}");
     }
 }

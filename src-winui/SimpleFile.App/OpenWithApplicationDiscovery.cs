@@ -9,7 +9,7 @@ internal static partial class OpenWithApplicationDiscovery
 {
     private static readonly string[] TextExtensions =
     [
-        ".cfg", ".config", ".css", ".csv", ".ini", ".json", ".jsonc", ".log", ".md", ".ps1",
+        ".cfg", ".config", ".css", ".csv", ".ini", ".json", ".jsonc", ".log", ".md",
         ".py", ".rs", ".sln", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml"
     ];
 
@@ -46,7 +46,7 @@ internal static partial class OpenWithApplicationDiscovery
     public static IReadOnlyList<OpenWithApplication> ApplicationsForPath(string path)
     {
         var extension = OpenWithPreferences.NormalizeExtension(Path.GetExtension(path));
-        if (extension == "*")
+        if (extension == "*" || OpenWithPolicy.IsDeniedTargetExtension(extension))
         {
             return [];
         }
@@ -221,6 +221,7 @@ internal static partial class OpenWithApplicationDiscovery
             yield return ("Visual Studio Code", PathUnderProgramFiles(@"Microsoft VS Code\Code.exe"));
             yield return ("Notepad++", PathUnderProgramFiles(@"Notepad++\notepad++.exe"));
             yield return ("Sublime Text", PathUnderProgramFiles(@"Sublime Text\sublime_text.exe"));
+            yield return ("Notepad", Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "notepad.exe"));
         }
 
         if (Matches(extension, ImageExtensions))
@@ -419,44 +420,8 @@ internal static partial class OpenWithApplicationDiscovery
     [GeneratedRegex("""^\s*(?:"(?<path>[^"]+\.(?:exe|com))"|(?<path>.*?\.(?:exe|com)))(?:\s|$)""", RegexOptions.IgnoreCase)]
     private static partial Regex ExecutableCommandPattern();
 
-    private static bool IsLaunchableApplication(string applicationPath)
-    {
-        if (!File.Exists(applicationPath))
-        {
-            return false;
-        }
-
-        var extension = Path.GetExtension(applicationPath);
-        if (!string.Equals(extension, ".exe", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(extension, ".com", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        return IsTrustedApplicationRoot(applicationPath);
-    }
-
-    private static bool IsTrustedApplicationRoot(string applicationPath)
-    {
-        try
-        {
-            var candidate = Path.GetFullPath(applicationPath);
-            return TrustedApplicationRoots().Any(root =>
-                !string.IsNullOrWhiteSpace(root)
-                && candidate.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase));
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static IEnumerable<string> TrustedApplicationRoots()
-    {
-        yield return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        yield return Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs");
-    }
+    private static bool IsLaunchableApplication(string applicationPath) =>
+        OpenWithPolicy.IsLaunchableApplication(applicationPath);
 
     private static string DisplayNameFor(string applicationPath)
     {

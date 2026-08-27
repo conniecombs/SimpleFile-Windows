@@ -278,7 +278,9 @@ public static class ContextMenuBuilder
 
     private static ContextMenuEntry OpenWithMenu(ContextMenuRequest request)
     {
-        if (request.SelectionCount != 1 || request.SelectedIsDirectory)
+        if (request.SelectionCount != 1
+            || request.SelectedIsDirectory
+            || OpenWithPolicy.IsDeniedTargetExtension(request.SelectedExtension))
         {
             return Item("ctx-open-with", "Open with...", disabled: true);
         }

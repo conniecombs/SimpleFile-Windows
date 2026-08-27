@@ -55,3 +55,11 @@ and available installers, and prints the generated artifact paths.
 
 To build release-quality artifacts on GitHub without publishing a release, run
 the `Release build` workflow from the Actions tab.
+
+## What Settings -> Updates does
+
+`check_for_update` reads `latest-winui.json` and reports whether a newer version exists.
+
+`install_update` is **fail-closed**. Until Ed25519 verification of the downloaded installer is implemented against an embedded public key, the service refuses to download or run the installer. The WinUI Settings page keeps Check for Updates, and the follow-up button opens GitHub Releases instead of calling install.
+
+Do not document in-app Download & Install as a shipping capability until that signature path exists.

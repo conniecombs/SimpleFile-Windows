@@ -1103,7 +1103,10 @@ mod tests {
         let server = tokio::spawn(serve_connection(
             server_read,
             server_write,
-            SessionState::default(),
+            SessionState {
+                expected_token: Some("dev".to_string()),
+                ..SessionState::default()
+            },
         ));
 
         let handshake = call(
@@ -1155,7 +1158,10 @@ mod tests {
         let server = tokio::spawn(serve_connection(
             server_read,
             server_write,
-            SessionState::default(),
+            SessionState {
+                expected_token: Some("dev".to_string()),
+                ..SessionState::default()
+            },
         ));
 
         let handshake = call(

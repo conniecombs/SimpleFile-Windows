@@ -368,9 +368,10 @@ public sealed partial class SettingsDialog : ContentDialog
             {
                 InstallUpdateButton.Visibility = Visibility.Visible;
                 InstallUpdateButton.IsEnabled = true;
-                UpdateStatusText.Text = string.IsNullOrWhiteSpace(update.Version)
-                    ? "Update available."
-                    : $"Update available: {update.Version}";
+                var version = string.IsNullOrWhiteSpace(update.Version)
+                    ? "an update"
+                    : update.Version;
+                UpdateStatusText.Text = $"Update available: {version}. In-app install is disabled until installer signatures exist. Download it from GitHub Releases.";
             }
             else
             {
@@ -395,38 +396,18 @@ public sealed partial class SettingsDialog : ContentDialog
     {
         if (_fileOps == null) return;
         InstallUpdateButton.IsEnabled = false;
-        UpdateStatusText.Text = "Installing update...";
+        UpdateStatusText.Text = "Opening GitHub Releases…";
         try
         {
-            await _fileOps.InstallUpdateAsync().ConfigureAwait(true);
-            UpdateStatusText.Text = "Update installed.";
-        }
-        catch (OperationCanceledException)
-        {
-            UpdateStatusText.Text = "Update install cancelled.";
-            InstallUpdateButton.IsEnabled = true;
+            await _fileOps.OpenExternalUrlAsync(RepositoryUrl + "/releases").ConfigureAwait(true);
+            UpdateStatusText.Text = "Download the latest release from the GitHub page. In-app install stays disabled until installer signatures exist.";
         }
         catch (Exception exception)
         {
-            // The updater is currently disabled until signature verification
-            // is implemented.  Offer to open the releases page instead.
-            if (exception.Message.Contains("cryptographically verified", StringComparison.OrdinalIgnoreCase))
-            {
-                UpdateStatusText.Text = "Opening the releases page in your browser\u2026";
-                try
-                {
-                    await _fileOps.OpenExternalUrlAsync(RepositoryUrl + "/releases").ConfigureAwait(true);
-                    UpdateStatusText.Text = "Please download the latest release from the GitHub page.";
-                }
-                catch
-                {
-                    UpdateStatusText.Text = "Please visit " + RepositoryUrl + "/releases to download the update.";
-                }
-            }
-            else
-            {
-                UpdateStatusText.Text = exception.Message;
-            }
+            UpdateStatusText.Text = "Please visit " + RepositoryUrl + "/releases to download the update. " + exception.Message;
+        }
+        finally
+        {
             InstallUpdateButton.IsEnabled = true;
         }
     }

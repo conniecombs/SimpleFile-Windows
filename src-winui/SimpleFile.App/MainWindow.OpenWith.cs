@@ -32,6 +32,11 @@ public sealed partial class MainWindow
 
     private IReadOnlyList<OpenWithApplication> OpenWithApplicationsForPath(string path)
     {
+        if (OpenWithPolicy.IsDeniedTargetPath(path))
+        {
+            return [];
+        }
+
         var extension = OpenWithPreferences.NormalizeExtension(Path.GetExtension(path));
         if (!_openWithDiscoveryCache.TryGetValue(extension, out var discovered))
         {
@@ -67,6 +72,12 @@ public sealed partial class MainWindow
         var fileOps = workspace?.FileOps;
         if (workspace is null || fileOps is null || ActiveSelectedRow is not { IsDir: false } row)
         {
+            return;
+        }
+
+        if (OpenWithPolicy.IsDeniedTargetPath(row.Path))
+        {
+            ShowMessage("Open With", "Open With does not allow executable or script payload files.", InfoBarSeverity.Warning);
             return;
         }
 

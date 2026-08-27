@@ -59,7 +59,7 @@ public sealed class FileOperationService
     // Copy items to a destination with conflict resolution.
     // conflictAction: "error", "skip", "replace", "rename", "keep-both"
     // Returns transfer results.
-    public async Task<TransferResult[]> CopyAsync(
+    public Task<TransferResult[]> CopyAsync(
         string[] sources,
         string destination,
         string conflictAction,
@@ -67,10 +67,42 @@ public sealed class FileOperationService
         Action<string>? operationStarted = null,
         CancellationToken ct = default)
     {
+        return RunTransferAsync(
+            (ipc, operationId, token) => ipc.CopyWithProgressAsync(
+                sources, destination, operationId, conflictAction, token),
+            progress,
+            operationStarted,
+            ct);
+    }
+
+    // Move items to a destination with conflict resolution.
+    public Task<TransferResult[]> MoveAsync(
+        string[] sources,
+        string destination,
+        string conflictAction,
+        IProgress<ProgressUpdate>? progress = null,
+        Action<string>? operationStarted = null,
+        CancellationToken ct = default)
+    {
+        return RunTransferAsync(
+            (ipc, operationId, token) => ipc.MoveWithProgressAsync(
+                sources, destination, operationId, conflictAction, token),
+            progress,
+            operationStarted,
+            ct);
+    }
+
+    private async Task<TransferResult[]> RunTransferAsync(
+        Func<ISimpleFileIpc, string, CancellationToken, Task<TransferResult[]>> invoke,
+        IProgress<ProgressUpdate>? progress,
+        Action<string>? operationStarted,
+        CancellationToken ct)
+    {
         var ipc = _ipc;
         var operationId = GenerateOperationId();
         operationStarted?.Invoke(operationId);
         IDisposable? subscription = null;
+        IDisposable? cancelRegistration = null;
         if (progress != null)
         {
             subscription = ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
@@ -79,46 +111,36 @@ public sealed class FileOperationService
                     progress.Report(update);
             });
         }
+
+        // JSON-RPC cancellation does not abort the backend copy/move. Always
+        // pair a cancelled wait with cancel_operation.
+        if (ct.CanBeCanceled)
+        {
+            cancelRegistration = ct.Register(() =>
+            {
+                _ = CancelOperationBestEffortAsync(ipc, operationId);
+            });
+        }
+
         try
         {
-            return await ipc.CopyWithProgressAsync(
-                sources, destination, operationId, conflictAction, ct).ConfigureAwait(false);
+            return await invoke(ipc, operationId, ct).ConfigureAwait(false);
         }
         finally
         {
+            cancelRegistration?.Dispose();
             subscription?.Dispose();
         }
     }
 
-    // Move items to a destination with conflict resolution.
-    public async Task<TransferResult[]> MoveAsync(
-        string[] sources,
-        string destination,
-        string conflictAction,
-        IProgress<ProgressUpdate>? progress = null,
-        Action<string>? operationStarted = null,
-        CancellationToken ct = default)
+    private static async Task CancelOperationBestEffortAsync(ISimpleFileIpc ipc, string operationId)
     {
-        var ipc = _ipc;
-        var operationId = GenerateOperationId();
-        operationStarted?.Invoke(operationId);
-        IDisposable? subscription = null;
-        if (progress != null)
-        {
-            subscription = ipc.On<ProgressUpdate>(Protocol.OperationProgressEvent, update =>
-            {
-                if (update.OperationId == operationId)
-                    progress.Report(update);
-            });
-        }
         try
         {
-            return await ipc.MoveWithProgressAsync(
-                sources, destination, operationId, conflictAction, ct).ConfigureAwait(false);
+            await ipc.CancelOperationAsync(operationId, CancellationToken.None).ConfigureAwait(false);
         }
-        finally
+        catch
         {
-            subscription?.Dispose();
         }
     }
 

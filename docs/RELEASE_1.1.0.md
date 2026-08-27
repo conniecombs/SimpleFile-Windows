@@ -33,8 +33,7 @@ The MSI is also produced for environments that prefer MSI-based deployment:
 SimpleFile_1.1.0_x64_en-US.msi
 ```
 
-The first updater-enabled release must be installed manually. After that,
-future published releases can be installed through Settings -> App Updates.
+The first release must be installed manually. Settings -> Updates can check for a newer version, but in-app install is disabled until installer signatures exist. Download later releases from GitHub.
 
 ## Major Changes
 

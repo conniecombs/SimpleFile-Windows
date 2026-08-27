@@ -64,10 +64,25 @@ fn contains_path_separator(value: &str) -> bool {
     value.contains('/') || value.contains('\\')
 }
 
-fn is_trusted_application_root(path: &Path) -> bool {
+fn normalized_windows_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('/', "\\")
+        .trim_end_matches(['\\', '/'])
+        .to_ascii_lowercase()
+}
+
+fn path_is_under_root(path: &Path, root: &Path) -> bool {
+    let candidate = normalized_windows_path(path);
+    let trusted = normalized_windows_path(root);
+    candidate == trusted || candidate.starts_with(&format!("{trusted}\\"))
+}
+
+fn trusted_application_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(value) = std::env::var("ProgramFiles") {
-        roots.push(PathBuf::from(value));
+        let program_files = PathBuf::from(value);
+        roots.push(program_files.join("WindowsApps"));
+        roots.push(program_files);
     }
     if let Ok(value) = std::env::var("ProgramFiles(x86)") {
         roots.push(PathBuf::from(value));
@@ -75,12 +90,29 @@ fn is_trusted_application_root(path: &Path) -> bool {
     if let Ok(value) = std::env::var("LOCALAPPDATA") {
         roots.push(PathBuf::from(value).join("Programs"));
     }
-    let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    roots.iter().any(|root| {
-        root.canonicalize()
-            .map(|trusted| canonical.starts_with(trusted))
-            .unwrap_or(false)
-    })
+    if let Ok(value) = std::env::var("SystemRoot") {
+        let system_root = PathBuf::from(value);
+        roots.push(system_root.join("System32"));
+        roots.push(system_root.join("SysWOW64"));
+    }
+    roots
+}
+
+fn is_trusted_application_root(path: &Path) -> bool {
+    // Prefer a logical prefix check so WindowsApps paths stay trusted even when
+    // canonicalize() is access-denied. Fall back to canonical comparison when it works.
+    let roots = trusted_application_roots();
+    if roots.iter().any(|root| path_is_under_root(path, root)) {
+        return true;
+    }
+    if let Ok(canonical) = path.canonicalize() {
+        return roots.iter().any(|root| {
+            root.canonicalize()
+                .map(|trusted| path_is_under_root(&canonical, &trusted))
+                .unwrap_or(false)
+        });
+    }
+    false
 }
 
 fn is_executable_file(path: &Path) -> bool {
@@ -188,7 +220,9 @@ fn resolve_readable_path(path: &str) -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{contains_path_separator, executable_name_is_denied, target_extension_is_denied};
+    use super::{
+        contains_path_separator, executable_name_is_denied, path_is_under_root, target_extension_is_denied,
+    };
     use std::path::Path;
 
     #[test]
@@ -232,5 +266,25 @@ mod tests {
             assert!(target_extension_is_denied(Path::new(name)));
         }
         assert!(!target_extension_is_denied(Path::new("notes.txt")));
+    }
+
+    #[test]
+    fn trusted_roots_cover_notepad_and_windowsapps_without_canonicalize() {
+        assert!(path_is_under_root(
+            Path::new(r"C:\Windows\System32\notepad.exe"),
+            Path::new(r"C:\Windows\System32"),
+        ));
+        assert!(path_is_under_root(
+            Path::new(r"C:\Program Files\WindowsApps\Microsoft.Windows.Photos\Photos.exe"),
+            Path::new(r"C:\Program Files"),
+        ));
+        assert!(!path_is_under_root(
+            Path::new(r"C:\Users\me\AppData\Roaming\payload.exe"),
+            Path::new(r"C:\Program Files"),
+        ));
+        assert!(!path_is_under_root(
+            Path::new(r"C:\Program Files Evil\app.exe"),
+            Path::new(r"C:\Program Files"),
+        ));
     }
 }

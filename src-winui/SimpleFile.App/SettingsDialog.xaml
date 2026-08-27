@@ -155,7 +155,8 @@
                     <TextBlock Text="Updates" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock x:Name="CurrentVersionText" Text="Current Version: " />
                     <Button x:Name="CheckUpdatesButton" Content="Check for Updates" Click="OnCheckUpdatesClicked" />
-                    <Button x:Name="InstallUpdateButton" Content="Download &#38; Install" Visibility="Collapsed" Click="OnInstallUpdateClicked" />
+                    <Button x:Name="InstallUpdateButton" Content="Open GitHub Releases" Visibility="Collapsed" Click="OnInstallUpdateClicked" />
+                    <TextBlock Text="In-app install is disabled until installer signatures can be verified. Check still works; download new versions from GitHub Releases." TextWrapping="Wrap" Foreground="{StaticResource SfTextMutedBrush}" />
                     <TextBlock x:Name="UpdateStatusText" Foreground="{StaticResource SfTextMutedBrush}" TextWrapping="Wrap" />
                 </StackPanel>
                 

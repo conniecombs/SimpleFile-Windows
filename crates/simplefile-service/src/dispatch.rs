@@ -1099,6 +1099,24 @@ pub(crate) fn dispatch(state: &mut SessionState, request: &JsonRpcRequest) -> Di
     }
 }
 
+fn auth_token_matches(expected: &str, provided: Option<&str>) -> bool {
+    let Some(provided) = provided else {
+        return false;
+    };
+    constant_time_eq(expected.as_bytes(), provided.as_bytes())
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    let mut diff = left.len() ^ right.len();
+    let n = left.len().max(right.len());
+    for index in 0..n {
+        let a = left.get(index).copied().unwrap_or(0);
+        let b = right.get(index).copied().unwrap_or(0);
+        diff |= usize::from(a ^ b);
+    }
+    diff == 0
+}
+
 fn handshake(state: &mut SessionState, request: &JsonRpcRequest) -> JsonRpcResponse {
     let params = match parse_params::<HandshakeParams>(request) {
         Ok(params) => params,
@@ -1115,14 +1133,19 @@ fn handshake(state: &mut SessionState, request: &JsonRpcRequest) -> JsonRpcRespo
         );
     }
 
-    if let Some(expected) = &state.expected_token {
-        if params.auth_token.as_deref() != Some(expected.as_str()) {
-            return JsonRpcResponse::error(
-                request.id.clone(),
-                ERR_INVALID_REQUEST,
-                "authToken does not match",
-            );
-        }
+    let Some(expected) = state.expected_token.as_deref() else {
+        return JsonRpcResponse::error(
+            request.id.clone(),
+            ERR_INVALID_REQUEST,
+            "authToken is required",
+        );
+    };
+    if !auth_token_matches(expected, params.auth_token.as_deref()) {
+        return JsonRpcResponse::error(
+            request.id.clone(),
+            ERR_INVALID_REQUEST,
+            "authToken does not match",
+        );
     }
 
     state.handshake_done = true;
@@ -1230,7 +1253,10 @@ mod tests {
 
     #[test]
     fn handshake_then_home_dir() {
-        let mut state = SessionState::default();
+        let mut state = SessionState {
+            expected_token: Some("dev".to_string()),
+            ..SessionState::default()
+        };
         let handshake = dispatch(
             &mut state,
             &request(
@@ -1255,6 +1281,62 @@ mod tests {
         };
         let path = response.result.unwrap().as_str().unwrap().to_string();
         assert!(!path.is_empty());
+    }
+
+    #[test]
+    fn handshake_requires_configured_token() {
+        let mut state = SessionState::default();
+        let handshake = dispatch(
+            &mut state,
+            &request(
+                HANDSHAKE_METHOD,
+                1,
+                json!({
+                    "protocolVersion": 1,
+                    "clientName": "test",
+                    "authToken": "dev"
+                }),
+            ),
+        );
+        let Dispatch::Reply(ready) = handshake else {
+            panic!("expected handshake reply");
+        };
+        assert!(ready.error.is_some());
+        assert!(!state.handshake_done);
+    }
+
+    #[test]
+    fn handshake_rejects_wrong_token() {
+        let mut state = SessionState {
+            expected_token: Some("dev".to_string()),
+            ..SessionState::default()
+        };
+        let handshake = dispatch(
+            &mut state,
+            &request(
+                HANDSHAKE_METHOD,
+                1,
+                json!({
+                    "protocolVersion": 1,
+                    "clientName": "test",
+                    "authToken": "nope"
+                }),
+            ),
+        );
+        let Dispatch::Reply(ready) = handshake else {
+            panic!("expected handshake reply");
+        };
+        assert!(ready.error.is_some());
+        assert!(!state.handshake_done);
+    }
+
+    #[test]
+    fn constant_time_eq_distinguishes_tokens() {
+        assert!(constant_time_eq(b"abcd", b"abcd"));
+        assert!(!constant_time_eq(b"abcd", b"abce"));
+        assert!(!constant_time_eq(b"abc", b"abcd"));
+        assert!(!auth_token_matches("secret", None));
+        assert!(auth_token_matches("secret", Some("secret")));
     }
 
     #[test]
