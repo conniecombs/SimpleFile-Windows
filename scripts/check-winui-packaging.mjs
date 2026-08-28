@@ -90,6 +90,10 @@ const buildSnippets = [
   'latest-winui.json',
   'resources.pri',
   'MainWindow.xbf',
+  '-sice:ICE03',
+  '-sice:ICE38',
+  '-sice:ICE64',
+  '-sice:ICE91',
 ];
 
 for (const snippet of buildSnippets) {

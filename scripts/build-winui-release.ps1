@@ -282,13 +282,40 @@ if (-not $SkipInstaller) {
             $productWxs,
             $harvested
         )
-        Invoke-Native $light @(
-            "-nologo",
-            "-spdb",
-            "-out", $msiPath,
-            (Join-Path $wixOut "Product.wixobj"),
-            (Join-Path $wixOut "harvested.wixobj")
+        $msiBuildPath = Join-Path $distRoot (
+            "{0}.tmp-{1}.msi" -f
+                [System.IO.Path]::GetFileNameWithoutExtension($msiPath),
+                [System.Guid]::NewGuid().ToString("N")
         )
+        # The per-user LocalAppData payload and Windows App SDK localized MUI files
+        # trip WiX ICEs that do not apply to this generated installer shape.
+        try {
+            Invoke-Native $light @(
+                "-nologo",
+                "-spdb",
+                "-sice:ICE03",
+                "-sice:ICE38",
+                "-sice:ICE64",
+                "-sice:ICE91",
+                "-out", $msiBuildPath,
+                (Join-Path $wixOut "Product.wixobj"),
+                (Join-Path $wixOut "harvested.wixobj")
+            )
+            if (Test-Path -LiteralPath $msiPath) {
+                try {
+                    Remove-Item -LiteralPath $msiPath -Force -ErrorAction Stop
+                }
+                catch {
+                    throw "Could not replace existing WinUI MSI at ${msiPath}. Close any installer or smoke-test process using it, then rerun. Original error: $($_.Exception.Message)"
+                }
+            }
+            Move-Item -LiteralPath $msiBuildPath -Destination $msiPath -Force
+        }
+        finally {
+            if (Test-Path -LiteralPath $msiBuildPath) {
+                Remove-Item -LiteralPath $msiBuildPath -Force -ErrorAction SilentlyContinue
+            }
+        }
         $builtMsi = Test-Path -LiteralPath $msiPath
     }
     else {

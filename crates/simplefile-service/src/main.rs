@@ -20,13 +20,42 @@ async fn run() -> Result<(), String> {
 
     #[cfg(windows)]
     {
-        use tokio::net::windows::named_pipe::ServerOptions;
+        use std::os::windows::io::RawHandle;
+        use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+        use windows_sys::Win32::Storage::FileSystem::{
+            FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAG_OVERLAPPED, PIPE_ACCESS_DUPLEX,
+            WRITE_DAC,
+        };
+        use windows_sys::Win32::System::Pipes::{
+            CreateNamedPipeW, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_WAIT,
+        };
 
-        let server = ServerOptions::new()
-            .first_pipe_instance(true)
-            .reject_remote_clients(true)
-            .create(&pipe)
-            .map_err(|error| format!("failed to create named pipe {pipe}: {error}"))?;
+        let pipe_wide: Vec<u16> = pipe.encode_utf16().chain(std::iter::once(0)).collect();
+        let raw = unsafe {
+            CreateNamedPipeW(
+                pipe_wide.as_ptr(),
+                PIPE_ACCESS_DUPLEX
+                    | FILE_FLAG_FIRST_PIPE_INSTANCE
+                    | FILE_FLAG_OVERLAPPED
+                    | WRITE_DAC,
+                PIPE_TYPE_BYTE | PIPE_REJECT_REMOTE_CLIENTS | PIPE_WAIT,
+                1,
+                65536,
+                65536,
+                0,
+                std::ptr::null(),
+            )
+        };
+        if raw == INVALID_HANDLE_VALUE {
+            return Err(format!(
+                "failed to create named pipe {pipe}: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        let server = unsafe {
+            tokio::net::windows::named_pipe::NamedPipeServer::from_raw_handle(raw as RawHandle)
+        }
+        .map_err(|error| format!("failed to register named pipe with tokio: {error}"))?;
 
         apply_creator_only_dacl(&server)?;
 
